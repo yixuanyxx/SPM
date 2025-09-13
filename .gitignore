@@ -1,1 +1,7 @@
+# ignore all env files
+.env
 
+# ignore venv folder (if yall have a diff name for ur virtual env folder just add to the list)
+venv/
+.venv/
+spmvenv/
