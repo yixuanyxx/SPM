@@ -175,6 +175,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import "./taskview.css"
 
 const activeFilter = ref('all')
 const expandedTasks = ref([])
