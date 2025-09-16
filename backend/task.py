@@ -15,8 +15,6 @@ SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-error_list = [400, 404, 500]
-
 @app.route("/create_task", methods=['POST'])
 def create_task(): 
     """
@@ -93,14 +91,17 @@ def create_task():
         }
 
         insert_result = supabase.table("task").insert(task_data).execute()
-        if insert_result.error:
-            return jsonify({"Message": str(insert_result.error), "Code": 500}), 500
-        task_id = insert_result.data[0]["id"]
+        if not insert_result.data:
+            return jsonify({"Message": "Insert failed — no data returned", "Code": 500}), 500
+
+        task_id = insert_result.data[0].get("id")
 
         return jsonify({
             "Message": f"Task created! Task ID: {task_id}",
-            "Code": 201
+            "Code": 201,
+            "data": insert_result.data
         }), 201
+
 
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
