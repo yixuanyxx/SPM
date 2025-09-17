@@ -24,8 +24,9 @@ from flask import Flask
 from flask_cors import CORS
 from config import Config
 
-# Import blueprints
-from routes.health import health_bp
+# Import routes
+from routes.health import register_health_routes
+from routes.task import register_task_routes
 
 def create_app():
     app = Flask(__name__)
@@ -33,7 +34,8 @@ def create_app():
     CORS(app, origins=app.config["CORS_ORIGINS"])
 
     # Register routes
-    app.register_blueprint(health_bp, url_prefix="/")
+    register_health_routes(app)
+    register_task_routes(app)
 
     return app
 
