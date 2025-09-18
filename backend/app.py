@@ -26,7 +26,7 @@ from config import Config
 
 # Import routes
 from routes.health import register_health_routes
-from routes.task import register_task_routes
+# from routes.task import register_task_routes
 
 def create_app():
     app = Flask(__name__)
@@ -35,7 +35,7 @@ def create_app():
 
     # Register routes
     register_health_routes(app)
-    register_task_routes(app)
+    # register_task_routes(app)
 
     return app
 
