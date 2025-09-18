@@ -54,6 +54,7 @@ def create_task():
         payload = parse_task_payload(data)
         result = service.create(payload)
         status = result.pop("__status", 201)
+        result["Code"] = status
         return jsonify(result), status
     except ValueError as ve:
         return jsonify({"Message": str(ve), "Code": 400}), 400
@@ -69,7 +70,11 @@ def list_tasks():
     project_id = request.args.get("project_id", type=int)
     try:
         rows = service.list(owner_id=owner_id, project_id=project_id)
-        return jsonify(rows), 200
+        return jsonify({
+            "Message": "Tasks retrieved successfully",
+            "Code": 200,
+            "data": rows
+        }), 200
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
