@@ -17,5 +17,5 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    port = int(os.getenv("PORT", "5002"))  # pick a unique port for this microservice
+    port = "5002" # pick a unique port for this microservice
     app.run(host="0.0.0.0", port=port, debug=True)

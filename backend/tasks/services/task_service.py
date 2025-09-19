@@ -30,8 +30,10 @@ class TaskService:
         created = self.repo.insert_task(data)
         return {"__status": 201, "Message": f"Task created! Task ID: {created.get('id')}", "data": created}
 
-    def list(self, owner_id: Optional[int] = None, project_id: Optional[int] = None):
-        return self.repo.list_tasks(owner_id=owner_id, project_id=project_id)
+    # get tasks by user_id (in owner_id or collaborators)
+    def get_by_user(self, user_id: int) -> Optional[list]:
+        tasks = self.repo.find_by_user(user_id)
+        return tasks
 
     def update_status(self, task_id: int, new_status: str):
         updated = self.repo.update_task(task_id, {"status": new_status})

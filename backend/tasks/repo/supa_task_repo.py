@@ -25,13 +25,21 @@ class SupabaseTaskRepo:
         res = self.client.table(TABLE).select("*").eq("id", task_id).single().execute()
         return res.data
 
-    def list_tasks(self, owner_id: Optional[int] = None, project_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        q = self.client.table(TABLE).select("*")
-        if owner_id is not None:
-            q = q.eq("owner_id", owner_id)
-        if project_id is not None:
-            q = q.eq("project_id", project_id)
-        return q.order("created_at", desc=True).execute().data
+    def find_by_user(self, user_id: int) -> list:
+        client = getattr(self, "client", None) or getattr(self, "supabase", None)
+        if client is None:
+            raise RuntimeError("Supabase client not configured on SupabaseTaskRepo")
+
+        # owner
+        owner_res = client.table("task").select("*").eq("owner_id", user_id).execute()
+        owner_tasks = owner_res.data or []
+
+        # collaborator
+        collab_res = client.table("task").select("*").filter("collaborators", "cs", [user_id]).execute()
+        collab_tasks = collab_res.data or []
+
+        combined = {t["id"]: t for t in (owner_tasks + collab_tasks)}
+        return list(combined.values())
 
     def update_task(self, task_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
         res = self.client.table(TABLE).update(patch).eq("id", task_id).execute()
