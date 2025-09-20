@@ -60,23 +60,26 @@ def create_task():
         return jsonify({"Message": str(ve), "Code": 400}), 400
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
+    
+# get tasks by user_id (in owner_id or collaborators)
+@task_bp.route("/tasks/user-task/<int:user_id>", methods=["GET"])
+def get_tasks_by_user(user_id: int):
+    try:
+        tasks = service.get_by_user(user_id)
+        if not tasks:
+            return jsonify({"Message": f"No tasks found for user ID {user_id}", "Code": 404}), 404
+        return jsonify({"tasks": tasks, "Code": 200}), 200
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+
+
+
+
 
 # get all tasks, or filter by owner_id and/or project_id 
 # eg: http://127.0.0.1:5002/tasks?owner_id=101
 # eg: http://127.0.0.1:5002/tasks?owner_id=101&project_id=10
-@task_bp.route("/tasks", methods=["GET"])
-def list_tasks():
-    owner_id = request.args.get("owner_id", type=int)
-    project_id = request.args.get("project_id", type=int)
-    try:
-        rows = service.list(owner_id=owner_id, project_id=project_id)
-        return jsonify({
-            "Message": "Tasks retrieved successfully",
-            "Code": 200,
-            "data": rows
-        }), 200
-    except Exception as e:
-        return jsonify({"Message": str(e), "Code": 500}), 500
 
 # @task_bp.route("/tasks/<int:task_id>/status", methods=["PUT"])
 # def set_status(task_id: int):
@@ -92,3 +95,5 @@ def list_tasks():
 #         return jsonify(updated), 200
 #     except Exception as e:
 #         return jsonify({"Message": str(e), "Code": 500}), 500
+
+# get tasks by user_id (in owner_id or collaborators)

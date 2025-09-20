@@ -10,6 +10,7 @@ class Task:
     due_date: Optional[datetime] = None
     description: str = ""
     collaborators: List[int] = field(default_factory=list)
-    status: str = "Unassigned"                    # Unassigned|In Progress|Under Review|Completed
+    status: str = ""                    # Unassigned|Ongoing|Under Review|Completed (Unassigned exist only for mgrs and directors)
     project_id: Optional[int] = None
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+# must include attachments also (PDF only)
