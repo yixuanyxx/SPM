@@ -231,13 +231,16 @@ export default {
     },
 
     async updateTask(updateData) {
-      // Replace this with your actual API endpoint
-      const response = await fetch(`/api/tasks/${this.taskId}`, {
+      // Update to match the backend endpoint format
+      const response = await fetch(`http://localhost:5002/tasks/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(updateData)
+        body: JSON.stringify({
+          task_id: this.taskId,
+          ...updateData
+        })
       })
 
       if (!response.ok) {

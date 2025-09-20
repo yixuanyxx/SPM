@@ -263,7 +263,7 @@ const router = useRouter()
 
 const navigateToTask = (taskId) => {
   console.log(`Navigating to task ${taskId}`)
-  // router.push(`/tasks/${taskId}`) // sends taskId in URL
+  router.push(`/tasks/${taskId}`)
 }
 
 const formatDate = (dateString) => {
