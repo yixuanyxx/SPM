@@ -46,3 +46,22 @@ class SupabaseTaskRepo:
         if not res.data:
             raise RuntimeError("Update failed — no data returned")
         return res.data[0]
+
+    def add_subtask_to_parent(self, parent_task_id: int, subtask_id: int) -> Dict[str, Any]:
+        """
+        Add a subtask ID to the parent task's subtasks list.
+        """
+        # First get the current parent task
+        parent_task = self.get_task(parent_task_id)
+        if not parent_task:
+            raise RuntimeError(f"Parent task with ID {parent_task_id} not found")
+        
+        # Get current subtasks list or initialize empty list
+        current_subtasks = parent_task.get("subtasks") or []
+        
+        # Add the new subtask ID if not already present
+        if subtask_id not in current_subtasks:
+            current_subtasks.append(subtask_id)
+        
+        # Update the parent task with the new subtasks list
+        return self.update_task(parent_task_id, {"subtasks": current_subtasks})

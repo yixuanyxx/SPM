@@ -1,58 +1,46 @@
 from flask import Blueprint, request, jsonify
 from services.task_service import TaskService
-from utils.parsing import parse_task_payload
+from utils.parsing import parse_task_payload, parse_subtask_payload, parse_task_update_payload
 
 task_bp = Blueprint("tasks", __name__)
 service = TaskService()
 
-@task_bp.route("/tasks/create", methods=["POST"])
-def create_task():
+@task_bp.route("/tasks/manager-task/create", methods=["POST"])
+def manager_create_task():
     """
     Endpoint to create a task.
 
-    FORM DATA:
-    {
-        "task_name": "Prepare Sprint Report",
-        "due_date": "2025-09-25T17:00:00Z", (ISO8601 format but in string)
-        "description": "Compile sprint metrics and retrospective notes",
-        "status": "Unassigned",
-        "owner_id": 101,
-        "project_id": 10, (optional)
-        "collaborators": [102, 103, 104] (optional)
-    }
+    Required fields:
+    - owner_id: ID of the user creating the task
+    - task_name: Name of the task  
+    - description: Task description
+    - type: Task type ("parent" or "subtask") - defaults to "parent"
+
+    Optional fields:
+    - due_date: Due date (various formats accepted)
+    - status: Task status (Unassigned|Ongoing|Under Review|Completed)
+    - project_id: Project ID
+    - collaborators: List of user IDs or comma-separated string
+    - parent_task: Parent task ID (for subtasks)
+    - subtasks: List of subtask IDs
 
     RETURNS:
     {
-        "Message": "Task created! Task ID: <int8>",
-        "data": {
-        "assigned_by": null,
-        "collaborators": [
-            102,
-            103,
-            104
-        ],
-        "created_at": "2025-09-18T15:48:32.245055+00:00",
-        "description": "Compile sprint metrics and retrospective notes",
-        "due_date": "2025-09-25T17:00:00+00:00",
-        "id": 5,
-        "owner_id": 101,
-        "project_id": null,
-        "status": "Unassigned",
-        "sub_task": null,
-        "task_name": "Prepare Sprint Report"
-        }
+        "Message": "Task created! Task ID: <int>",
+        "data": { ... task data ... },
+        "Code": 201
     }
 
     RESPONSES:
-        200: Task name already exists
+        200: Task name already exists for this user
         201: Task successfully created
-        400: Missing required fields
+        400: Missing required fields or validation error
         500: Internal Server Error
     """
     try:
         data = request.form if request.form else (request.get_json(silent=True) or {})
         payload = parse_task_payload(data)
-        result = service.create(payload)
+        result = service.manager_create(payload)
         status = result.pop("__status", 201)
         result["Code"] = status
         return jsonify(result), status
@@ -60,7 +48,207 @@ def create_task():
         return jsonify({"Message": str(ve), "Code": 400}), 400
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
-    
+
+@task_bp.route("/tasks/staff-task/create", methods=["POST"])
+def staff_create_task():
+    """
+    Endpoint to create a task for staff (automatically adds owner as collaborator).
+
+    Required fields:
+    - owner_id: ID of the user creating the task
+    - task_name: Name of the task  
+    - description: Task description
+
+    Optional fields:
+    - due_date: Due date (various formats accepted)
+    - status: Task status (Unassigned|Ongoing|Under Review|Completed)
+    - project_id: Project ID
+    - collaborators: List of user IDs or comma-separated string
+    - parent_task: Parent task ID (for subtasks)
+    - subtasks: List of subtask IDs
+    - type: Task type ("parent" or "subtask") - defaults to "parent"
+
+    Note: owner_id is automatically added to the collaborators list
+
+    RETURNS:
+    {
+        "Message": "Task created! Task ID: <int>",
+        "data": { ... task data ... },
+        "Code": 201
+    }
+
+    RESPONSES:
+        200: Task name already exists for this user
+        201: Task successfully created
+        400: Missing required fields or validation error
+        500: Internal Server Error
+    """
+    try:
+        data = request.form if request.form else (request.get_json(silent=True) or {})
+        payload = parse_task_payload(data)
+        result = service.staff_create(payload)
+        status = result.pop("__status", 201)
+        result["Code"] = status
+        return jsonify(result), status
+    except ValueError as ve:
+        return jsonify({"Message": str(ve), "Code": 400}), 400
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/manager-subtask/create", methods=["POST"])
+def manager_create_subtask():
+    """
+    Endpoint to create a subtask.
+
+    Required fields:
+    - owner_id: ID of the user creating the subtask
+    - task_name: Name of the subtask
+    - description: Subtask description
+    - parent_task: Parent task ID (REQUIRED for subtasks)
+
+    Optional fields:
+    - due_date: Due date (various formats accepted)
+    - status: Task status (Unassigned|Ongoing|Under Review|Completed)
+    - project_id: Project ID
+    - collaborators: List of user IDs or comma-separated string
+
+    Note: type is automatically set to "subtask"
+    Note: The parent task's subtasks list will be automatically updated
+
+    RETURNS:
+    {
+        "Message": "Subtask created! Task ID: <int>",
+        "data": { ... task data ... },
+        "Code": 201
+    }
+
+    RESPONSES:
+        200: Subtask name already exists for this user
+        201: Subtask successfully created
+        400: Missing required fields or validation error
+        500: Internal Server Error
+    """
+    try:
+        data = request.form if request.form else (request.get_json(silent=True) or {})
+        
+        # Parse using the specialized subtask parser that requires parent_task
+        payload = parse_subtask_payload(data)
+        
+        # Use the specialized subtask creation service
+        result = service.manager_create_subtask(payload)
+        status = result.pop("__status", 201)
+        result["Code"] = status
+        
+        # Update message to indicate subtask
+        if "Message" in result and "Task created!" in result["Message"]:
+            result["Message"] = result["Message"].replace("Task created!", "Subtask created!")
+        
+        return jsonify(result), status
+    except ValueError as ve:
+        return jsonify({"Message": str(ve), "Code": 400}), 400
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/staff-subtask/create", methods=["POST"])
+def staff_create_subtask():
+    """
+    Endpoint to create a subtask for staff (automatically adds owner as collaborator).
+
+    Required fields:
+    - owner_id: ID of the user creating the subtask
+    - task_name: Name of the subtask
+    - description: Subtask description
+    - parent_task: Parent task ID (REQUIRED for subtasks)
+
+    Optional fields:
+    - due_date: Due date (various formats accepted)
+    - status: Task status (Unassigned|Ongoing|Under Review|Completed)
+    - project_id: Project ID
+    - collaborators: List of user IDs or comma-separated string
+
+    Note: type is automatically set to "subtask"
+    Note: owner_id is automatically added to the collaborators list
+    Note: The parent task's subtasks list will be automatically updated
+
+    RETURNS:
+    {
+        "Message": "Subtask created! Task ID: <int>",
+        "data": { ... task data ... },
+        "Code": 201
+    }
+
+    RESPONSES:
+        200: Subtask name already exists for this user
+        201: Subtask successfully created
+        400: Missing required fields or validation error
+        500: Internal Server Error
+    """
+    try:
+        data = request.form if request.form else (request.get_json(silent=True) or {})
+        
+        # Parse using the specialized subtask parser that requires parent_task
+        payload = parse_subtask_payload(data)
+        
+        # Use the specialized staff subtask creation service
+        result = service.staff_create_subtask(payload)
+        status = result.pop("__status", 201)
+        result["Code"] = status
+        
+        # Update message to indicate subtask
+        if "Message" in result and "Task created!" in result["Message"]:
+            result["Message"] = result["Message"].replace("Task created!", "Subtask created!")
+        
+        return jsonify(result), status
+    except ValueError as ve:
+        return jsonify({"Message": str(ve), "Code": 400}), 400
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/update", methods=["PUT", "PATCH"])
+def update_task():
+    """
+    Endpoint to update an existing task.
+
+    Required fields:
+    - task_id: ID of the task to update
+
+    Optional fields (any combination):
+    - owner_id: ID of the task owner
+    - task_name: Name of the task
+    - description: Task description
+    - due_date: Due date (various formats accepted)
+    - status: Task status (Unassigned|Ongoing|Under Review|Completed)
+    - project_id: Project ID
+    - collaborators: List of user IDs or comma-separated string
+    - parent_task: Parent task ID
+    - subtasks: List of subtask IDs
+    - type: Task type ("parent" or "subtask")
+
+    RETURNS:
+    {
+        "Message": "Task <task_id> updated successfully",
+        "data": { ... updated task data ... },
+        "Code": 200
+    }
+
+    RESPONSES:
+        200: Task successfully updated
+        400: Missing task_id, no fields to update, or validation error
+        404: Task not found
+        500: Internal Server Error
+    """
+    try:
+        data = request.form if request.form else (request.get_json(silent=True) or {})
+        payload = parse_task_update_payload(data)
+        result = service.update_task_by_id(payload)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except ValueError as ve:
+        return jsonify({"Message": str(ve), "Code": 400}), 400
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
 # get tasks by user_id (in owner_id or collaborators)
 @task_bp.route("/tasks/user-task/<int:user_id>", methods=["GET"])
 def get_tasks_by_user(user_id: int):
