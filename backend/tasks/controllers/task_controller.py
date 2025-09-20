@@ -249,9 +249,51 @@ def update_task():
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
-# get tasks by user_id (in owner_id or collaborators)
+# get tasks by user_id (in owner_id or collaborators) with nested subtasks
 @task_bp.route("/tasks/user-task/<int:user_id>", methods=["GET"])
 def get_tasks_by_user(user_id: int):
+    """
+    Get all tasks for a user where the user is either the owner or collaborator.
+    Returns parent tasks with their subtasks nested inside.
+    
+    Path Parameters:
+        user_id (int): The user ID to get tasks for
+    
+    Query Parameters:
+        include_subtasks (bool): Whether to include subtasks (default: true)
+    
+    Returns:
+        200: {
+            "tasks": [
+                {
+                    "id": 1,
+                    "task_name": "Parent Task",
+                    "description": "Task description",
+                    "due_date": "2024-01-15",
+                    "status": "ongoing",
+                    "owner_id": 123,
+                    "collaborators": [123, 456],
+                    "project_id": 1,
+                    "type": "parent",
+                    "subtasks": [
+                        {
+                            "id": 2,
+                            "task_name": "Subtask 1",
+                            "description": "Subtask description",
+                            "due_date": "2024-01-12",
+                            "dueDate": "2024-01-12",
+                            "status": "completed",
+                            "parent_task": 1,
+                            "type": "subtask"
+                        }
+                    ]
+                }
+            ],
+            "Code": 200
+        }
+        404: No tasks found for user
+        500: Internal server error
+    """
     try:
         tasks = service.get_by_user(user_id)
         if not tasks:

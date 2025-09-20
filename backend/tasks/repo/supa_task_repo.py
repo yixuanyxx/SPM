@@ -26,18 +26,46 @@ class SupabaseTaskRepo:
         return res.data
 
     def find_by_user(self, user_id: int) -> list:
+        """
+        Find all tasks (parent and subtask) where user is owner or collaborator.
+        This includes both parent tasks and subtasks that the user has access to.
+        """
         client = getattr(self, "client", None) or getattr(self, "supabase", None)
         if client is None:
             raise RuntimeError("Supabase client not configured on SupabaseTaskRepo")
 
-        # owner
-        owner_res = client.table("task").select("*").eq("owner_id", user_id).execute()
+        # Get tasks where user is owner
+        owner_res = client.table(TABLE).select("*").eq("owner_id", user_id).execute()
         owner_tasks = owner_res.data or []
 
-        # collaborator
-        collab_res = client.table("task").select("*").filter("collaborators", "cs", [user_id]).execute()
+        # Get tasks where user is collaborator
+        collab_res = client.table(TABLE).select("*").filter("collaborators", "cs", [user_id]).execute()
         collab_tasks = collab_res.data or []
 
+        # Combine and deduplicate by ID
+        combined = {t["id"]: t for t in (owner_tasks + collab_tasks)}
+        return list(combined.values())
+
+    def find_subtasks_by_parent(self, parent_task_id: int) -> List[Dict[str, Any]]:
+        """
+        Find all subtasks for a given parent task.
+        """
+        res = self.client.table(TABLE).select("*").eq("parent_task", parent_task_id).eq("type", "subtask").execute()
+        return res.data or []
+
+    def find_parent_tasks_by_user(self, user_id: int) -> List[Dict[str, Any]]:
+        """
+        Find only parent tasks (type='parent' or null) where user is owner or collaborator.
+        """
+        # Get parent tasks where user is owner
+        owner_res = self.client.table(TABLE).select("*").eq("owner_id", user_id).in_("type", ["parent", None]).execute()
+        owner_tasks = owner_res.data or []
+
+        # Get parent tasks where user is collaborator  
+        collab_res = self.client.table(TABLE).select("*").filter("collaborators", "cs", [user_id]).in_("type", ["parent", None]).execute()
+        collab_tasks = collab_res.data or []
+
+        # Combine and deduplicate
         combined = {t["id"]: t for t in (owner_tasks + collab_tasks)}
         return list(combined.values())
 
