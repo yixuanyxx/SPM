@@ -223,3 +223,9 @@ class TaskService:
             return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task}
         except Exception as e:
             raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
+
+    def get_task(self, task_id: int) -> Dict[str, Any]:
+        task = self.repo.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found")
+        return task
