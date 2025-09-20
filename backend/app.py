@@ -26,6 +26,7 @@ from config import Config
 
 # Import blueprints
 from routes.health import health_bp
+from routes.auth import auth_bp
 
 def create_app():
     app = Flask(__name__)
@@ -34,6 +35,7 @@ def create_app():
 
     # Register routes
     app.register_blueprint(health_bp, url_prefix="/")
+    app.register_blueprint(auth_bp, url_prefix="/auth")
 
     return app
 
