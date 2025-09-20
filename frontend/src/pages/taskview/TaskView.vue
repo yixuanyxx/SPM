@@ -1,12 +1,12 @@
 <template>
-  <div class="app-layout">
+  <div class="app-layout ms-2">
     <!-- Side Navigation -->
     <SideNavbar />
     
     <!-- Main Content Area -->
     <div class="app-container">
       <!-- Header Section -->
-      <div class="header-section ms-5">
+      <div class="header-section">
         <div class="header-content">
           <h1 class="page-title">My Tasks</h1>
           <p class="page-subtitle">View and Create Tasks Here</p>
@@ -28,6 +28,19 @@
           </div>
         </div>
         
+        <!-- Unassigned status card - only show for managers and directors -->
+        <div v-if="isManagerOrDirector" class="stat-card" @click="activeFilter = 'unassigned'" :class="{ active: activeFilter === 'unassigned' }">
+          <div class="stat-content">
+            <div class="stat-icon unassigned">
+              <i class="bi bi-person-dash"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-number">{{ unassignedTasks }}</div>
+              <div class="stat-title">Unassigned</div>
+            </div>
+          </div>
+        </div>
+        
         <div class="stat-card" @click="activeFilter = 'ongoing'" :class="{ active: activeFilter === 'ongoing' }">
           <div class="stat-content">
             <div class="stat-icon ongoing">
@@ -35,7 +48,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ ongoingTasks }}</div>
-              <div class="stat-title">In Progress</div>
+              <div class="stat-title">Ongoing</div>
             </div>
           </div>
         </div>
@@ -47,7 +60,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ underReviewTasks }}</div>
-              <div class="stat-title">Review</div>
+              <div class="stat-title">Under Review</div>
             </div>
           </div>
         </div>
@@ -59,7 +72,7 @@
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ completedTasks }}</div>
-              <div class="stat-title">Done</div>
+              <div class="stat-title">Completed</div>
             </div>
           </div>
         </div>
@@ -186,6 +199,18 @@ import "./taskview.css"
 
 const activeFilter = ref('all')
 const expandedTasks = ref([])
+const userRole = ref('manager') // change back to ref('') after testing
+
+// Get user role from localStorage on component mount
+// onMounted(() => {
+//   const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
+//   userRole.value = storedRole.toLowerCase()
+// })
+
+// Check if user is manager or director
+const isManagerOrDirector = computed(() => {
+  return ['manager', 'director'].includes(userRole.value)
+})
 
 // const tasks = ref([]) // where the fetched data will be stored
 
@@ -255,6 +280,20 @@ const tasks = ref([
     dueDate: '2024-01-25',
     status: 'ongoing',
     subtasks: []
+  },
+  {
+    id: 6,
+    name: 'Assign new developer tasks',
+    dueDate: '2024-01-30',
+    status: 'unassigned',
+    subtasks: []
+  },
+  {
+    id: 7,
+    name: 'Review budget allocations',
+    dueDate: '2024-02-01',
+    status: 'unassigned',
+    subtasks: []
   }
 ])
 
@@ -298,18 +337,20 @@ const getStatusIcon = (status) => {
   const icons = {
     'ongoing': 'bi-play-circle',
     'under-review': 'bi-eye',
-    'completed': 'bi-check-circle-fill'
+    'completed': 'bi-check-circle-fill',
+    'unassigned': 'bi-person-dash'
   }
   return icons[status] || 'bi-circle'
 }
 
 const getStatusLabel = (status) => {
   const labels = {
-    'ongoing': 'In Progress',
-    'under-review': 'Review',
-    'completed': 'Done'
+    'ongoing': 'Ongoing',
+    'under-review': 'Under Review',
+    'completed': 'Completed',
+    'unassigned': 'Unassigned'
   }
-  return labels[status] || 'Todo'
+  return labels[status]
 }
 
 const getSubtaskProgress = (task) => {
@@ -328,7 +369,8 @@ const getEmptyMessage = () => {
     'all': 'Add some tasks to get started!',
     'ongoing': 'No tasks in progress.',
     'under-review': 'No tasks under review.',
-    'completed': 'No completed tasks yet.'
+    'completed': 'No completed tasks yet.',
+    'unassigned': 'No unassigned tasks.'
   }
   return messages[activeFilter.value] || 'No tasks found.'
 }
@@ -337,485 +379,5 @@ const totalTasks = computed(() => tasks.value.length)
 const ongoingTasks = computed(() => tasks.value.filter(task => task.status === 'ongoing').length)
 const underReviewTasks = computed(() => tasks.value.filter(task => task.status === 'under-review').length)
 const completedTasks = computed(() => tasks.value.filter(task => task.status === 'completed').length)
+const unassignedTasks = computed(() => tasks.value.filter(task => task.status === 'unassigned').length)
 </script>
-
-<style scoped>
-/* Layout: make the page fill the viewport with sidebar */
-.app-layout {
-  display: flex;
-  min-height: 100vh;
-  min-height: 100dvh;
-}
-
-.app-container {
-  /* Use dynamic viewport height to avoid mobile browser UI issues */
-  min-height: 100vh;
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
-  padding: 2rem;
-  box-sizing: border-box;
-  flex: 1;
-  margin-left: 250px; /* Account for sidebar width */
-}
-
-.main-content {
-  /* Take up remaining space and allow internal scrolling if needed */
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-/* Center main inner containers while keeping them responsive */
-.header-content,
-.stats-container,
-.tasks-container {
-  width: 100%;
-  margin: 0 auto;
-}
-
-/* Header */
-.header-section {
-  margin-bottom: 2rem;
-}
-
-.page-title {
-  font-size: 2rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 0.25rem 0;
-  letter-spacing: -0.01em;
-}
-
-.page-subtitle {
-  font-size: 0.95rem;
-  color: #6b7280;
-  margin: 0;
-  font-weight: 400;
-}
-
-/* Stats */
-.stats-section {
-  margin-bottom: 2rem;
-}
-
-.stats-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-  max-width: 800px;
-}
-
-.stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 1rem;
-  border: 1px solid #e5e7eb;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.stat-card:hover {
-  border-color: #d1d5db;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card.active {
-  border-color: #3b82f6;
-  background: #f8faff;
-}
-
-.stat-content {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.stat-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1rem;
-}
-
-.stat-icon.total { background: #f3f4f6; color: #374151; }
-.stat-icon.ongoing { background: #fef3c7; color: #d97706; }
-.stat-icon.under-review { background: #e0e7ff; color: #6366f1; }
-.stat-icon.completed { background: #d1fae5; color: #059669; }
-
-.stat-number {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1a1a1a;
-  line-height: 1;
-}
-
-.stat-title {
-  font-size: 0.8rem;
-  color: #6b7280;
-  font-weight: 500;
-}
-
-/* Tasks */
-.tasks-container {
-  max-width: 800px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.task-card {
-  background: white;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-  overflow: hidden;
-  animation: slideIn 0.3s ease-out both;
-}
-
-.task-card.completed {
-  opacity: 0.7;
-}
-
-.task-main {
-  display: flex;
-  align-items: center;
-  padding: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-bottom: 1px solid transparent;
-}
-
-.task-main:hover {
-  background: #f9fafb;
-}
-
-.task-main:hover .click-hint {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.task-content {
-  flex: 1;
-}
-
-.task-header {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.task-title-section {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.task-title {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  margin: 0;
-  line-height: 1.4;
-}
-
-.task-title.completed {
-  text-decoration: line-through;
-  color: #9ca3af;
-}
-
-.task-status {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  white-space: nowrap;
-}
-
-.task-status.ongoing {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.task-status.under-review {
-  background: #e0e7ff;
-  color: #6366f1;
-}
-
-.task-status.completed {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.task-meta {
-  display: flex;
-  align-items: center;
-}
-
-.task-date {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.task-actions {
-  margin-left: 1rem;
-}
-
-.click-hint {
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: all 0.2s ease;
-  color: #9ca3af;
-  font-size: 0.8rem;
-}
-
-/* Subtasks Toggle */
-.subtasks-toggle {
-  padding: 0.75rem 1rem;
-  background: #f9fafb;
-  border-top: 1px solid #f3f4f6;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.subtasks-toggle:hover {
-  background: #f3f4f6;
-}
-
-.toggle-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.toggle-info {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  color: #6b7280;
-}
-
-.subtask-progress {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.progress-bar {
-  width: 40px;
-  height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: #10b981;
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.progress-text {
-  font-size: 0.7rem;
-  color: #9ca3af;
-}
-
-.toggle-icon {
-  transition: transform 0.2s ease;
-  color: #9ca3af;
-}
-
-.toggle-icon.expanded {
-  transform: rotate(180deg);
-}
-
-/* Subtasks */
-.subtasks-section {
-  background: #f9fafb;
-  border-top: 1px solid #f3f4f6;
-}
-
-.subtask {
-  display: flex;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #f3f4f6;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  animation: slideInSubtask 0.3s ease-out both;
-}
-
-.subtask:last-child {
-  border-bottom: none;
-}
-
-.subtask:hover {
-  background: #f3f4f6;
-}
-
-.subtask:hover .subtask-action {
-  opacity: 1;
-  transform: translateX(0);
-}
-
-.subtask.completed {
-  opacity: 0.6;
-}
-
-.subtask-content {
-  flex: 1;
-}
-
-.subtask-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.25rem;
-}
-
-.subtask-title {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #374151;
-  margin: 0;
-}
-
-.subtask-title.completed {
-  text-decoration: line-through;
-  color: #9ca3af;
-}
-
-.subtask-date {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: #9ca3af;
-}
-
-.subtask-action {
-  opacity: 0;
-  transform: translateX(-4px);
-  transition: all 0.2s ease;
-  color: #9ca3af;
-  font-size: 0.7rem;
-}
-
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 3rem 1rem;
-  color: #6b7280;
-}
-
-.empty-icon {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  opacity: 0.5;
-}
-
-.empty-title {
-  font-size: 1rem;
-  font-weight: 500;
-  margin-bottom: 0.5rem;
-  color: #374151;
-}
-
-.empty-subtitle {
-  font-size: 0.85rem;
-  margin: 0;
-}
-
-/* Animations */
-@keyframes slideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideInSubtask {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
-/* Subtasks Transition */
-.subtasks-enter-active,
-.subtasks-leave-active {
-  transition: all 0.3s ease;
-  overflow: hidden;
-}
-
-.subtasks-enter-from,
-.subtasks-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-.subtasks-enter-to,
-.subtasks-leave-from {
-  max-height: 500px;
-  opacity: 1;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .app-container {
-    padding: 1rem;
-    margin-left: 200px; /* Smaller sidebar width on mobile */
-  }
-  
-  .stats-container {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .task-title-section {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
-  
-  .toggle-info {
-    flex-wrap: wrap;
-  }
-}
-
-@media (max-width: 640px) {
-  .app-container {
-    margin-left: 0; /* Remove sidebar margin on small screens */
-    padding: 1rem;
-  }
-  
-  .stats-container {
-    grid-template-columns: 1fr;
-  }
-  
-  .subtask-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-}
-</style>
