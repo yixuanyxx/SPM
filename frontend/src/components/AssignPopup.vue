@@ -1,0 +1,648 @@
+<template>
+  <div v-if="isVisible" class="popup-overlay" @click="closePopup">
+    <div class="popup-container" @click.stop>
+      <div class="popup-header">
+        <h3>{{ isSubtask ? 'Transfer Subtask Ownership' : 'Transfer Task Ownership' }}</h3>
+        <button class="close-btn" @click="closePopup">&times;</button>
+      </div>
+      
+      <div class="popup-content">
+        <div class="task-info">
+          <p><strong>{{ isSubtask ? 'Subtask' : 'Task' }}:</strong> {{ taskTitle }}</p>
+          <p><strong>Current Owner:</strong> {{ currentOwner || 'Unassigned' }}</p>
+          <p><strong>Your Role:</strong> {{ userRole.charAt(0).toUpperCase() + userRole.slice(1) }}</p>
+        </div>
+
+        <form @submit.prevent="handleAssignment">
+          <div class="form-group">
+            <label for="assignee">Assign to:</label>
+            <select 
+              id="assignee" 
+              v-model="selectedAssignee" 
+              required
+              :disabled="isLoading"
+            >
+              <option value="">Select team member</option>
+              <option 
+                v-for="member in eligibleMembers" 
+                :key="member.id" 
+                :value="member.id"
+              >
+                {{ member.name }} ({{ member.role }})
+              </option>
+            </select>
+          </div>
+
+          <!-- Status selection for director assigning to manager -->
+          <div v-if="showStatusSelection" class="form-group">
+            <label for="status">Set status to:</label>
+            <select 
+              id="status" 
+              v-model="selectedStatus" 
+              required
+              :disabled="isLoading"
+            >
+              <option value="Unassigned">Unassigned</option>
+              <option value="Ongoing">Ongoing</option>
+            </select>
+          </div>
+          <div v-else class="form-group">
+            <label for="status">Set status to:</label>
+            <select 
+                id="status" 
+                v-model="selectedStatus" 
+                required
+                disabled 
+            >
+                <option value="Ongoing" selected>Ongoing</option>
+            </select>
+          </div>
+
+
+          <div class="form-actions">
+            <button type="button" @click="closePopup" :disabled="isLoading">
+              Cancel
+            </button>
+            <button type="submit" :disabled="!selectedAssignee || isLoading">
+              {{ isLoading ? 'Assigning...' : 'Assign Task' }}
+            </button>
+          </div>
+        </form>
+
+        <!-- Messages -->
+        <div v-if="successMessage" class="message success">
+          {{ successMessage }}
+        </div>
+        <div v-if="errorMessage" class="message error">
+          {{ errorMessage }}
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+export default {
+  name: 'TaskAssignmentPopup',
+  props: {
+    isVisible: {
+      type: Boolean,
+      default: false
+    },
+    taskId: {
+      type: [String, Number],
+      required: true
+    },
+    taskTitle: {
+      type: String,
+      required: true
+    },
+    currentOwner: {
+      type: String,
+      default: ''
+    },
+    userRole: {
+      type: String,
+      required: true // 'director', 'manager', 'staff'
+    },
+    isSubtask: {
+      type: Boolean,
+      default: false
+    },
+    parentTaskId: {
+      type: [String, Number],
+      default: null
+    },
+    teamMembers: {
+      type: Array,
+      default: () => []
+    }
+  },
+  data() {
+    return {
+      selectedAssignee: '',
+      selectedStatus: 'Ongoing',
+      isLoading: false,
+      successMessage: '',
+      errorMessage: ''
+    }
+  },
+  computed: {
+    eligibleMembers() {
+      if (this.userRole === 'director') {
+        return this.teamMembers.filter(member => member.role === 'manager')
+      } else if (this.userRole === 'manager') {
+        return this.teamMembers.filter(member => member.role === 'staff')
+      }
+      return []
+    },
+    showStatusSelection() {
+      if (this.userRole !== 'director') return false
+      const selectedMember = this.teamMembers.find(m => m.id === this.selectedAssignee)
+      return selectedMember && selectedMember.role === 'manager'
+    }
+  },
+  methods: {
+    async handleAssignment() {
+      this.clearMessages()
+      
+      if (!this.validateAssignment()) {
+        return
+      }
+
+      this.isLoading = true
+
+      try {
+        const assigneeData = this.teamMembers.find(m => m.id === this.selectedAssignee)
+        const updateData = this.prepareUpdateData(assigneeData)
+        
+        await this.updateTask(updateData)
+        
+        this.successMessage = `${this.isSubtask ? 'Subtask' : 'Task'} successfully assigned to ${assigneeData.name}`
+        
+        // Auto-close after 2 seconds
+        setTimeout(() => {
+          this.closePopup()
+          this.$emit('assignment-success', {
+            taskId: this.taskId,
+            assignee: assigneeData,
+            status: updateData.status
+          })
+        }, 2000)
+        
+      } catch (error) {
+        this.errorMessage = error.message || 'Failed to assign task. Please try again.'
+      } finally {
+        this.isLoading = false
+      }
+    },
+
+    validateAssignment() {
+      const assigneeData = this.teamMembers.find(m => m.id === this.selectedAssignee)
+      
+      if (!assigneeData) {
+        this.errorMessage = 'Please select a valid team member'
+        return false
+      }
+
+      // Validate role-based assignment rules
+      if (this.userRole === 'director' && assigneeData.role !== 'manager') {
+        this.errorMessage = 'Directors can only assign tasks to managers'
+        return false
+      }
+      
+      if (this.userRole === 'manager' && assigneeData.role !== 'staff') {
+        this.errorMessage = 'Managers can only assign tasks to staff members'
+        return false
+      }
+
+      // Invalid assignment attempt (e.g. manager to manager)
+      if (this.userRole === assigneeData.role) {
+        this.errorMessage = `Cannot assign to another ${this.userRole}`
+        return false
+      }
+
+      return true
+    },
+
+    prepareUpdateData(assigneeData) {
+      const updateData = {
+        owner: assigneeData.id,
+        ownerName: assigneeData.name
+      }
+
+      // Determine status based on assignment rules
+      if (this.userRole === 'manager' && assigneeData.role === 'staff') {
+        updateData.status = 'Ongoing'
+      } else if (this.userRole === 'director' && assigneeData.role === 'manager') {
+        updateData.status = this.selectedStatus
+      }
+
+      // Handle collaborator additions
+      if (this.userRole === 'manager' && assigneeData.role === 'staff') {
+        updateData.addCollaborator = assigneeData.id
+        
+        if (this.isSubtask && this.parentTaskId) {
+          updateData.addParentTaskCollaborator = assigneeData.id
+        }
+      }
+
+      return updateData
+    },
+
+    async updateTask(updateData) {
+      // Replace this with your actual API endpoint
+      const response = await fetch(`/api/tasks/${this.taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updateData)
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      return response.json()
+    },
+
+    closePopup() {
+      this.clearMessages()
+      this.selectedAssignee = ''
+      this.selectedStatus = 'Ongoing'
+      this.$emit('close')
+    },
+
+    clearMessages() {
+      this.successMessage = ''
+      this.errorMessage = ''
+    }
+  },
+
+  watch: {
+    isVisible(newVal) {
+      if (newVal) {
+        this.clearMessages()
+      }
+    },
+    selectedAssignee() {
+      this.clearMessages()
+    }
+  }
+}
+</script>
+
+<style scoped>
+/* Popup Overlay */
+.popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: 1rem;
+  box-sizing: border-box;
+}
+
+.popup-container {
+  background: white;
+  border-radius: 8px;
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  animation: slideIn 0.3s ease-out both;
+}
+
+/* Header */
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.popup-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+/* Content */
+.popup-content {
+  padding: 1.5rem;
+}
+
+.task-info {
+  background: #f9fafb;
+  border: 1px solid #f3f4f6;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.task-info p {
+  margin: 0.25rem 0;
+  font-size: 0.85rem;
+  color: #374151;
+  line-height: 1.4;
+}
+
+.task-info p:first-child {
+  margin-top: 0;
+}
+
+.task-info p:last-child {
+  margin-bottom: 0;
+}
+
+.task-info strong {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+/* Form */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #374151;
+  font-size: 0.875rem;
+}
+
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background-color: white;
+  color: #374151;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group select:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group select:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+.form-actions button {
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  border: 1px solid;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.form-actions button[type="button"] {
+  background-color: white;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.form-actions button[type="button"]:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: #d1d5db;
+  color: #374151;
+}
+
+.form-actions button[type="submit"] {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+.form-actions button[type="submit"]:hover:not(:disabled) {
+  background-color: #2563eb;
+  border-color: #2563eb;
+}
+
+.form-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Messages */
+.message {
+  padding: 0.75rem;
+  border-radius: 6px;
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  border: 1px solid;
+}
+
+.message.success {
+  background-color: #d1fae5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.message.error {
+  background-color: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+/* Animation */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .popup-overlay {
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .popup-container {
+    max-width: 100%;
+    max-height: calc(100vh - 4rem);
+  }
+
+  .popup-header {
+    padding: 1.25rem;
+  }
+
+  .popup-header h3 {
+    font-size: 1.125rem;
+  }
+
+  .popup-content {
+    padding: 1.25rem;
+  }
+
+  .task-info {
+    padding: 0.875rem;
+  }
+
+  .task-info p {
+    font-size: 0.8rem;
+  }
+
+  .form-group {
+    margin-bottom: 1.25rem;
+  }
+
+  .form-actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+
+  .form-actions button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .popup-overlay {
+    padding: 0.75rem;
+    align-items: flex-start;
+    padding-top: 1.5rem;
+  }
+
+  .popup-container {
+    max-height: calc(100vh - 3rem);
+  }
+
+  .popup-header {
+    padding: 1rem;
+  }
+
+  .popup-header h3 {
+    font-size: 1rem;
+    line-height: 1.3;
+  }
+
+  .close-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 1.25rem;
+  }
+
+  .popup-content {
+    padding: 1rem;
+  }
+
+  .task-info {
+    padding: 0.75rem;
+  }
+
+  .task-info p {
+    font-size: 0.75rem;
+    margin: 0.125rem 0;
+  }
+
+  .form-group {
+    margin-bottom: 1rem;
+  }
+
+  .form-group label {
+    font-size: 0.8rem;
+  }
+
+  .form-group select {
+    padding: 0.625rem;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .popup-overlay {
+    padding: 0.5rem;
+    padding-top: 1rem;
+  }
+
+  .popup-container {
+    max-height: calc(100vh - 2rem);
+  }
+
+  .popup-header {
+    padding: 0.875rem;
+  }
+
+  .popup-content {
+    padding: 0.875rem;
+  }
+
+  .task-info {
+    padding: 0.625rem;
+  }
+
+  .form-actions button {
+    padding: 0.625rem 1rem;
+    font-size: 0.8rem;
+  }
+}
+
+/* Ensure proper text wrapping on very small screens */
+@media (max-width: 400px) {
+  .popup-header h3 {
+    font-size: 0.9rem;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+
+  .task-info p {
+    font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
+  .form-group label {
+    font-size: 0.75rem;
+  }
+
+  .form-group select {
+    font-size: 0.75rem;
+  }
+
+  .message {
+    font-size: 0.8rem;
+  }
+}
+</style>

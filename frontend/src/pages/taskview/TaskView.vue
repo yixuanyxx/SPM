@@ -89,7 +89,7 @@
           <div class="empty-icon">
             <i class="bi bi-clipboard"></i>
           </div>
-          <div class="empty-title">No tasks found. Create one now!</div>
+          <div class="empty-title">No tasks found :(</div>
           <p class="empty-subtitle">{{ getEmptyMessage() }}</p>
         </div>
 
