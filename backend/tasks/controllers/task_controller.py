@@ -54,6 +54,7 @@ def create_task():
         payload = parse_task_payload(data)
         result = service.create(payload)
         status = result.pop("__status", 201)
+        result["Code"] = status
         return jsonify(result), status
     except ValueError as ve:
         return jsonify({"Message": str(ve), "Code": 400}), 400
