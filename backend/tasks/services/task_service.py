@@ -99,6 +99,12 @@ class TaskService:
         except Exception as e:
             raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
 
+    def get_task(self, task_id: int) -> Dict[str, Any]:
+        task = self.repo.get_task(task_id)
+        if not task:
+            raise ValueError(f"Task with ID {task_id} not found")
+        return task
+
     def staff_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a task for staff and automatically add owner_id to collaborators list.
@@ -191,3 +197,21 @@ class TaskService:
             return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task}
         except Exception as e:
             raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
+
+    def get_task_by_id(self, task_id: int) -> Dict[str, Any]:
+        """
+        Get a single task by its ID.
+        """
+        task = self.repo.get_task(task_id)
+        if not task:
+            return {"__status": 404, "Message": f"Task with ID {task_id} not found"}
+        return {"__status": 200, "data": task}
+
+    def get_tasks_by_project(self, project_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks that belong to a specific project.
+        """
+        tasks = self.repo.find_by_project(project_id)
+        if not tasks:
+            return {"__status": 404, "Message": f"No tasks found for project ID {project_id}"}
+        return {"__status": 200, "data": tasks}
