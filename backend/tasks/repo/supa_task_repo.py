@@ -93,3 +93,10 @@ class SupabaseTaskRepo:
         
         # Update the parent task with the new subtasks list
         return self.update_task(parent_task_id, {"subtasks": current_subtasks})
+
+    def find_by_project(self, project_id: int) -> list:
+        """
+        Find all tasks that belong to a specific project.
+        """
+        res = self.client.table(TABLE).select("*").eq("project_id", project_id).execute()
+        return res.data or []
