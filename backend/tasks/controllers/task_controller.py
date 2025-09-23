@@ -272,32 +272,6 @@ def get_tasks_by_user(user_id: int):
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
-@task_bp.route("/tasks/<int:task_id>", methods=["GET"])
-def get_task_by_id(task_id: int):
-    """
-    Get a single task by its ID.
-    
-    Parameters:
-    - task_id: ID of the task to retrieve
-    
-    RETURNS:
-    {
-        "data": { ... task data ... },
-        "Code": 200
-    }
-    
-    RESPONSES:
-        200: Task found and returned
-        404: Task not found
-        500: Internal Server Error
-    """
-    try:
-        task = service.get_task(task_id)
-        if not task:
-            return jsonify({"Message": f"Task ID {task_id} not found", "Code": 404}), 404
-        return jsonify({"task": task, "Code": 200}), 200
-    except Exception as e:
-        return jsonify({"Message": str(e), "Code": 500}), 500
 
 @task_bp.route("/tasks/project/<int:project_id>", methods=["GET"])
 def get_tasks_by_project(project_id: int):
