@@ -140,3 +140,74 @@ def update_project():
         return jsonify({"error": str(ve), "status": 400}), 400
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+@project_bp.route("/projects/owner/<int:owner_id>", methods=["GET"])
+def get_projects_by_owner(owner_id: int):
+    """
+    Get all projects that are owned by a specific user (by owner_id only).
+    
+    Parameters:
+    - owner_id: ID of the user who owns the projects
+    
+    Returns:
+    {
+        "data": [ ... list of projects ... ],
+        "status": 200
+    }
+    
+    Responses:
+        200: Projects found and returned
+        404: No projects found for this owner
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_projects_by_owner(owner_id)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
+@project_bp.route("/projects/<int:project_id>/task/<int:task_id>", methods=["POST"])
+def add_task_to_project(project_id: int, task_id: int):
+    """
+    Add a task and its subtasks to a project.
+    
+    This endpoint will:
+    1. Get task details from task microservice
+    2. Add task_id and all subtask_ids to project's tasks list
+    3. Add new task collaborators to project's collaborators list
+    4. Use bulk update to set project_id for task and all subtasks
+    
+    Parameters:
+    - project_id: ID of the project
+    - task_id: ID of the main task to add (subtasks will be included automatically)
+    
+    Returns:
+    {
+        "message": "Task {task_id} and {subtask_count} subtasks successfully added to project {project_id}",
+        "data": {
+            "project": { ... updated project data ... },
+            "main_task_id": task_id,
+            "subtask_ids": [ ... list of subtask IDs ... ],
+            "all_task_ids": [ ... list of all task IDs (main + subtasks) ... ],
+            "added_collaborators": [ ... list of newly added collaborator IDs ... ]
+        },
+        "status": 200
+    }
+    
+    Responses:
+        200: Task and subtasks successfully added to project
+        400: Task or subtasks already exist in project
+        404: Project or task not found
+        500: Internal Server Error
+    """
+    try:
+        result = service.add_task_to_project(project_id, task_id)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500

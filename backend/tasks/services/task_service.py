@@ -198,14 +198,14 @@ class TaskService:
         except Exception as e:
             raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
 
-    def get_task_by_id(self, task_id: int) -> Dict[str, Any]:
-        """
-        Get a single task by its ID.
-        """
-        task = self.repo.get_task(task_id)
-        if not task:
-            return {"__status": 404, "Message": f"Task with ID {task_id} not found"}
-        return {"__status": 200, "data": task}
+    # def get_task_by_id(self, task_id: int) -> Dict[str, Any]:
+    #     """
+    #     Get a single task by its ID.
+    #     """
+    #     task = self.repo.get_task(task_id)
+    #     if not task:
+    #         return {"__status": 404, "Message": f"Task with ID {task_id} not found"}
+    #     return {"__status": 200, "data": task}
 
     def get_tasks_by_project(self, project_id: int) -> Dict[str, Any]:
         """
@@ -215,3 +215,169 @@ class TaskService:
         if not tasks:
             return {"__status": 404, "Message": f"No tasks found for project ID {project_id}"}
         return {"__status": 200, "data": tasks}
+
+    def get_tasks_by_owner(self, owner_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks that are owned by a specific user (by owner_id only).
+        """
+        tasks = self.repo.find_by_owner(owner_id)
+        if not tasks:
+            return {"__status": 404, "Message": f"No tasks found for owner ID {owner_id}"}
+        return {"__status": 200, "data": tasks}
+
+    def bulk_update_project_id(self, task_ids: list, project_id: int) -> Dict[str, Any]:
+        """
+        Bulk update the project_id for multiple tasks.
+        
+        Args:
+            task_ids: List of task IDs to update
+            project_id: The project ID to set for all tasks
+            
+        Returns:
+            Dict with status, message, and results
+        """
+        if not task_ids:
+            return {"__status": 400, "Message": "task_ids list cannot be empty"}
+        
+        if not isinstance(task_ids, list):
+            return {"__status": 400, "Message": "task_ids must be a list"}
+        
+        if not all(isinstance(task_id, int) for task_id in task_ids):
+            return {"__status": 400, "Message": "All task_ids must be integers"}
+        
+        if not isinstance(project_id, int):
+            return {"__status": 400, "Message": "project_id must be an integer"}
+        
+        updated_tasks = []
+        failed_updates = []
+        
+        for task_id in task_ids:
+            try:
+                # Check if task exists
+                existing_task = self.repo.get_task(task_id)
+                if not existing_task:
+                    failed_updates.append({"task_id": task_id, "error": "Task not found"})
+                    continue
+                
+                # Update the task's project_id
+                updated_task = self.repo.update_task(task_id, {"project_id": project_id})
+                updated_tasks.append(updated_task)
+                
+            except Exception as e:
+                failed_updates.append({"task_id": task_id, "error": str(e)})
+        
+        # Prepare response
+        total_tasks = len(task_ids)
+        successful_updates = len(updated_tasks)
+        failed_count = len(failed_updates)
+        
+        if successful_updates == 0:
+            return {
+                "__status": 400,
+                "Message": f"Failed to update any tasks. {failed_count} tasks failed to update.",
+                "data": {
+                    "total_tasks": total_tasks,
+                    "successful_updates": successful_updates,
+                    "failed_updates": failed_count,
+                    "failed_details": failed_updates
+                }
+            }
+        elif failed_count > 0:
+            return {
+                "__status": 207,  # Multi-status
+                "Message": f"Partially successful: {successful_updates} tasks updated, {failed_count} failed",
+                "data": {
+                    "total_tasks": total_tasks,
+                    "successful_updates": successful_updates,
+                    "failed_updates": failed_count,
+                    "updated_tasks": updated_tasks,
+                    "failed_details": failed_updates
+                }
+            }
+        else:
+            return {
+                "__status": 200,
+                "Message": f"Successfully updated project_id to {project_id} for {successful_updates} tasks",
+                "data": {
+                    "total_tasks": total_tasks,
+                    "successful_updates": successful_updates,
+                    "failed_updates": failed_count,
+                    "updated_tasks": updated_tasks
+                }
+            }
+
+    def get_subtasks_by_parent(self, parent_task_id: int) -> Dict[str, Any]:
+        """
+        Get all subtask details for a given parent task ID.
+        
+        Args:
+            parent_task_id: ID of the parent task
+            
+        Returns:
+            Dict with status, message, and subtask details
+        """
+        # First, get the parent task to verify it exists and get its subtasks list
+        parent_task = self.repo.get_task(parent_task_id)
+        if not parent_task:
+            return {"__status": 404, "Message": f"Parent task with ID {parent_task_id} not found"}
+        
+        # Get the subtasks list from the parent task
+        subtask_ids = parent_task.get("subtasks") or []
+        
+        if not subtask_ids:
+            return {
+                "__status": 200,
+                "Message": f"No subtasks found for parent task {parent_task_id}",
+                "data": {
+                    "parent_task_id": parent_task_id,
+                    "subtasks": [],
+                    "subtask_count": 0
+                }
+            }
+        
+        # Get details for each subtask
+        subtask_details = []
+        failed_subtasks = []
+        
+        for subtask_id in subtask_ids:
+            try:
+                subtask = self.repo.get_task(subtask_id)
+                if subtask:
+                    subtask_details.append(subtask)
+                else:
+                    failed_subtasks.append({"subtask_id": subtask_id, "error": "Subtask not found"})
+            except Exception as e:
+                failed_subtasks.append({"subtask_id": subtask_id, "error": str(e)})
+        
+        # Prepare response
+        if not subtask_details:
+            return {
+                "__status": 404,
+                "Message": f"No valid subtasks found for parent task {parent_task_id}",
+                "data": {
+                    "parent_task_id": parent_task_id,
+                    "subtasks": [],
+                    "subtask_count": 0,
+                    "failed_subtasks": failed_subtasks
+                }
+            }
+        
+        response_data = {
+            "parent_task_id": parent_task_id,
+            "subtasks": subtask_details,
+            "subtask_count": len(subtask_details)
+        }
+        
+        if failed_subtasks:
+            response_data["failed_subtasks"] = failed_subtasks
+            return {
+                "__status": 207,  # Multi-status for partial success
+                "Message": f"Retrieved {len(subtask_details)} subtasks for parent task {parent_task_id}, {len(failed_subtasks)} failed",
+                "data": response_data
+            }
+        else:
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(subtask_details)} subtasks for parent task {parent_task_id}",
+                "data": response_data
+            }
