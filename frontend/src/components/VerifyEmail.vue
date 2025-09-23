@@ -26,7 +26,8 @@
 <script setup>
 import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
-import { verifyEmail } from '../services/auth.js';
+import { verifyEmail, ensureUserRow } from '../services/auth.js';
+import { supabase } from '../services/supabase';
 import '../assets/auth.css';
 
 const router = useRouter();
@@ -37,16 +38,32 @@ const success = ref(false);
 
 onMounted(async () => {
   try {
-    const token = route.query.token;
-    if (!token) throw new Error('No verification token found');
+    // Supabase email confirmation usually arrives with tokens in hash or query
+    // Try to parse from hash first: #access_token=...&refresh_token=...&type=...
+    let accessToken = route.query.access_token;
+    let refreshToken = route.query.refresh_token;
+    let email = route.query.email;
 
-    await verifyEmail(token);
+    if (!accessToken && window.location.hash) {
+      const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+      accessToken = params.get('access_token');
+      refreshToken = params.get('refresh_token');
+      email = email || params.get('email');
+    }
+
+    if (!accessToken) throw new Error('No verification token found');
+
+    await verifyEmail(accessToken, refreshToken || null);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Upsert into public.users using user_metadata.role populated at signUp
+      await ensureUserRow(user);
+    }
     success.value = true;
     message.value = 'Your email has been verified successfully!';
     
     // Redirect to login page after 2 seconds
     // Extract email from token or URL if available
-    const email = route.query.email;
     
     setTimeout(() => {
       router.push({

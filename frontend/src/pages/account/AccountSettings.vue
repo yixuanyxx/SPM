@@ -27,6 +27,8 @@
 <script setup>
 import { ref, onMounted } from "vue";
 import { getUser, updateProfile } from "../../services/auth.js";
+import { supabase } from "../../services/supabase";
+import '../../assets/auth.css';
 
 const name = ref("");
 const newPassword = ref("");

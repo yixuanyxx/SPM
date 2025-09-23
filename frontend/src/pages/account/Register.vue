@@ -5,6 +5,9 @@
       <label>Email
         <input v-model="email" type="email" required placeholder="Enter your email" />
       </label>
+      <label>Name
+        <input v-model="name" type="text" required placeholder="Enter your full name" />
+      </label>
       <label>Role
         <select v-model="role" required class="role-select">
           <option value="" disabled>Select your role</option>
@@ -30,6 +33,12 @@
         {{ message }}
       </p>
     </form>
+    <div class="auth-footer">
+      <p>Already have an account?</p>
+      <button class="secondary-button" @click="router.push({ name: 'Login' })">
+        Go to Login
+      </button>
+    </div>
   </div>
 </template>
 
@@ -41,6 +50,7 @@ import '../../assets/auth.css';
 
 const router = useRouter();
 const email = ref("");
+const name = ref("");
 const password = ref("");
 const confirmPassword = ref("");
 const role = ref("");
@@ -63,7 +73,7 @@ async function onRegister() {
       throw new Error("Passwords do not match");
     }
 
-    const { data, error: err } = await register(email.value, password.value, role.value);
+    const { data, error: err } = await register(email.value, password.value, role.value, name.value);
     if (err) throw err;
 
     message.value = "Please check your email to verify your account.";
@@ -71,6 +81,7 @@ async function onRegister() {
 
     // Clear form
     email.value = "";
+    name.value = "";
     password.value = "";
     confirmPassword.value = "";
     
@@ -82,3 +93,4 @@ async function onRegister() {
   }
 }
 </script>
+

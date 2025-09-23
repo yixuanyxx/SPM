@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { watch } from "vue";
 import LandingPage from "../pages/LandingPage.vue";
 import Login from "../pages/account/Login.vue";
 import Register from "../pages/account/Register.vue";
@@ -6,8 +7,8 @@ import AccountSettings from "../pages/account/AccountSettings.vue";
 import { sessionState } from "../services/session";
 
 const routes = [
-  { path: "/", name: "Login", component: Login },
-  { path: "/landing", name: "Landing", component: LandingPage, meta: { requiresAuth: true } },
+  { path: "/login", name: "Login", component: Login },
+  { path: "/", name: "Landing", component: LandingPage, meta: { requiresAuth: true } },
   { path: "/register", name: "Register", component: Register },
   { path: "/verify-email", name: "VerifyEmail", component: () => import('../components/VerifyEmail.vue') },
   { path: "/account", name: "AccountSettings", component: AccountSettings, meta: { requiresAuth: true } },
