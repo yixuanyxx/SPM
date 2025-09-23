@@ -249,7 +249,19 @@ def update_task():
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
-# get tasks by user_id (in owner_id or collaborators)
+# get task by task_id
+@task_bp.route("/tasks/<int:task_id>", methods=["GET"])
+def get_task_by_id(task_id: int):
+    try:
+        task = service.get_task(task_id)
+        if not task:
+            return jsonify({"Message": f"Task ID {task_id} not found", "Code": 404}), 404
+        return jsonify({"task": task, "Code": 200}), 200
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+    
+
+# get tasks by user_id (in owner_id or collaborators) with nested subtasks
 @task_bp.route("/tasks/user-task/<int:user_id>", methods=["GET"])
 def get_tasks_by_user(user_id: int):
     try:

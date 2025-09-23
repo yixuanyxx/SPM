@@ -1,13 +1,24 @@
+/* Layout: make the page fill the viewport with sidebar */
+.app-layout {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
 .app-container {
+  /* Use dynamic viewport height to avoid mobile browser UI issues */
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding: 2rem;
   box-sizing: border-box;
+  flex: 1;
+  margin-left: 250px; /* Account for sidebar width */
 }
 
 .main-content {
+  /* Take up remaining space and allow internal scrolling if needed */
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
@@ -49,9 +60,9 @@
 
 .stats-container {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
   gap: 1rem;
-  max-width: 800px;
+  max-width: 900px; 
 }
 
 .stat-card {
@@ -61,6 +72,7 @@
   border: 1px solid #e5e7eb;
   cursor: pointer;
   transition: all 0.2s ease;
+  min-width: 0; 
 }
 
 .stat-card:hover {
@@ -77,6 +89,7 @@
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  min-width: 0; 
 }
 
 .stat-icon {
@@ -87,12 +100,34 @@
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  flex-shrink: 0; 
 }
 
-.stat-icon.total { background: #f3f4f6; color: #374151; }
-.stat-icon.ongoing { background: #fef3c7; color: #d97706; }
-.stat-icon.under-review { background: #e0e7ff; color: #6366f1; }
-.stat-icon.completed { background: #d1fae5; color: #059669; }
+.stat-icon.total {
+  background: #f3f4f6;
+  color: #374151;
+}
+.stat-icon.unassigned {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.stat-icon.ongoing {
+  background: #fef3c7;
+  color: #d97706;
+}
+.stat-icon.under-review {
+  background: #e0e7ff;
+  color: #6366f1;
+}
+.stat-icon.completed {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.stat-info {
+  min-width: 0; 
+  flex: 1;
+}
 
 .stat-number {
   font-size: 1.5rem;
@@ -102,14 +137,17 @@
 }
 
 .stat-title {
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   color: #6b7280;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Tasks */
 .tasks-container {
-  max-width: 800px;
+  max-width: 900px;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -184,6 +222,11 @@
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+.task-status.unassigned {
+  background: #fef2f2;
+  color: #dc2626;
 }
 
 .task-status.ongoing {
@@ -431,31 +474,124 @@
 @media (max-width: 768px) {
   .app-container {
     padding: 1rem;
+    margin-left: 200px; 
   }
-  
+
   .stats-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); 
+    gap: 0.75rem; 
   }
-  
+
+  .stat-card {
+    padding: 0.75rem; 
+  }
+
+  .stat-content {
+    gap: 0.5rem; 
+  }
+
+  .stat-icon {
+    width: 28px; 
+    height: 28px;
+    font-size: 0.9rem;
+  }
+
+  .stat-number {
+    font-size: 1.25rem; 
+  }
+
+  .stat-title {
+    font-size: 0.65rem; 
+    line-height: 1.2;
+  }
+
   .task-title-section {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
   }
-  
+
   .toggle-info {
     flex-wrap: wrap;
   }
 }
 
-@media (max-width: 480px) {
-  .stats-container {
-    grid-template-columns: 1fr;
+@media (max-width: 640px) {
+  .app-container {
+    margin-left: 0; 
+    padding: 1rem;
   }
-  
+
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr); 
+  }
+
+  .stat-card {
+    padding: 0.5rem; 
+  }
+
+  .stat-content {
+    flex-direction: column; 
+    text-align: center;
+    gap: 0.25rem;
+  }
+
+  .stat-icon {
+    width: 24px;
+    height: 24px;
+    font-size: 0.8rem;
+  }
+
+  .stat-number {
+    font-size: 1.1rem; 
+  }
+
+  .stat-title {
+    font-size: 0.6rem; 
+    white-space: normal; 
+    text-align: center;
+  }
+
   .subtask-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.25rem;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .stats-container {
+    grid-template-columns: 1fr 1fr; 
+  }
+
+  .stat-card {
+    min-width: 0;
+    padding: 0.4rem;
+  }
+
+  .stat-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+  }
+
+  .stat-number {
+    font-size: 1rem;
+  }
+
+  .stat-title {
+    font-size: 0.55rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+}
+
+@media (max-width: 400px) {
+  .stat-title {
+    font-size: 0.5rem;
+    line-height: 1;
+    word-break: break-word; 
+    hyphens: auto; 
   }
 }

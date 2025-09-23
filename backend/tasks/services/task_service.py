@@ -33,10 +33,42 @@ class TaskService:
         created = self.repo.insert_task(data)
         return {"__status": 201, "Message": f"Task created! Task ID: {created.get('id')}", "data": created}
 
-    # get tasks by user_id (in owner_id or collaborators)
-    def get_by_user(self, user_id: int) -> Optional[list]:
-        tasks = self.repo.find_by_user(user_id)
-        return tasks
+    # get tasks by user_id (in owner_id or collaborators) with nested subtasks
+    def get_by_user(self, user_id: int) -> Dict[str, Any]:
+
+        # Get only parent tasks for the user
+        parent_tasks = self.repo.find_parent_tasks_by_user(user_id)
+        
+        # For each parent task, get its subtasks
+        for parent_task in parent_tasks:
+            parent_task_id = parent_task["id"]
+            subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+            
+            # Format subtasks for frontend
+            formatted_subtasks = []
+            for subtask in subtasks:
+                formatted_subtask = {
+                    "id": subtask["id"],
+                    "task_name": subtask["task_name"], 
+                    "description": subtask["description"],
+                    "due_date": subtask["due_date"],  
+                    "status": subtask["status"],
+                    "owner_id": subtask["owner_id"],
+                    "collaborators": subtask["collaborators"] or [],
+                    "project_id": subtask["project_id"],
+                    "created_at": subtask["created_at"],
+                    "parent_task": subtask["parent_task"],
+                    "type": subtask["type"]
+                }
+                formatted_subtasks.append(formatted_subtask)
+            
+            # Format parent task for frontend
+            parent_task["subtasks"] = formatted_subtasks
+        
+        return {
+            "status": "success",
+            "data": parent_tasks
+        }
 
     def update_status(self, task_id: int, new_status: str):
         updated = self.repo.update_task(task_id, {"status": new_status})
