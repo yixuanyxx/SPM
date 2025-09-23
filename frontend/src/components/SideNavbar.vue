@@ -64,7 +64,7 @@
 
         <!-- Projects -->
         <div class="nav-item">
-          <router-link to="/" class="nav-link" @click="handleNavItemClick"> <!-- UPDATE THIS -->
+          <router-link to="/projects" class="nav-link" @click="handleNavItemClick"> <!-- UPDATE THIS -->
             <div class="nav-icon">
               <i class="bi bi-folder"></i>
             </div>
