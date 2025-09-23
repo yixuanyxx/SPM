@@ -1,4 +1,5 @@
 <script setup>
+import './UpdateTask.css'
 import { useRouter } from 'vue-router'
 import { task, today, dateError, addStep, removeStep, addSubtask, removeSubtask, saveTask, cancelEditTask } from './updateTask.js'
 
@@ -20,24 +21,76 @@ const cancelEdit = () => {
         <input v-model="task.title" type="text" class="form-control" required />
       </div>
 
-      <!-- Steps -->
+      <!-- Description -->
       <div class="mb-3">
-        <label class="form-label fw-semibold">Steps</label>
+        <label class="form-label fw-semibold">Description</label>
+        <div
+          v-for="(step, index) in task.steps"
+          :key="index"
+          class="mb-3"
+        >
+          <textarea
+            v-model="task.steps[index]"
+            class="form-control"
+            rows="3"
+            placeholder="Enter step description..."
+            @keydown.enter.prevent="addStep(index)"
+          ></textarea>
+          <div class="d-flex justify-content-end mt-1">
+            <button
+              v-if="task.steps.length > 1"
+              type="button"
+              class="btn btn-outline-danger btn-sm"
+              @click="removeStep(index)"
+            >
+              ✕ Remove
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description
+      <div class="mb-3">
+        <label class="form-label fw-semibold">Description</label>
         <div v-for="(step, index) in task.steps" :key="index" class="d-flex mb-2 align-items-center">
           <span class="me-2 text-muted fw-bold">{{ index + 1 }}.</span>
           <input v-model="task.steps[index]" type="text" class="form-control" placeholder="Enter step..." @keydown.enter.prevent="addStep(index)" />
           <button v-if="task.steps.length > 1" type="button" class="btn btn-outline-danger ms-2 btn-sm" @click="removeStep(index)">✕</button>
         </div>
-      </div>
+      </div> -->
 
       <!-- Status -->
-      <div class="mb-3">
-        <label class="form-label fw-semibold">Status</label>
-        <select v-model="task.status" class="form-select" required>
-          <option value="ongoing">In Progress</option>
-          <option value="under-review">Review</option>
-          <option value="done">Done</option>
-        </select>
+      <div class="mb-3 d-flex align-items-center">
+        <label class="form-label fw-semibold me-3 mb-0">Status:</label>
+
+        <div class="d-flex gap-2">
+          <div
+            class="task-status ongoing"
+            :class="{ selected: task.status === 'ongoing' }"
+            @click="task.status = 'ongoing'"
+          >
+            <i class="bi bi-play-circle"></i>
+            <span>In Progress</span>
+          </div>
+
+          <div
+            class="task-status under-review"
+            :class="{ selected: task.status === 'under-review' }"
+            @click="task.status = 'under-review'"
+          >
+            <i class="bi bi-eye"></i>
+            <span>Review</span>
+          </div>
+
+          <div
+            class="task-status completed"
+            :class="{ selected: task.status === 'completed' }"
+            @click="task.status = 'completed'"
+          >
+            <i class="bi bi-check-circle-fill"></i>
+            <span>Done</span>
+          </div>
+        </div>
       </div>
 
       <!-- Due Date -->
