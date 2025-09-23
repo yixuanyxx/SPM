@@ -11,6 +11,10 @@
             <h1 class="page-title">My Projects</h1>
             <p class="page-subtitle">View and manage your project collaborations</p>
           </div>
+          <button class="create-project-btn" @click="createNewProject">
+            <i class="bi bi-plus-lg"></i>
+            Create New Project
+          </button>
         </div>
   
         <!-- Main Content -->
@@ -289,6 +293,11 @@
       card.style.transform = 'scale(1)'
     }, 150)
   }
+
+  const createNewProject = () => {
+  // Add your create project logic here
+  console.log('Create new project clicked')
+}
   </script>
   
  
