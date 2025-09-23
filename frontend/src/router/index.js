@@ -3,6 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 const LandingPage  = () => import('../pages/LandingPage.vue')
 const TaskView = () => import('../pages/taskview/TaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
+const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 
 const routes = [
   { path: '/', name: 'landing', component: LandingPage },
@@ -18,6 +19,12 @@ const routes = [
   { path: '/tasks',  // change to '/tasks/:id'
     name: 'task-view', 
     component: TaskView 
+    // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/projects',  // change to '/projects/:id'
+    name: 'project-view', 
+    component: ProjectView
     // ,meta: { requiresAuth: true }
   }
 ]
