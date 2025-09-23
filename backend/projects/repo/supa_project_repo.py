@@ -49,3 +49,10 @@ class SupabaseProjectRepo:
         if not res.data:
             raise RuntimeError("Update failed — no data returned")
         return res.data[0]
+
+    def find_by_owner(self, owner_id: int) -> list:
+        """
+        Find all projects that are owned by a specific user (by owner_id only).
+        """
+        res = self.client.table(TABLE).select("*").eq("owner_id", owner_id).execute()
+        return res.data or []

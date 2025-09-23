@@ -100,3 +100,10 @@ class SupabaseTaskRepo:
         """
         res = self.client.table(TABLE).select("*").eq("project_id", project_id).execute()
         return res.data or []
+
+    def find_by_owner(self, owner_id: int) -> list:
+        """
+        Find all tasks that are owned by a specific user (by owner_id only).
+        """
+        res = self.client.table(TABLE).select("*").eq("owner_id", owner_id).execute()
+        return res.data or []

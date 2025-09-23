@@ -326,6 +326,122 @@ def get_tasks_by_project(project_id: int):
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
+@task_bp.route("/tasks/owner/<int:owner_id>", methods=["GET"])
+def get_tasks_by_owner(owner_id: int):
+    """
+    Get all tasks that are owned by a specific user (by owner_id only).
+    
+    Parameters:
+    - owner_id: ID of the user who owns the tasks
+    
+    RETURNS:
+    {
+        "data": [ ... list of tasks ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: Tasks found and returned
+        404: No tasks found for this owner
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_tasks_by_owner(owner_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+
+# helper function to be used in assign task to project inside project microservice
+@task_bp.route("/tasks/update-project/bulk", methods=["POST"])
+def bulk_update_project_id():
+    """
+    Bulk update the project_id for multiple tasks.
+    
+    Required fields in JSON body:
+    - task_ids: List of task IDs (integers) to update
+    - project_id: The project ID (integer) to set for all tasks
+    
+    RETURNS:
+    {
+        "Message": "Successfully updated project_id to {project_id} for {count} tasks",
+        "data": {
+            "total_tasks": int,
+            "successful_updates": int,
+            "failed_updates": int,
+            "updated_tasks": [ ... list of updated task objects ... ],
+            "failed_details": [ ... list of failed updates with error details ... ] (only if failures)
+        },
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: All tasks successfully updated
+        207: Partially successful (some tasks updated, some failed)
+        400: Invalid input or all tasks failed to update
+        500: Internal Server Error
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        # Validate required fields
+        if "task_ids" not in data:
+            return jsonify({"Message": "task_ids is required", "Code": 400}), 400
+        
+        if "project_id" not in data:
+            return jsonify({"Message": "project_id is required", "Code": 400}), 400
+        
+        task_ids = data["task_ids"]
+        project_id = data["project_id"]
+        
+        # Call service to perform bulk update
+        result = service.bulk_update_project_id(task_ids, project_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        
+        return jsonify(result), status
+        
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/<int:parent_task_id>/subtasks", methods=["GET"])
+def get_subtasks_by_parent(parent_task_id: int):
+    """
+    Get all subtask details for a given parent task ID.
+    
+    Parameters:
+    - parent_task_id: ID of the parent task
+    
+    RETURNS:
+    {
+        "Message": "Successfully retrieved {count} subtasks for parent task {parent_task_id}",
+        "data": {
+            "parent_task_id": int,
+            "subtasks": [ ... list of subtask objects with full details ... ],
+            "subtask_count": int,
+            "failed_subtasks": [ ... list of failed subtasks with error details ... ] (only if failures)
+        },
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: All subtasks successfully retrieved
+        207: Partially successful (some subtasks retrieved, some failed)
+        404: Parent task not found or no valid subtasks found
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_subtasks_by_parent(parent_task_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        
+        return jsonify(result), status
+        
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
 
 
 
