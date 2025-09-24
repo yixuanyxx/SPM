@@ -5,6 +5,9 @@ import Login from "../pages/account/Login.vue";
 import Register from "../pages/account/Register.vue";
 import AccountSettings from "../pages/account/AccountSettings.vue";
 import { sessionState } from "../services/session";
+const TaskView = () => import('../pages/taskview/TaskView.vue')
+const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
+const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 
 const routes = [
   { path: "/login", name: "Login", component: Login },
@@ -12,6 +15,25 @@ const routes = [
   { path: "/register", name: "Register", component: Register },
   { path: "/verify-email", name: "VerifyEmail", component: () => import('../components/VerifyEmail.vue') },
   { path: "/account", name: "AccountSettings", component: AccountSettings, meta: { requiresAuth: true } },
+  {
+    path: '/tasks/:id',  // new route with dynamic segment
+    name: 'task-detail', 
+    component: TaskDetail,
+    props: true  // allows route params to be passed as props to the component
+    // ,meta: { requiresAuth: true }
+  },
+  
+  { path: '/tasks',  // change to '/tasks/:id'
+    name: 'task-view', 
+    component: TaskView 
+    // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/projects',  // change to '/projects/:id'
+    name: 'project-view', 
+    component: ProjectView
+    // ,meta: { requiresAuth: true }
+  }
 ];
 
 const router = createRouter({
@@ -42,8 +64,8 @@ router.beforeEach((to, from, next) => {
     return next({ name: "Login" });
   }
 
-  // If trying to access login page while logged in
-  if (to.path === "/" && loggedIn) {
+  // If trying to access login page while logged in, redirect to landing
+  if (to.path === "/login" && loggedIn) {
     return next({ name: "Landing" });
   }
 
