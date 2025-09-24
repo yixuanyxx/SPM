@@ -215,8 +215,8 @@ const isManagerOrDirector = computed(() => {
 
 const tasks = ref([]) // where the fetched data will be stored
 
-const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
-// const userId = localStorage.getItem("UID") // check the way user id is stored in table
+// const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
+const userId = localStorage.getItem("spm_userid") // check the way user id is stored in table
 
 onMounted(() => {
   fetch(`http://localhost:5002/tasks/user-task/${userId}`)

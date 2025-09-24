@@ -51,14 +51,84 @@ export async function verifyEmail(accessToken) {
   return data;
 }
 
+// Generate a random 3-digit userid starting from 100
+async function generateUserId() {
+  let userId;
+  let isUnique = false;
+  
+  while (!isUnique) {
+    // Generate random 3-digit number from 100-999
+    userId = Math.floor(Math.random() * 900) + 100;
+    
+    // Check if this userId already exists
+    const { data, error } = await supabase
+      .from('user')
+      .select('userid')
+      .eq('userid', userId)
+      .single();
+    
+    // If no data found, the userId is unique
+    if (error && error.code === 'PGRST116') {
+      isUnique = true;
+    } else if (error) {
+      throw error;
+    }
+  }
+  
+  return userId;
+}
+
 // Ensure a row exists in public.users with the current user's id and role
 export async function ensureUserRow(user) {
   if (!user?.id) return;
+  
   const role = user.user_metadata?.role || null;
+  const name = user.user_metadata?.name || user.user_metadata?.full_name || null;
+  const email = user.email || null;
+  const team_id = user.user_metadata?.team_id || null;
+  const dept_id = user.user_metadata?.dept_id || null;
 
-  // Upsert with RLS: only own id allowed; relies on being authenticated
-  const { error } = await supabase
-    .from('users')
-    .upsert({ id: user.id, role }, { onConflict: 'id' });
-  if (error) throw error;
+  // Check if user already exists
+  const { data: existingUser, error: fetchError } = await supabase
+    .from('user')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
+  if (fetchError && fetchError.code !== 'PGRST116') {
+    throw fetchError;
+  }
+
+  // If user doesn't exist, create new row with generated userid
+  if (!existingUser) {
+    const userId = await generateUserId();
+    
+    const { error } = await supabase
+      .from('user')
+      .insert({
+        id: user.id,
+        userid: userId,
+        role: role,
+        name: name,
+        email: email,
+        team_id: team_id,
+        dept_id: dept_id
+      });
+    
+    if (error) throw error;
+  } else {
+    // If user exists, update with any new metadata (but keep existing userid)
+    const { error } = await supabase
+      .from('user')
+      .update({
+        role: role,
+        name: name,
+        email: email,
+        team_id: team_id,
+        dept_id: dept_id
+      })
+      .eq('id', user.id);
+    
+    if (error) throw error;
+  }
 }
