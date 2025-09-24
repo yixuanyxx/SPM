@@ -1,12 +1,17 @@
 <template>
-  <div class="app-container">
-    <!-- Header Section -->
-    <div class="header-section ms-5">
-      <div class="header-content">
-        <h1 class="page-title">My Tasks</h1>
-        <p class="page-subtitle">View and Create Tasks Here</p>
+  <div class="app-layout ms-2">
+    <!-- Side Navigation -->
+    <SideNavbar />
+    
+    <!-- Main Content Area -->
+    <div class="app-container">
+      <!-- Header Section -->
+      <div class="header-section">
+        <div class="header-content">
+          <h1 class="page-title">My Tasks</h1>
+          <p class="page-subtitle">View and Create Tasks Here</p>
+        </div>
       </div>
-    </div>
 
     <!-- Stats Section -->
     <div class="stats-section">
@@ -23,38 +28,51 @@
           </div>
         </div>
         
-        <div class="stat-card" @click="activeFilter = 'ongoing'" :class="{ active: activeFilter === 'ongoing' }">
+        <!-- Unassigned status card - only show for managers and directors -->
+        <div v-if="isManagerOrDirector" class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
+          <div class="stat-content">
+            <div class="stat-icon unassigned">
+              <i class="bi bi-person-dash"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-number">{{ unassignedTasks }}</div>
+              <div class="stat-title">Unassigned</div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="stat-card" @click="activeFilter = 'Ongoing'" :class="{ active: activeFilter === 'Ongoing' }">
           <div class="stat-content">
             <div class="stat-icon ongoing">
               <i class="bi bi-play-circle"></i>
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ ongoingTasks }}</div>
-              <div class="stat-title">In Progress</div>
+              <div class="stat-title">Ongoing</div>
             </div>
           </div>
         </div>
         
-        <div class="stat-card" @click="activeFilter = 'under-review'" :class="{ active: activeFilter === 'under-review' }">
+        <div class="stat-card" @click="activeFilter = 'Under Review'" :class="{ active: activeFilter === 'Under Review' }">
           <div class="stat-content">
             <div class="stat-icon under-review">
               <i class="bi bi-eye"></i>
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ underReviewTasks }}</div>
-              <div class="stat-title">Review</div>
+              <div class="stat-title">Under Review</div>
             </div>
           </div>
         </div>
         
-        <div class="stat-card" @click="activeFilter = 'completed'" :class="{ active: activeFilter === 'completed' }">
+        <div class="stat-card" @click="activeFilter = 'Completed'" :class="{ active: activeFilter === 'Completed' }">
           <div class="stat-content">
             <div class="stat-icon completed">
               <i class="bi bi-check-circle-fill"></i>
             </div>
             <div class="stat-info">
               <div class="stat-number">{{ completedTasks }}</div>
-              <div class="stat-title">Done</div>
+              <div class="stat-title">Completed</div>
             </div>
           </div>
         </div>
@@ -71,7 +89,7 @@
           <div class="empty-icon">
             <i class="bi bi-clipboard"></i>
           </div>
-          <div class="empty-title">No tasks found. Create one now!</div>
+          <div class="empty-title">No tasks found :(</div>
           <p class="empty-subtitle">{{ getEmptyMessage() }}</p>
         </div>
 
@@ -79,7 +97,7 @@
           v-for="(task, index) in filteredTasks" 
           :key="task.id"
           class="task-card"
-          :class="{ completed: task.status === 'completed' }"
+          :class="{ completed: task.status === 'Completed' }"
           :style="{ animationDelay: `${index * 0.05}s` }"
         >
           <!-- Main Task -->
@@ -87,10 +105,10 @@
             <div class="task-content">
               <div class="task-header">
                 <div class="task-title-section">
-                  <h3 class="task-title" :class="{ completed: task.status === 'completed' }">
-                    {{ task.name }}
+                  <h3 class="task-title" :class="{ completed: task.status === 'Completed' }">
+                    {{ task.task_name }}
                   </h3>
-                  <div class="task-status" :class="task.status">
+                  <div class="task-status" :class="getStatusClass(task.status)">
                     <i :class="getStatusIcon(task.status)"></i>
                     <span>{{ getStatusLabel(task.status) }}</span>
                   </div>
@@ -98,7 +116,7 @@
                 <div class="task-meta">
                   <div class="task-date">
                     <i class="bi bi-calendar3"></i>
-                    <span>{{ formatDate(task.dueDate) }}</span>
+                    <span>{{ formatDate(task.due_date) }}</span>
                   </div>
                 </div>
               </div>
@@ -143,22 +161,22 @@
                 v-for="(subtask, subIndex) in task.subtasks" 
                 :key="subtask.id"
                 class="subtask"
-                :class="{ completed: subtask.status === 'completed' }"
+                :class="{ completed: subtask.status === 'Completed' }"
                 :style="{ animationDelay: `${subIndex * 0.03}s` }"
                 @click="navigateToTask(subtask.id)"
               >
                 <div class="subtask-content">
                   <div class="subtask-header">
-                    <div class="subtask-title" :class="{ completed: subtask.status === 'completed' }">
-                      {{ subtask.name }}
+                    <div class="subtask-title" :class="{ completed: subtask.status === 'Completed' }">
+                      {{ subtask.task_name }}
                     </div>
-                    <div class="task-status" :class="subtask.status">
+                    <div class="task-status" :class="getStatusClass(subtask.status)">
                       <i :class="getStatusIcon(subtask.status)"></i>
                     </div>
                   </div>
                   <div class="subtask-date">
                     <i class="bi bi-calendar3"></i>
-                    <span>{{ formatDate(subtask.dueDate) }}</span>
+                    <span>{{ formatDate(subtask.due_date) }}</span>
                   </div>
                 </div>
                 <div class="subtask-action">
@@ -170,63 +188,53 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import SideNavbar from '../../components/SideNavbar.vue'
 import "./taskview.css"
 
 const activeFilter = ref('all')
 const expandedTasks = ref([])
+const userRole = ref('')
 
-const tasks = ref([
-  {
-    id: 1,
-    name: 'Complete project proposal',
-    dueDate: '2024-01-15',
-    status: 'under-review',
-    subtasks: [
-      { id: 11, name: 'Research competitors', dueDate: '2024-01-12', status: 'completed' },
-      { id: 12, name: 'Write executive summary', dueDate: '2024-01-14', status: 'under-review' },
-      { id: 13, name: 'Create budget breakdown', dueDate: '2024-01-15', status: 'ongoing' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'Client meeting preparation',
-    dueDate: '2024-01-08',
-    status: 'completed',
-    subtasks: [
-      { id: 21, name: 'Prepare presentation slides', dueDate: '2024-01-07', status: 'completed' },
-      { id: 22, name: 'Review client requirements', dueDate: '2024-01-08', status: 'completed' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'Review team performance',
-    dueDate: '2024-01-10',
-    status: 'completed',
-    subtasks: []
-  },
-  {
-    id: 4,
-    name: 'Update website content',
-    dueDate: '2024-01-20',
-    status: 'ongoing',
-    subtasks: [
-      { id: 41, name: 'Write new blog post', dueDate: '2024-01-18', status: 'ongoing' },
-      { id: 42, name: 'Update team page', dueDate: '2024-01-19', status: 'ongoing' }
-    ]
-  },
-  {
-    id: 5,
-    name: 'Plan quarterly review',
-    dueDate: '2024-01-25',
-    status: 'ongoing',
-    subtasks: []
-  }
-])
+// Get user role from localStorage on component mount
+// onMounted(() => {
+//   const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
+//   userRole.value = storedRole.toLowerCase()
+// })
+
+// Check if user is manager or director
+const isManagerOrDirector = computed(() => {
+  return ['manager', 'director'].includes(userRole.value)
+})
+
+const tasks = ref([]) // where the fetched data will be stored
+
+// const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
+const userId = localStorage.getItem("spm_userid") // check the way user id is stored in table
+
+onMounted(() => {
+  fetch(`http://localhost:5002/tasks/user-task/${userId}`)
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      return response.json()
+    })
+    .then(data => {
+      // API returns { "tasks": [ {...}, {...} ] }
+      tasks.value = data.tasks.data
+      console.log('Fetched tasks:', tasks.value)
+    })
+    .catch(error => {
+      console.error('Error fetching tasks:', error)
+    })
+})
 
 const filteredTasks = computed(() => {
   let filtered = tasks.value
@@ -236,9 +244,9 @@ const filteredTasks = computed(() => {
   }
   
   return filtered.sort((a, b) => {
-    if (a.status === 'completed' && b.status !== 'completed') return 1
-    if (a.status !== 'completed' && b.status === 'completed') return -1
-    return new Date(a.dueDate) - new Date(b.dueDate)
+    if (a.status === 'Completed' && b.status !== 'Completed') return 1
+    if (a.status !== 'Completed' && b.status === 'Completed') return -1
+    return new Date(a.due_date) - new Date(b.due_date)
   })
 })
 
@@ -251,9 +259,11 @@ const toggleSubtasks = (taskId) => {
   }
 }
 
+const router = useRouter()
+
 const navigateToTask = (taskId) => {
   console.log(`Navigating to task ${taskId}`)
-  // Example: this.$router.push(`/tasks/${taskId}`)
+  router.push(`/tasks/${taskId}`)
 }
 
 const formatDate = (dateString) => {
@@ -264,47 +274,61 @@ const formatDate = (dateString) => {
   })
 }
 
+const getStatusClass = (status) => {
+  const statusClassMap = {
+    'Ongoing': 'ongoing',
+    'Under Review': 'under-review',
+    'Completed': 'completed',
+    'Unassigned': 'unassigned'
+  }
+  return statusClassMap[status] || 'unassigned'
+}
+
 const getStatusIcon = (status) => {
   const icons = {
-    'ongoing': 'bi-play-circle',
-    'under-review': 'bi-eye',
-    'completed': 'bi-check-circle-fill'
+    'Ongoing': 'bi-play-circle',
+    'Under Review': 'bi-eye',
+    'Completed': 'bi-check-circle-fill',
+    'Unassigned': 'bi-person-dash'
   }
   return icons[status] || 'bi-circle'
 }
 
 const getStatusLabel = (status) => {
   const labels = {
-    'ongoing': 'In Progress',
-    'under-review': 'Review',
-    'completed': 'Done'
+    'Ongoing': 'Ongoing',
+    'Under Review': 'Under Review',
+    'Completed': 'Completed',
+    'Unassigned': 'Unassigned'
   }
-  return labels[status] || 'Todo'
+  return labels[status]
 }
 
 const getSubtaskProgress = (task) => {
   if (!task.subtasks || task.subtasks.length === 0) return 0
-  const completed = task.subtasks.filter(subtask => subtask.status === 'completed').length
+  const completed = task.subtasks.filter(subtask => subtask.status === 'Completed').length
   return Math.round((completed / task.subtasks.length) * 100)
 }
 
 const getCompletedSubtasks = (task) => {
   if (!task.subtasks) return 0
-  return task.subtasks.filter(subtask => subtask.status === 'completed').length
+  return task.subtasks.filter(subtask => subtask.status === 'Completed').length
 }
 
 const getEmptyMessage = () => {
   const messages = {
     'all': 'Add some tasks to get started!',
-    'ongoing': 'No tasks in progress.',
-    'under-review': 'No tasks under review.',
-    'completed': 'No completed tasks yet.'
+    'Ongoing': 'No tasks in progress.',
+    'Under Review': 'No tasks under review.',
+    'Completed': 'No completed tasks yet.',
+    'Unassigned': 'No unassigned tasks.'
   }
   return messages[activeFilter.value] || 'No tasks found.'
 }
 
 const totalTasks = computed(() => tasks.value.length)
-const ongoingTasks = computed(() => tasks.value.filter(task => task.status === 'ongoing').length)
-const underReviewTasks = computed(() => tasks.value.filter(task => task.status === 'under-review').length)
-const completedTasks = computed(() => tasks.value.filter(task => task.status === 'completed').length)
+const ongoingTasks = computed(() => tasks.value.filter(task => task.status === 'Ongoing').length)
+const underReviewTasks = computed(() => tasks.value.filter(task => task.status === 'Under Review').length)
+const completedTasks = computed(() => tasks.value.filter(task => task.status === 'Completed').length)
+const unassignedTasks = computed(() => tasks.value.filter(task => task.status === 'Unassigned').length)
 </script>
