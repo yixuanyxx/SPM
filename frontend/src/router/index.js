@@ -8,6 +8,7 @@ import { sessionState } from "../services/session";
 const TaskView = () => import('../pages/taskview/TaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
 const ProjectView = () => import('../pages/projectview/ProjectView.vue')
+const ScheduleView = () => import('../pages/schedule/ScheduleView.vue')
 
 const routes = [
   { path: "/login", name: "Login", component: Login },
@@ -32,6 +33,12 @@ const routes = [
   { path: '/projects',  // change to '/projects/:id'
     name: 'project-view', 
     component: ProjectView
+    // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/schedule',
+    name: 'schedule-view',
+    component: ScheduleView
     // ,meta: { requiresAuth: true }
   }
 ];
