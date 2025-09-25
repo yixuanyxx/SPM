@@ -1,52 +1,66 @@
 <template>
-  <div class="auth-page">
-    <h2>Create New Account</h2>
-    <form @submit.prevent="onRegister">
-      <label>Email
-        <input v-model="email" type="email" required placeholder="Enter your email" />
-      </label>
-      <label>Name
-        <input v-model="name" type="text" required placeholder="Enter your full name" />
-      </label>
-      <label>Role
-        <select v-model="role" required class="role-select">
-          <option value="" disabled>Select your role</option>
-          <option value="staff">Staff</option>
-          <option value="manager">Manager/Director</option>
-          <option value="hr">HR/Senior Management</option>
-        </select>
-      </label>
-      <label>Password
-        <input v-model="password" :type="show ? 'text' : 'password'" required placeholder="Choose a password" />
-      </label>
-      <label>Confirm Password
-        <input v-model="confirmPassword" :type="show ? 'text' : 'password'" required placeholder="Confirm your password" />
-      </label>
-      <div class="checkbox-wrapper">
-        <input type="checkbox" id="show-password" v-model="show" />
-        <label for="show-password">Show password</label>
+  <div class="container" style="min-height:100vh; display:flex; flex-direction:column; padding:2rem;">
+      <div class="header-section">
+        <div class="header-content">
+          <h1 class="page-title">Create New Account</h1>
+          <p class="page-subtitle">Join your team</p>
+        </div>
       </div>
-      <button type="submit" :disabled="loading">
-        {{ loading ? 'Registering...' : 'Create Account' }}
-      </button>
-      <p v-if="message" :class="['message', error ? 'error' : 'success']">
-        {{ message }}
-      </p>
-    </form>
-    <div class="auth-footer">
-      <p>Already have an account?</p>
-      <button class="secondary-button" @click="router.push({ name: 'Login' })">
-        Go to Login
-      </button>
+
+      <div class="main-content">
+        <div class="tasks-container" style="max-width: 640px;">
+          <div class="task-card">
+            <div class="task-main" style="cursor: default; border-bottom: 1px solid #f3f4f6;">
+              <div class="task-content" style="width: 100%">
+                <form @submit.prevent="onRegister" style="display: grid; gap: 1rem;">
+                  <div>
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Email</label>
+                    <input v-model="email" type="email" required placeholder="Enter your email" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
+                  </div>
+                  <div>
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Name</label>
+                    <input v-model="name" type="text" required placeholder="Enter your full name" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
+                  </div>
+                  <div>
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Role</label>
+                    <select v-model="role" required class="role-select" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;">
+                      <option value="" disabled>Select your role</option>
+                      <option value="staff">Staff</option>
+                      <option value="manager">Manager/Director</option>
+                      <option value="hr">HR/Senior Management</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Password</label>
+                    <input v-model="password" :type="show ? 'text' : 'password'" required placeholder="Choose a password" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
+                  </div>
+                  <div>
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Confirm Password</label>
+                    <input v-model="confirmPassword" :type="show ? 'text' : 'password'" required placeholder="Confirm your password" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
+                  </div>
+                  <div class="checkbox-wrapper" style="display:flex; align-items:center; gap:0.5rem;">
+                    <input type="checkbox" id="show-password" v-model="show" />
+                    <label for="show-password" style="color:#6b7280;">Show password</label>
+                  </div>
+                  <div style="display:flex; gap:0.5rem;">
+                    <button type="submit" :disabled="loading">{{ loading ? 'Registering...' : 'Create Account' }}</button>
+                    <button class="secondary-button" type="button" @click="router.push({ name: 'Login' })">Go to Login</button>
+                  </div>
+                  <p v-if="message" :class="['message', error ? 'error' : 'success']">{{ message }}</p>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-</template>
+ </template>
 
 <script setup>
 import { ref } from "vue";
 import { register } from "../../services/auth.js";
 import { useRouter } from 'vue-router';
-import '../../assets/auth.css';
+import './account.css'
 
 const router = useRouter();
 const email = ref("");

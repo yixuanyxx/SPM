@@ -64,33 +64,6 @@ def register():
 
 
 # -----------------------------
-# 2. Verify OTP
-# -----------------------------
-@auth_bp.route("/verify_otp", methods=["POST"])
-def verify_otp():
-    data = request.form if request.form else request.json
-    email = data.get("email", "").lower()
-    otp = data.get("otp")
-
-    user_res = supabase.table("users").select("*").eq("email", email).execute()
-    if not user_res.data:
-        return jsonify({"error": "User not found", "Code": 404}), 404
-    user = user_res.data[0]
-
-    if user.get("is_verified"):
-        return jsonify({"Message": "Already verified", "Code": 200}), 200
-
-    if str(user.get("otp_code")) != str(otp):
-        return jsonify({"error": "Invalid OTP", "Code": 400}), 400
-
-    update_res = supabase.table("users").update({"is_verified": True, "otp_code": None}).eq("email", email).execute()
-    if update_res.error:
-        return jsonify({"error": str(update_res.error), "Code": 500}), 500
-
-    return jsonify({"Message": "Account verified!", "Code": 200}), 200
-
-
-# -----------------------------
 # 3. Login
 # -----------------------------
 @auth_bp.route("/login", methods=["POST"])

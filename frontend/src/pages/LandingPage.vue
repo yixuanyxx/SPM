@@ -4,12 +4,27 @@
  <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import SideNavbar from '../components/SideNavbar.vue'
 import { sessionState } from '../services/session'
 import { logout } from '../services/auth'
-import '../assets/auth.css'
+import './taskview/taskview.css'
 
 const router = useRouter()
 const now = ref(new Date())
+const tasks = ref([])
+const loading = ref(false)
+const userId = localStorage.getItem('spm_userid')
+const API_TASKS = 'http://localhost:5002'
+const API_USERS = 'http://127.0.0.1:5003'
+const userName = ref('')
+
+const upcomingTasks = computed(() => {
+  const list = Array.isArray(tasks.value) ? tasks.value.slice() : []
+  return list
+    .filter(t => !!t?.due_date)
+    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+    .slice(0, 5)
+})
 const greeting = computed(() => {
   const hour = now.value.getHours()
   if (hour < 12) return 'Good morning'
@@ -21,114 +36,170 @@ onMounted(() => {
   const timer = setInterval(() => (now.value = new Date()), 60000)
   // cleanup
   window.addEventListener('beforeunload', () => clearInterval(timer))
+  if (userId) {
+    fetchTasks()
+    fetchUserName()
+  }
 })
 
 async function onLogout() {
   await logout()
   router.push({ name: 'Login' })
 }
+
+async function fetchTasks() {
+  try {
+    loading.value = true
+    const res = await fetch(`${API_TASKS}/tasks/user-task/${userId}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    tasks.value = data?.tasks?.data || []
+  } catch (e) {
+    console.error('Failed to load tasks:', e)
+    tasks.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+async function fetchUserName() {
+  try {
+    const res = await fetch(`${API_USERS}/users/${userId}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    userName.value = data?.data?.name || ''
+  } catch (e) {
+    console.error('Failed to load user name:', e)
+    userName.value = ''
+  }
+}
 </script>
 
 <template>
-  <div class="dashboard">
-    <header class="app-header">
-      <div class="brand">
-        <div class="logo">AIO</div>
-        <div class="brand-text">
-          <h1>All‑In‑One</h1>
-          <p>Smart Task Manager</p>
+  <div class="app-layout ms-2">
+    <SideNavbar />
+
+    <div class="app-container">
+      <div class="header-section">
+        <div class="header-content">
+          <h1 class="page-title">Welcome</h1>
+          <p class="page-subtitle">Your hub for tasks, schedule, and projects</p>
         </div>
       </div>
-      <div class="header-actions">
-        <div class="user-chip">
-          <span class="avatar">{{ sessionState.user?.email?.charAt(0)?.toUpperCase() || 'U' }}</span>
-          <span class="user-meta">
-            <strong>{{ sessionState.user?.user_metadata?.name || 'User' }}</strong>
-            <small>{{ sessionState.user?.email }}</small>
-          </span>
+
+      <div class="main-content">
+        <div class="tasks-container">
+          <div class="empty-state" style="padding-top: 0;">
+            <div class="empty-icon">
+              <i class="bi bi-emoji-smile"></i>
+            </div>
+            <div class="empty-title">{{ greeting }}, {{ userName || sessionState.user?.user_metadata?.name || 'there' }} 👋</div>
+            <p class="empty-subtitle">Stay on top of your tasks, deadlines, and team collaboration.</p>
+          </div>
+
+          <div class="stats-section">
+            <div class="stats-container">
+              <div class="stat-card" @click="router.push('/tasks')">
+                <div class="stat-content">
+                  <div class="stat-icon ongoing">
+                    <i class="bi bi-list-task"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-number">Tasks</div>
+                    <div class="stat-title">View your tasks</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stat-card" @click="router.push('/schedule')">
+                <div class="stat-content">
+                  <div class="stat-icon under-review">
+                    <i class="bi bi-calendar3"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-number">Schedule</div>
+                    <div class="stat-title">See upcoming events</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stat-card" @click="router.push('/projects')">
+                <div class="stat-content">
+                  <div class="stat-icon completed">
+                    <i class="bi bi-folder"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-number">Projects</div>
+                    <div class="stat-title">Browse projects</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="stat-card" @click="router.push({ name: 'AccountSettings' })">
+                <div class="stat-content">
+                  <div class="stat-icon total">
+                    <i class="bi bi-person-circle"></i>
+                  </div>
+                  <div class="stat-info">
+                    <div class="stat-number">Account</div>
+                    <div class="stat-title">Manage profile</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <button class="secondary-button" @click="router.push({ name: 'AccountSettings' })">Account</button>
-        <button @click="onLogout">Logout</button>
+
+        <!-- Upcoming tasks summary -->
+        <div class="tasks-container" style="margin-top: 1rem;">
+          <h3 class="page-subtitle" style="color:#374151; margin-bottom: 0.5rem;">Upcoming Tasks</h3>
+          <div v-if="loading" class="empty-state" style="padding: 1rem;">
+            <p class="empty-subtitle">Loading tasks…</p>
+          </div>
+          <div v-else>
+            <div v-if="upcomingTasks.length === 0" class="empty-state" style="padding: 1rem;">
+              <p class="empty-subtitle">No upcoming tasks.</p>
+            </div>
+            <div v-else>
+              <div 
+                v-for="(task, index) in upcomingTasks" 
+                :key="task.id" 
+                class="task-card" 
+                :style="{ animationDelay: `${index * 0.05}s` }"
+              >
+                <div class="task-main" @click="router.push(`/tasks/${task.id}`)">
+                  <div class="task-content">
+                    <div class="task-header">
+                      <div class="task-title-section">
+                        <h3 class="task-title">{{ task.task_name }}</h3>
+                        <div class="task-status" :class="{ ongoing: task.status==='Ongoing', completed: task.status==='Completed', 'under-review': task.status==='Under Review' }">
+                          <i class="bi" :class="{ 'bi-play-circle': task.status==='Ongoing', 'bi-check-circle-fill': task.status==='Completed', 'bi-eye': task.status==='Under Review' }"></i>
+                          <span>{{ task.status }}</span>
+                        </div>
+                      </div>
+                      <div class="task-meta">
+                        <div class="task-date">
+                          <i class="bi bi-calendar3"></i>
+                          <span>{{ new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="task-actions">
+                    <div class="click-hint">
+                      <i class="bi bi-arrow-right"></i>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-    </header>
-
-    <main class="content">
-      <section class="hero">
-        <div>
-          <h2>{{ greeting }}, {{ sessionState.user?.user_metadata?.name || 'there' }} 👋</h2>
-          <p>Stay on top of your tasks, deadlines, and team collaboration.</p>
-        </div>
-      </section>
-
-      <section class="grid">
-        <article class="card kpi">
-          <h3>My Tasks</h3>
-          <p>Quick access to your assigned tasks.</p>
-          <button class="secondary-button" aria-label="View my tasks">Open</button>
-        </article>
-        <article class="card kpi">
-          <h3>Calendar</h3>
-          <p>See upcoming deadlines and events.</p>
-          <button class="secondary-button" aria-label="Open calendar">Open</button>
-        </article>
-        <article class="card kpi">
-          <h3>Reports</h3>
-          <p>Generate progress and workload reports.</p>
-          <button class="secondary-button" aria-label="Open reports">Open</button>
-        </article>
-      </section>
-    </main>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dashboard {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 100vh;
-  background: var(--bg-secondary);
-}
-
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-color);
-}
-
-.brand { display: flex; align-items: center; gap: 0.75rem; }
-.logo {
-  width: 40px; height: 40px; border-radius: 10px;
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-  display: grid; place-items: center; color: #fff; font-weight: 700;
-}
-.brand-text h1 { margin: 0; font-size: 1rem; color: var(--text-primary); }
-.brand-text p { margin: 0; font-size: 0.75rem; color: var(--text-secondary); }
-
-.header-actions { display: flex; align-items: center; gap: 0.5rem; }
-.user-chip { display: flex; align-items: center; gap: 0.5rem; padding-right: 0.5rem; border-right: 1px solid var(--border-color); }
-.avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--bg-secondary); display: grid; place-items: center; color: var(--primary-color); font-weight: 700; }
-.user-meta { display: flex; flex-direction: column; }
-.user-meta strong { color: var(--text-primary); line-height: 1; }
-.user-meta small { color: var(--text-secondary); }
-
-.content { padding: 1.25rem; max-width: 1200px; width: 100%; margin: 0 auto; }
-.hero { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1.25rem; box-shadow: var(--shadow-sm); }
-.hero h2 { margin: 0 0 0.25rem 0; color: var(--text-primary); }
-.hero p { margin: 0; color: var(--text-secondary); }
-
-.grid { margin-top: 1rem; display: grid; grid-template-columns: repeat(12, 1fr); gap: 1rem; }
-.card { background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; gap: 0.5rem; }
-.kpi { grid-column: span 4; }
-
-@media (max-width: 1024px) {
-  .kpi { grid-column: span 6; }
-}
-@media (max-width: 640px) {
-  .content { padding: 1rem; }
-  .grid { grid-template-columns: repeat(6, 1fr); }
-  .kpi { grid-column: span 6; }
-}
+/* No component-scoped styles needed; using TaskView theme from imported CSS */
 </style>
