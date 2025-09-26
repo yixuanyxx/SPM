@@ -83,14 +83,6 @@
                     <i class="bi bi-person-plus"></i>
                     Assign
                   </button>
-                  <button 
-                    v-if="canAddSubtask"
-                    @click="openAddSubtaskPopup"
-                    class="btn btn-secondary"
-                  >
-                    <i class="bi bi-plus-circle"></i>
-                    Add Subtask
-                  </button>
                 </div>
               </div>
             </div>
@@ -341,22 +333,6 @@
       @update-success="updateSuccess"
     />
 
-    <!-- Add Subtask Popup -->
-    <EditPopup
-      :isVisible="showAddSubtaskPopup"
-      :taskId="null"
-      :taskTitle="''"
-      :currentOwner="currentUser.id"
-      :userRole="currentUser.role"
-      :isSubtask="true"
-      :parentTaskId="task?.id"
-      :parentTaskTitle="task?.task_name"
-      :teamMembers="teamMembers"
-      :isNewSubtask="true"
-      @close="closeAddSubtaskPopup"
-      @update-success="handleSubtaskCreated"
-    />
-
     <!-- Assign Popup -->
     <AssignPopup 
       :isVisible="showAssignPopup"
@@ -393,7 +369,6 @@ const error = ref(null)
 // const showEditModal = ref(false)
 const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
-const showAddSubtaskPopup = ref(false)
 
 // Team members data for assign popup - replace with real data fetching as needed (this is for testing)
 const teamMembers = ref([
@@ -433,17 +408,6 @@ const canAssignTask = computed(() => {
   return task.value.owner === currentUser.id || 
          currentUser.role === 'manager' || 
          currentUser.role === 'director'
-})
-
-const canAddSubtask = computed(() => {
-  if (!task.value) return false
-  // Only allow adding subtasks if:
-  // 1. User has permission (owner or manager/director)
-  // 2. Current task is not already a subtask
-  return (task.value.owner === currentUser.id || 
-         currentUser.role === 'manager' || 
-         currentUser.role === 'director') && 
-         !task.value.parent_task
 })
 
 // Watch for route parameter changes to reload task details
@@ -691,21 +655,5 @@ const updateSuccess = async (assignmentData) => {
   // Refresh task details to show updated assignment
   await fetchTaskDetails()
   closeEditPopup()
-}
-
-// Add Subtask popup methods
-const openAddSubtaskPopup = () => {
-  showAddSubtaskPopup.value = true
-}
-
-const closeAddSubtaskPopup = () => {
-  showAddSubtaskPopup.value = false
-}
-
-const handleSubtaskCreated = async (subtaskData) => {
-  console.log('Subtask created:', subtaskData)
-  // Refresh task details to show the new subtask
-  await fetchTaskDetails()
-  closeAddSubtaskPopup()
 }
 </script>

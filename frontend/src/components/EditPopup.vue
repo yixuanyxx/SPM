@@ -3,7 +3,7 @@
     <div class="popup-container">
       <!-- Header -->
       <div class="popup-header">
-        <h3>{{ isNewSubtask ? 'Add Subtask' : 'Edit Task Details' }}</h3>
+        <h3>Edit Task Details</h3>
         <button class="close-btn" @click="closePopup">&times;</button>
       </div>
 
@@ -191,7 +191,6 @@ export default {
     isSubtask: { type: Boolean, default: false },
     parentTaskId: { type: [String, Number], default: null },
     parentTaskTitle: { type: String, default: '' },
-    isNewSubtask: { type: Boolean, default: false },
     teamMembers: {
       type: Array,
       default: () => [],
@@ -261,48 +260,35 @@ export default {
       });
     },
     async fetchTaskDetails() {
+      if (!this.taskId) return;
+      
       this.isLoading = true;
       this.clearMessages();
 
       try {
-        if (this.isNewSubtask) {
-          // Initialize empty form for new subtask
-          this.editedTask = {
-            id: null,
-            task_name: "",
-            description: "",
-            status: "Unassigned",
-            due_date: "",
-            priority: "Medium",
-            owner: this.currentOwner,
-            collaborators: [],
-          };
-        } else if (this.taskId) {
-          // Fetch existing task details
-          const response = await fetch(`http://localhost:5002/tasks/${this.taskId}`);
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const data = await response.json();
-          const task = data.task || data;
-
-          // Format the due date to YYYY-MM-DD format for the date input
-          const dueDate = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
-          
-          this.editedTask = {
-            id: this.taskId,
-            task_name: task.task_name || this.taskTitle,
-            description: task.description || "",
-            status: task.status || "Unassigned",
-            due_date: dueDate,
-            priority: task.priority || "Medium",
-            owner: task.owner || this.currentOwner,
-            collaborators: Array.isArray(task.collaborators) 
-              ? task.collaborators.map(c => c.id || c)
-              : [],
-          };
+        const response = await fetch(`http://localhost:5002/tasks/${this.taskId}`);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const data = await response.json();
+        const task = data.task || data;
+
+        // Format the due date to YYYY-MM-DD format for the date input
+        const dueDate = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
+        
+        this.editedTask = {
+          id: this.taskId,
+          task_name: task.task_name || this.taskTitle,
+          description: task.description || "",
+          status: task.status || "Unassigned",
+          due_date: dueDate,
+          priority: task.priority || "Medium",
+          owner: task.owner || this.currentOwner,
+          collaborators: Array.isArray(task.collaborators) 
+            ? task.collaborators.map(c => c.id || c)
+            : [],
+        };
 
         this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
       } catch (err) {
@@ -320,41 +306,16 @@ export default {
       this.isLoading = true;
 
       try {
-        let endpoint;
-        let method;
-        let requestData;
+        const updateData = {
+          task_id: this.taskId,
+          ...this.editedTask,
+          due_date: this.editedTask.due_date,
+        };
 
-        if (this.isNewSubtask) {
-          // Creating a new subtask using the correct endpoint based on role
-          endpoint = this.userRole === 'manager' ? 
-            "http://localhost:5002/tasks/manager-subtask/create" : 
-            "http://localhost:5002/tasks/staff-subtask/create";
-          method = "POST";
-          requestData = {
-            owner_id: this.currentOwner,
-            task_name: this.editedTask.task_name,
-            description: this.editedTask.description,
-            status: this.editedTask.status,
-            due_date: this.editedTask.due_date,
-            priority: this.editedTask.priority,
-            collaborators: this.editedTask.collaborators,
-            parent_task: this.parentTaskId // Required field for subtasks
-          };
-        } else {
-          // Updating existing task
-          endpoint = "http://localhost:5002/tasks/update";
-          method = "PUT";
-          requestData = {
-            task_id: this.taskId,
-            ...this.editedTask,
-            due_date: this.editedTask.due_date,
-          };
-        }
-
-        const response = await fetch(endpoint, {
-          method: method,
+        const response = await fetch("http://localhost:5002/tasks/update", {
+          method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(requestData),
+          body: JSON.stringify(updateData),
         });
 
         if (!response.ok) {
