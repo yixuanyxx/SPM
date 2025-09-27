@@ -69,7 +69,7 @@
                 <div class="action-buttons">
                   <button 
                     v-if="canEditTask" 
-                    @click="showEditModal = true" 
+                    @click="openEditPopup" 
                     class="btn btn-ghost"
                   >
                     <i class="bi bi-pencil"></i>
@@ -303,7 +303,7 @@
       </div>
     </div>
 
-    <!-- Edit Modal -->
+    <!-- Edit Modal
     <div v-if="showEditModal" class="modal-overlay" @click="showEditModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
@@ -316,7 +316,22 @@
           <p>Edit task functionality will be implemented here...</p>
         </div>
       </div>
-    </div>
+    </div> -->
+
+    <!-- Edit Popup -->
+    <EditPopup
+      :isVisible="showEditPopup"
+      :taskId="task?.id"
+      :taskTitle="task?.task_name || ''"
+      :currentOwner="task?.owner || ''"
+      :userRole="currentUser.role"
+      :isSubtask="!!task?.parent_task"
+      :parentTaskId="task?.parent_task"
+      :parentTaskTitle="parentTask?.task_name || ''"
+      :teamMembers="teamMembers"
+      @close="closeEditPopup"
+      @update-success="updateSuccess"
+    />
 
     <!-- Assign Popup -->
     <AssignPopup 
@@ -338,6 +353,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AssignPopup from '@/components/AssignPopup.vue'
+import EditPopup from '@/components/EditPopup.vue'
 import SideNavbar from '../../components/SideNavbar.vue'
 import '../taskview/taskview.css'
 import './taskdetails.css'
@@ -350,7 +366,8 @@ const project = ref(null)
 const parentTask = ref(null)
 const loading = ref(true)
 const error = ref(null)
-const showEditModal = ref(false)
+// const showEditModal = ref(false)
+const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
 
 // Team members data for assign popup - replace with real data fetching as needed (this is for testing)
@@ -622,5 +639,21 @@ const handleAssignmentSuccess = async (assignmentData) => {
   // Refresh task details to show updated assignment
   await fetchTaskDetails()
   closeAssignPopup()
+}
+
+// Edit popup methods
+const openEditPopup = () => {
+  showEditPopup.value = true
+}
+
+const closeEditPopup = () => {
+  showEditPopup.value = false
+}
+
+const updateSuccess = async (assignmentData) => {
+  console.log('Update successful:', assignmentData)
+  // Refresh task details to show updated assignment
+  await fetchTaskDetails()
+  closeEditPopup()
 }
 </script>

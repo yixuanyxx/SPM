@@ -415,29 +415,3 @@ def get_subtasks_by_parent(parent_task_id: int):
         
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
-
-
-
-
-
-
-# get all tasks, or filter by owner_id and/or project_id 
-# eg: http://127.0.0.1:5002/tasks?owner_id=101
-# eg: http://127.0.0.1:5002/tasks?owner_id=101&project_id=10
-
-# @task_bp.route("/tasks/<int:task_id>/status", methods=["PUT"])
-# def set_status(task_id: int):
-#     """
-#     JSON body: { "status": "Ongoing" | "Under Review" | "Completed" | "Unassigned" }
-#     """
-#     try:
-#         body = request.get_json(force=True)
-#         new_status = body.get("status")
-#         if not new_status:
-#             return jsonify({"Message": "status is required", "Code": 400}), 400
-#         updated = service.update_status(task_id, new_status)
-#         return jsonify(updated), 200
-#     except Exception as e:
-#         return jsonify({"Message": str(e), "Code": 500}), 500
-
-# get tasks by user_id (in owner_id or collaborators)
