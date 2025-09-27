@@ -11,12 +11,12 @@
           <h1 class="page-title">My Tasks</h1>
           <p class="page-subtitle">View and Create Tasks Here</p>
         </div>
-        <button class="create-task-btn" @click="createNewTask">
+        <button class="create-task-btn" @click="showCreateModal = true">
             <i class="bi bi-plus-lg"></i>
             Create New Task
         </button>
       </div>
-
+      
     <!-- Stats Section -->
     <div class="stats-section">
       <div class="stats-container">
@@ -31,7 +31,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Unassigned status card - only show for managers and directors -->
         <div v-if="isManagerOrDirector" class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
           <div class="stat-content">
@@ -192,8 +192,48 @@
         </div>
       </div>
     </div>
+    <!-- Create Task Modal -->
+    <div v-if="showCreateModal" class="modal-overlay">
+      <div class="modal-content">
+        <h2>Create New Task</h2>
+
+        <label>Task Name* </label>
+        <input v-model="newTask.task_name" placeholder="Enter task name" :class="{ 'input-error': newTask.task_name.trim() === '' }" required/>
+
+        <label>Description* </label>
+        <textarea v-model="newTask.description" placeholder="Enter description" :class="{ 'input-error': newTask.description.trim() === '' }" required></textarea>
+
+        <label>Due Date* </label>
+        <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
+
+        <label>Status</label>
+        <select v-model="newTask.status">
+          <option v-if="isManagerOrDirector" value="Unassigned">Unassigned</option>
+          <option value="Ongoing">Ongoing</option>
+          <option value="Under Review">Under Review</option>
+          <option value="Completed">Completed</option>
+        </select>
+
+        <label>Project ID</label>
+        <input type="text" v-model="newTask.project_id" placeholder="Enter project ID" />
+
+        <label>Collaborators (comma-separated)</label>
+        <input type="text" v-model="newTask.collaborators" placeholder="e.g., 101,102,103" />
+
+        <label>Subtask IDs (comma-separated)</label>
+        <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" />
+
+        <div class="modal-actions">
+          <button @click="submitNewTask" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
+            Create
+          </button>
+          <button @click="showCreateModal = false">Cancel</button>
+        </div>
+      </div>
     </div>
+
   </div>
+</div>
 </template>
 
 <script setup>
@@ -205,6 +245,7 @@ import "./taskview.css"
 const activeFilter = ref('all')
 const expandedTasks = ref([])
 const userRole = ref('')
+const showCreateModal = ref(false);
 
 // Get user role from localStorage on component mount
 // onMounted(() => {
@@ -239,6 +280,80 @@ onMounted(() => {
       console.error('Error fetching tasks:', error)
     })
 })
+
+const newTask = ref({
+  owner_id: userId,
+  task_name: '',
+  description: '',
+  type: 'parent',
+  due_date: '',
+  status: 'Ongoing',
+  project_id: '',
+  collaborators: '',
+  parent_task: '',
+  subtasks: ''
+})
+
+const isFormValid = computed(() => {
+  return newTask.value.task_name.trim() !== '' &&
+         newTask.value.description.trim() !== '' &&
+         newTask.value.due_date.trim() !== ''   
+})
+
+// send POST to backend
+const submitNewTask = async () => {
+  if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
+    alert('Please fill out all required fields: Task Name, Description, and Due Date.')
+    return
+  }
+  try {
+    let endpoint = userRole.value === 'manager'
+      ? 'http://localhost:5002/tasks/manager-task/create'
+      : 'http://localhost:5002/tasks/staff-task/create'
+
+    // convert comma-separated strings to arrays where needed
+    const payload = {
+      ...newTask.value,
+      collaborators: newTask.value.collaborators
+        ? newTask.value.collaborators.split(',').map(id => id.trim())
+        : [],
+      subtasks: newTask.value.subtasks
+        ? newTask.value.subtasks.split(',').map(id => id.trim())
+        : []
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+
+    const data = await response.json()
+
+    if (response.ok && data.Code === 201) {
+      tasks.value.push(data.data)
+      // reset form
+      newTask.value = {
+        owner_id: userId,
+        task_name: '',
+        description: '',
+        type: 'parent',
+        due_date: '',
+        status: 'Unassigned',
+        project_id: '',
+        collaborators: '',
+        parent_task: '',
+        subtasks: ''
+      }
+      showCreateModal.value = false
+    } else {
+      alert('Failed: ' + data.Message)
+    }
+  } catch (err) {
+    console.error(err)
+    alert('Error creating task')
+  }
+}
 
 const filteredTasks = computed(() => {
   let filtered = tasks.value
