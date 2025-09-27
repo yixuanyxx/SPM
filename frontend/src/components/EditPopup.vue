@@ -65,18 +65,22 @@
 
           <!-- Priority Level -->
           <div class="form-group">
-            <label for="priority">Priority Level</label>
-            <select
-              id="priority"
-              v-model="editedTask.priority"
-              :disabled="isLoading"
-              class="form-select"
-            >
-              <option value="Low">Low</option>
-              <option value="Medium">Medium</option>
-              <option value="High">High</option>
-              <option value="Urgent">Urgent</option>
-            </select>
+            <label for="priority">Priority Level: {{ editedTask.priority }}</label>
+            <div class="priority-slider-container">
+              <input
+                id="priority"
+                type="range"
+                min="1"
+                max="10"
+                v-model="editedTask.priority"
+                :disabled="isLoading"
+                class="priority-slider"
+              />
+              <div class="priority-labels">
+                <span class="priority-label-left">1 - Least Important</span>
+                <span class="priority-label-right">10 - Most Important</span>
+              </div>
+            </div>
           </div>
 
           <!-- Collaborators -->
@@ -204,7 +208,7 @@ export default {
         description: "",
         status: "Unassigned",
         due_date: "",
-        priority: "Medium",
+        priority: "5",
         owner: "",
         collaborators: [],
       },
@@ -283,7 +287,7 @@ export default {
           description: task.description || "",
           status: task.status || "Unassigned",
           due_date: dueDate,
-          priority: task.priority || "Medium",
+          priority: task.priority || "5",
           owner: task.owner || this.currentOwner,
           collaborators: Array.isArray(task.collaborators) 
             ? task.collaborators.map(c => c.id || c)
@@ -845,4 +849,74 @@ export default {
     opacity: 1;
   }
 }
+
+.priority-slider-container {
+  margin-top: 8px;
+}
+
+.priority-slider {
+  width: 100%;
+  height: 8px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #9ca3af 0%, #fbbf24 50%, #ef4444 100%);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.priority-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+.priority-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #374151;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.priority-slider::-webkit-slider-thumb:hover {
+  border-color: #111827;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Firefox */
+.priority-slider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #374151;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.priority-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 5px;
+  background: linear-gradient(to right, #9ca3af 0%, #fbbf24 50%, #ef4444 100%);
+  border: none;
+}
+
+.priority-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.priority-label-left,
+.priority-label-right {
+  font-size: 0.75rem;
+}
+
 </style>
