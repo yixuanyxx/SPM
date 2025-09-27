@@ -36,6 +36,16 @@
 
       <!-- Navigation Items -->
       <div class="nav-items">
+        <!-- Home -->
+        <div class="nav-item">
+          <router-link to="/" class="nav-link" @click="handleNavItemClick">
+            <div class="nav-icon">
+              <i class="bi bi-house"></i>
+            </div>
+            <span class="nav-text">Home</span>
+          </router-link>
+        </div>
+
         <!-- Tasks -->
         <div class="nav-item" :class="{ expanded: expandedMenus.includes('tasks') }">
           <div class="nav-link" @click="toggleMenu('tasks')">
@@ -82,14 +92,30 @@
           </router-link>
         </div>
 
-        <!-- Profile -->
-        <div class="nav-item">
-          <router-link to="/" class="nav-link" @click="handleNavItemClick"> <!-- UPDATE THIS -->
+        <!-- Profile with dropdown -->
+        <div class="nav-item" :class="{ expanded: expandedMenus.includes('profile') }">
+          <div class="nav-link" @click="toggleMenu('profile')">
             <div class="nav-icon">
               <i class="bi bi-person-circle"></i>
             </div>
             <span class="nav-text">Profile</span>
-          </router-link>
+            <div class="nav-arrow" :class="{ rotated: expandedMenus.includes('profile') }">
+              <i class="bi bi-chevron-down"></i>
+            </div>
+          </div>
+
+          <transition name="dropdown">
+            <div v-if="expandedMenus.includes('profile')" class="nav-dropdown">
+              <router-link :to="{ name: 'AccountSettings' }" class="dropdown-item" @click="handleNavItemClick">
+                <i class="bi bi-gear"></i>
+                <span>Account Settings</span>
+              </router-link>
+              <a href="#" class="dropdown-item" @click.prevent="onLogout">
+                <i class="bi bi-box-arrow-right"></i>
+                <span @click="onLogout">Logout</span>
+              </a>
+            </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -97,25 +123,29 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
+import { logout } from '../services/auth'
 
 const expandedMenus = ref([])
 const userRole = ref('')
 const userId = ref(null)
 const isMobileMenuOpen = ref(false)
+const router = useRouter()
+const route = useRoute()
 
 onMounted(async () => {
   // Get user ID from localStorage
-  const storedUserId = localStorage.getItem('UID') || localStorage.getItem('userId') || localStorage.getItem('user_id')
+  const storedUserId = localStorage.getItem('spm_userid') || localStorage.getItem('UID') || localStorage.getItem('userId') || localStorage.getItem('user_id')
   userId.value = storedUserId
 
   // Fetch user role from backend
   if (storedUserId) {
     try {
-      const response = await fetch(`........`) // UPDATE THIS
+      const response = await fetch(`http://127.0.0.1:5003/users/${storedUserId}`)
       if (response.ok) {
         const userData = await response.json()
-        userRole.value = userData.role || ''
+        userRole.value = userData?.data?.role || ''
       }
     } catch (error) {
       console.error('Error fetching user role:', error)
@@ -158,7 +188,24 @@ const handleNavItemClick = () => {
   if (window.innerWidth <= 640) {
     closeMobileMenu()
   }
+  // Don't auto-close expanded menus - let them stay open to show current page
 }
+
+// Watch for route changes to auto-expand relevant menus
+watch(() => route.path, (newPath) => {
+  // Auto-expand tasks menu if on any tasks page
+  if (newPath.startsWith('/tasks')) {
+    if (!expandedMenus.value.includes('tasks')) {
+      expandedMenus.value.push('tasks')
+    }
+  }
+  // Auto-expand profile menu if on account settings
+  if (newPath === '/account') {
+    if (!expandedMenus.value.includes('profile')) {
+      expandedMenus.value.push('profile')
+    }
+  }
+}, { immediate: true })
 
 // Computed properties for role-based navigation (CHANGE THIS ALSO!!!!!)
 const teamTasksRoute = computed(() => {
@@ -174,6 +221,11 @@ const teamTasksIcon = computed(() => {
 })
 
 //ADD ROLE-BASED NAVIGATION FOR PROJECTS ALSO (TO BE DONE)
+
+async function onLogout() {
+  await logout()
+  router.push({ name: 'Login' })
+}
 </script>
 
 <style scoped>

@@ -41,7 +41,7 @@ For windows:
 
 ===================================================
 
-### Create a virtual environment inside task microservice
+### Create a virtual environment inside projects microservice
 ```cd backend/projects```
 ```python -m venv venv```
 
