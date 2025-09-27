@@ -11,6 +11,10 @@
           <h1 class="page-title">My Tasks</h1>
           <p class="page-subtitle">View and Create Tasks Here</p>
         </div>
+        <button class="create-task-btn" @click="createNewTask">
+            <i class="bi bi-plus-lg"></i>
+            Create New Task
+        </button>
       </div>
 
     <!-- Stats Section -->
