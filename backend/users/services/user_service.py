@@ -10,19 +10,24 @@ class UserService:
         """
         Get user details by userid.
         """
-        user = self.repo.get_user_by_userid(userid)
-        if not user:
+        user_data = self.repo.get_user_by_userid(userid)
+        if not user_data:
             return {"status": 404, "message": f"User with userid {userid} not found"}
-        return {"status": 200, "data": user}
-
+        
+        # Convert dict to User object for validation
+        try:
+            user = User(**user_data)
+            return {"status": 200, "data": user.__dict__}
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to parse user data: {str(e)}"}
 
     def update_user_by_userid(self, userid: int, update_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Update user details by userid.
         """
         # Check if user exists
-        existing_user = self.repo.get_user_by_userid(userid)
-        if not existing_user:
+        existing_user_data = self.repo.get_user_by_userid(userid)
+        if not existing_user_data:
             return {"status": 404, "message": f"User with userid {userid} not found"}
         
         # Validate update data
@@ -33,7 +38,19 @@ class UserService:
             return {"status": 400, "message": "No valid fields to update provided"}
         
         try:
-            updated_user = self.repo.update_user_by_userid(userid, filtered_data)
-            return {"status": 200, "message": f"User {userid} updated successfully", "data": updated_user}
+            # Create User object from existing data
+            existing_user = User(**existing_user_data)
+            
+            # Update the User object with new data
+            for field, value in filtered_data.items():
+                if hasattr(existing_user, field):
+                    setattr(existing_user, field, value)
+            
+            # Update in repository
+            updated_user_data = self.repo.update_user_by_userid(userid, filtered_data)
+            
+            # Return updated User object
+            updated_user = User(**updated_user_data)
+            return {"status": 200, "message": f"User {userid} updated successfully", "data": updated_user.__dict__}
         except Exception as e:
             return {"status": 500, "message": f"Failed to update user: {str(e)}"}
