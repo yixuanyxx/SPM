@@ -127,6 +127,7 @@ export async function registerWithMapping(email, password, role, name, teamName 
           dept_id: dept_id
         };
 
+
         const response = await fetch(`http://127.0.0.1:5003/users`, {
           method: 'POST',
           headers: {
