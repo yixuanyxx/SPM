@@ -14,7 +14,6 @@ const routes = [
   { path: "/login", name: "Login", component: Login },
   { path: "/", name: "Landing", component: LandingPage, meta: { requiresAuth: true } },
   { path: "/register", name: "Register", component: Register },
-  { path: "/verify-email", name: "VerifyEmail", component: () => import("../components/VerifyEmail.vue") },
   { path: "/account", name: "AccountSettings", component: AccountSettings, meta: { requiresAuth: true } },
   {
     path: "/tasks/:id",

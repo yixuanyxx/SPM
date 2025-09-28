@@ -73,3 +73,61 @@ def update_user_by_userid(userid: int):
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+
+@user_bp.route("/users/department/<int:dept_id>", methods=["GET"])
+def get_users_by_dept_id(dept_id: int):
+    """
+    Get all users by department ID.
+    
+    Parameters:
+    - dept_id: The department ID (integer) to get users for
+    
+    Returns:
+    {
+        "message": "Retrieved {count} user(s) for department ID {dept_id}",
+        "data": [ ... list of users ... ],
+        "status": 200
+    }
+    
+    Responses:
+        200: Users found and returned (or empty list if no users)
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_users_by_dept_id(dept_id)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
+
+@user_bp.route("/users/team/<int:team_id>", methods=["GET"])
+def get_users_by_team_id(team_id: int):
+    """
+    Get all users by team ID.
+    
+    Parameters:
+    - team_id: The team ID (integer) to get users for
+    
+    Returns:
+    {
+        "message": "Retrieved {count} user(s) for team ID {team_id}",
+        "data": [ ... list of users ... ],
+        "status": 200
+    }
+    
+    Responses:
+        200: Users found and returned (or empty list if no users)
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_users_by_team_id(team_id)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
