@@ -40,3 +40,12 @@ class SupabaseUserRepo:
         """
         res = self.client.table(TABLE).select("*").eq("team_id", team_id).execute()
         return res.data or []
+
+    def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new user record.
+        """
+        res = self.client.table(TABLE).insert(user_data).execute()
+        if not res.data:
+            raise RuntimeError("Insert failed — no data returned")
+        return res.data[0]

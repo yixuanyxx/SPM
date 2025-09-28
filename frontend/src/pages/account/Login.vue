@@ -32,6 +32,17 @@
                     <button type="submit" :disabled="loading">{{ loading ? 'Logging in...' : 'Login' }}</button>
                     <button class="secondary-button" type="button" @click="router.push({ name: 'Register' })">Create new account</button>
                   </div>
+                  
+                  <div style="text-align: center; margin-top: 1rem;">
+                    <button 
+                      type="button" 
+                      @click="router.push({ name: 'ResetPassword' })"
+                      style="background: none; border: none; color: #3b82f6; text-decoration: underline; cursor: pointer; font-size: 0.9rem;"
+                    >
+                      Forgot your password?
+                    </button>
+                  </div>
+                  
                   <p v-if="message" :class="['message', error ? 'error' : 'success']">{{ message }}</p>
                 </form>
               </div>

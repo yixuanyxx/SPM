@@ -4,6 +4,47 @@ from services.user_service import UserService
 user_bp = Blueprint("users", __name__)
 service = UserService()
 
+@user_bp.route("/users", methods=["POST"])
+def create_user():
+    """
+    Create a new user.
+    
+    Required fields in JSON body:
+    - id: Supabase Auth user ID (UUID)
+    - userid: Unique integer user ID
+    - role: User role
+    - name: User name
+    - email: User email
+    
+    Optional fields:
+    - team_id: Team ID
+    - dept_id: Department ID
+    
+    Returns:
+    {
+        "message": "User {userid} created successfully",
+        "data": { ... created user data ... },
+        "status": 201
+    }
+    
+    Responses:
+        201: User successfully created
+        400: Missing required fields or invalid data
+        500: Internal Server Error
+    """
+    try:
+        # Get JSON data from request
+        data = request.get_json(silent=True) or {}
+        
+        # Call service to create user
+        result = service.create_user(data)
+        status_code = result.pop("status", 201)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
 @user_bp.route("/users/<int:userid>", methods=["GET"])
 def get_user_by_userid(userid: int):
     """

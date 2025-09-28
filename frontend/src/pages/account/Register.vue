@@ -23,11 +23,43 @@
                   </div>
                   <div>
                     <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Role</label>
-                    <select v-model="role" required class="role-select" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;">
+                    <select v-model="role" required class="role-select" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" @change="onRoleChange">
                       <option value="" disabled>Select your role</option>
                       <option value="staff">Staff</option>
-                      <option value="manager">Manager/Director</option>
-                      <option value="hr">HR/Senior Management</option>
+                      <option value="manager">Manager</option>
+                      <option value="director">Director</option>
+                    </select>
+                  </div>
+                  <div v-if="role === 'staff' || role === 'manager'">
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Team</label>
+                    <select v-model="team" required style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;">
+                      <option value="" disabled>Select your team</option>
+                      <option value="Sales Team">Sales Team</option>
+                      <option value="Consultant">Consultant</option>
+                      <option value="Developers">Developers</option>
+                      <option value="Support Team">Support Team</option>
+                      <option value="Senior Engineers">Senior Engineers</option>
+                      <option value="Junior Engineers">Junior Engineers</option>
+                      <option value="Call Centre">Call Centre</option>
+                      <option value="Operation Planning Team">Operation Planning Team</option>
+                      <option value="HR Team">HR Team</option>
+                      <option value="L&D Team">L&D Team</option>
+                      <option value="Admin Team">Admin Team</option>
+                      <option value="Finance Team">Finance Team</option>
+                      <option value="IT Team">IT Team</option>
+                    </select>
+                  </div>
+                  <div v-if="role === 'director'">
+                    <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Department</label>
+                    <select v-model="department" required style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;">
+                      <option value="" disabled>Select your department</option>
+                      <option value="Sales">Sales</option>
+                      <option value="Consultancy">Consultancy</option>
+                      <option value="System Solutioning">System Solutioning</option>
+                      <option value="Engineering Operation">Engineering Operation</option>
+                      <option value="HR and Admin">HR and Admin</option>
+                      <option value="Finance">Finance</option>
+                      <option value="IT">IT</option>
                     </select>
                   </div>
                   <div>
@@ -58,7 +90,7 @@
 
 <script setup>
 import { ref } from "vue";
-import { register } from "../../services/auth.js";
+import { registerWithMapping } from "../../services/registration.js";
 import { useRouter } from 'vue-router';
 import './account.css'
 
@@ -68,10 +100,18 @@ const name = ref("");
 const password = ref("");
 const confirmPassword = ref("");
 const role = ref("");
+const team = ref("");
+const department = ref("");
 const show = ref(false);
 const message = ref("");
 const error = ref(false);
 const loading = ref(false);
+
+function onRoleChange() {
+  // Clear team/department when role changes
+  team.value = "";
+  department.value = "";
+}
 
 async function onRegister() {
   message.value = "";
@@ -83,11 +123,45 @@ async function onRegister() {
       throw new Error("Please select a role");
     }
 
+    // Validate team/department selection based on role
+    if ((role.value === 'staff' || role.value === 'manager') && !team.value) {
+      throw new Error("Please select a team");
+    }
+    
+    if (role.value === 'director' && !department.value) {
+      throw new Error("Please select a department");
+    }
+
+    // Validate password strength
+    const hasLetter = /[a-zA-Z]/.test(password.value);
+    const hasNumber = /[0-9]/.test(password.value);
+    const isAlphanumeric = hasLetter && hasNumber;
+    const minLength = password.value.length >= 8;
+    
+    if (!minLength) {
+      throw new Error("Password must be at least 8 characters long");
+    }
+    
+    if (!isAlphanumeric) {
+      throw new Error("Password must contain both letters and numbers");
+    }
+
     if (password.value !== confirmPassword.value) {
       throw new Error("Passwords do not match");
     }
 
-    const { data, error: err } = await register(email.value, password.value, role.value, name.value);
+    // Determine team or department based on role
+    const teamName = (role.value === 'staff' || role.value === 'manager') ? team.value : null;
+    const departmentName = (role.value === 'director') ? department.value : null;
+
+    const { data, error: err } = await registerWithMapping(
+      email.value, 
+      password.value, 
+      role.value, 
+      name.value, 
+      teamName, 
+      departmentName
+    );
     if (err) throw err;
 
     message.value = "Please check your email to verify your account.";
@@ -98,6 +172,9 @@ async function onRegister() {
     name.value = "";
     password.value = "";
     confirmPassword.value = "";
+    role.value = "";
+    team.value = "";
+    department.value = "";
     
   } catch (err) {
     message.value = err.message;

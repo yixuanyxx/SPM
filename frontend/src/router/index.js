@@ -4,6 +4,8 @@ import LandingPage from "../pages/LandingPage.vue";
 import Login from "../pages/account/Login.vue";
 import Register from "../pages/account/Register.vue";
 import AccountSettings from "../pages/account/AccountSettings.vue";
+import ResetPassword from "../pages/account/ResetPassword.vue";
+import UpdatePassword from "../pages/account/UpdatePassword.vue";
 import { sessionState } from "../services/session";
 const TaskView = () => import('../pages/taskview/TaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
@@ -15,6 +17,8 @@ const routes = [
   { path: "/", name: "Landing", component: LandingPage, meta: { requiresAuth: true } },
   { path: "/register", name: "Register", component: Register },
   { path: "/account", name: "AccountSettings", component: AccountSettings, meta: { requiresAuth: true } },
+  { path: "/account/reset-password", name: "ResetPassword", component: ResetPassword },
+  { path: "/account/update-password", name: "UpdatePassword", component: UpdatePassword },
   {
     path: "/tasks/:id",
     name: "task-detail",

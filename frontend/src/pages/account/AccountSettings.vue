@@ -59,48 +59,34 @@
                     <div></div>
                   </div>
 
-                  <!-- Team ID (readonly) -->
-                  <div style="display:grid; grid-template-columns: 1fr auto; align-items:center; gap:0.5rem;">
+                  <!-- Team (readonly) - Only show for staff and managers -->
+                  <div v-if="role === 'staff' || role === 'manager'" style="display:grid; grid-template-columns: 1fr auto; align-items:center; gap:0.5rem;">
                     <div>
-                      <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Team ID</label>
-                      <div>{{ team_id ?? '-' }}</div>
+                      <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Team</label>
+                      <div>{{ teamName || '-' }}</div>
                     </div>
                     <div></div>
                   </div>
 
-                  <!-- Dept ID (readonly) -->
+                  <!-- Department (readonly) - Show for all roles -->
                   <div style="display:grid; grid-template-columns: 1fr auto; align-items:center; gap:0.5rem;">
                     <div>
-                      <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Department ID</label>
-                      <div>{{ dept_id ?? '-' }}</div>
+                      <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Department</label>
+                      <div>{{ departmentName || '-' }}</div>
                     </div>
                     <div></div>
                   </div>
 
-                  <!-- Password (editable: change only) -->
+                  <!-- Password (change via email) -->
                   <div style="display:grid; grid-template-columns: 1fr auto; align-items:center; gap:0.5rem;">
                     <div>
                       <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.25rem;">Password</label>
-                      <div v-if="!isEditingPassword" style="display:flex; align-items:center; gap:0.5rem;">
-                        <span>{{ showCurrentPassword ? '••••••••' : '••••••••' }}</span>
-                      </div>
-                      <div v-else style="display:grid; gap:0.75rem;">
-                        <input v-model="newPassword" :type="show ? 'text' : 'password'" placeholder="Enter new password" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
-                        <input v-model="confirmPassword" :type="show ? 'text' : 'password'" placeholder="Confirm new password" style="width:100%; padding:0.6rem 0.75rem; border:1px solid #e5e7eb; border-radius:8px;" />
-                        <div class="checkbox-wrapper" style="display:flex; align-items:center; gap:0.5rem;">
-                          <input type="checkbox" id="show-password" v-model="show" />
-                          <label for="show-password" style="color:#6b7280;">Show password</label>
-                        </div>
-                      </div>
+                      <div>••••••••</div>
                     </div>
                     <div style="display:flex; gap:0.5rem; margin-top: 1.35rem">
-                      <button v-if="!isEditingPassword" class="secondary-button" type="button" @click="startEditPassword">Change</button>
-                      <template v-else style="display:flex; ">
-                        <div style="display:flex; gap:0.5rem; margin-top: 1.35rem">
-                          <button class="secondary-button" type="button" @click="cancelEditPassword">Cancel</button>
-                          <button type="button" @click="savePassword" :disabled="loading">{{ loading ? 'Updating...' : 'Update' }}</button>
-                        </div>
-                        </template>
+                      <button class="secondary-button" type="button" @click="sendPasswordResetEmail" :disabled="loading">
+                        {{ loading ? 'Sending...' : 'Change Password' }}
+                      </button>
                     </div>
                   </div>
 
@@ -124,8 +110,11 @@ import { ref, onMounted } from "vue";
 import SideNavbar from '../../components/SideNavbar.vue'
 import './account.css'
 import { supabase } from "../../services/supabase";
+import { resetPasswordForEmail } from "../../services/auth.js";
 
 const API = 'http://127.0.0.1:5003';
+const TEAM_API = 'http://127.0.0.1:5004';
+const DEPT_API = 'http://127.0.0.1:5005';
 
 const userid = ref(null);
 const name = ref("");
@@ -133,18 +122,58 @@ const email = ref("");
 const role = ref("");
 const team_id = ref(null);
 const dept_id = ref(null);
+const teamName = ref("");
+const departmentName = ref("");
 const nameDraft = ref("");
 const isEditingName = ref(false);
-const newPassword = ref("");
-const confirmPassword = ref("");
-const isEditingPassword = ref(false);
-const show = ref(false);
-const showCurrentPassword = ref(false);
 const message = ref("");
 const error = ref(false);
 const loading = ref(false);
 
+// Helper function to get team name by ID
+async function getTeamNameById(teamId) {
+  if (!teamId) return '';
+  try {
+    const res = await fetch(`${TEAM_API}/teams/${teamId}`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data?.data?.name || '';
+  } catch (e) {
+    console.warn('Failed to fetch team name:', e);
+    return '';
+  }
+}
+
+// Helper function to get department name by ID
+async function getDepartmentNameById(deptId) {
+  if (!deptId) return '';
+  try {
+    const res = await fetch(`${DEPT_API}/departments/${deptId}`);
+    if (!res.ok) return '';
+    const data = await res.json();
+    return data?.data?.name || '';
+  } catch (e) {
+    console.warn('Failed to fetch department name:', e);
+    return '';
+  }
+}
+
 onMounted(async () => {
+  // Check if user is authenticated
+  try {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      console.warn('User not authenticated, redirecting to login');
+      // You might want to redirect to login page here
+      message.value = 'Please log in to access account settings';
+      error.value = true;
+      return;
+    }
+    console.log('User authenticated:', user.id);
+  } catch (e) {
+    console.error('Authentication check failed:', e);
+  }
+
   const stored = localStorage.getItem('spm_userid');
   if (stored) {
     userid.value = Number(stored);
@@ -172,6 +201,15 @@ async function onFetch() {
     team_id.value = u.team_id ?? null;
     dept_id.value = u.dept_id ?? null;
     nameDraft.value = name.value;
+    
+    // Fetch team and department names
+    if (team_id.value) {
+      teamName.value = await getTeamNameById(team_id.value);
+    }
+    if (dept_id.value) {
+      departmentName.value = await getDepartmentNameById(dept_id.value);
+    }
+    
     // No success message on initial load
     error.value = false;
   } catch (e) {
@@ -218,32 +256,36 @@ async function saveName() {
   }
 }
 
-function startEditPassword() {
-  isEditingPassword.value = true;
-  newPassword.value = '';
-  confirmPassword.value = '';
-}
-
-function cancelEditPassword() {
-  isEditingPassword.value = false;
-  newPassword.value = '';
-  confirmPassword.value = '';
-  show.value = false;
-}
-
-async function savePassword() {
+async function sendPasswordResetEmail() {
   try {
     message.value = '';
     error.value = false;
-    if (!newPassword.value) throw new Error('Enter a new password');
-    if (newPassword.value !== confirmPassword.value) throw new Error('Passwords do not match');
     loading.value = true;
-    const { error: err } = await supabase.auth.updateUser({ password: newPassword.value });
-    if (err) throw err;
-    isEditingPassword.value = false;
-    message.value = 'Password updated!';
+
+    // Get user email from the current user data
+    if (!email.value) {
+      throw new Error('User email not found. Please reload the page.');
+    }
+
+    // Send password reset email
+    const redirectTo = `${window.location.origin}/account/update-password`;
+    const { error: resetError } = await resetPasswordForEmail(email.value, redirectTo);
+    
+    if (resetError) throw resetError;
+
+    message.value = 'Password reset email sent! Please check your email and follow the instructions to change your password.';
+    error.value = false;
+    
+    // Keep the success message visible for a few seconds
+    setTimeout(() => {
+      if (message.value && message.value.includes('reset email sent')) {
+        message.value = '';
+      }
+    }, 8000);
+    
   } catch (e) {
-    message.value = e.message || 'Failed to update password.';
+    console.error('Password reset email failed:', e);
+    message.value = e.message || 'Failed to send password reset email.';
     error.value = true;
   } finally {
     loading.value = false;

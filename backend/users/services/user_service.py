@@ -122,3 +122,30 @@ class UserService:
             
         except Exception as e:
             return {"status": 500, "message": f"Failed to get users by team: {str(e)}"}
+
+    def create_user(self, user_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create a new user.
+        """
+        # Validate required fields
+        required_fields = {"id", "userid", "role", "name", "email"}
+        missing_fields = required_fields - set(user_data.keys())
+        if missing_fields:
+            return {"status": 400, "message": f"Missing required fields: {missing_fields}"}
+        
+        # Validate allowed fields
+        allowed_fields = {"id", "userid", "role", "name", "email", "team_id", "dept_id"}
+        filtered_data = {k: v for k, v in user_data.items() if k in allowed_fields}
+        
+        try:
+            # Create User object for validation
+            user = User(**filtered_data)
+            
+            # Create in repository
+            created_user_data = self.repo.create_user(filtered_data)
+            
+            # Return created User object
+            created_user = User(**created_user_data)
+            return {"status": 201, "message": f"User {created_user.userid} created successfully", "data": created_user.__dict__}
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to create user: {str(e)}"}

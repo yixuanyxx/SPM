@@ -19,3 +19,21 @@ button[disabled] { opacity: 0.6; cursor: not-allowed; }
   .app-container { padding: 1rem !important; }
 }
 
+.password-validation {
+  padding: 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.password-validation.valid {
+  background-color: #f0f9ff;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.password-validation.invalid {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+

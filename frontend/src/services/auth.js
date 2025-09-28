@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
 // Register
-export async function register(email, password, role, name) {
+export async function register(email, password, role, name, additionalData = {}) {
   return await supabase.auth.signUp({
     email,
     password,
@@ -9,6 +9,8 @@ export async function register(email, password, role, name) {
       data: {
         role: role,
         name: name,
+        team_name: additionalData.team || null,
+        department_name: additionalData.department || null,
       },
     },
   });
@@ -34,6 +36,18 @@ export async function getUser() {
 // Update profile
 export async function updateProfile(userId, updates) {
   return await supabase.from("profiles").update(updates).eq("id", userId);
+}
+
+// Reset password - send reset email
+export async function resetPasswordForEmail(email, redirectTo) {
+  return await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectTo
+  });
+}
+
+// Update password (for authenticated users)
+export async function updatePassword(newPassword) {
+  return await supabase.auth.updateUser({ password: newPassword });
 }
 
 // Verify email (using Supabase auth email redirect handler)
@@ -79,14 +93,13 @@ async function generateUserId() {
 }
 
 // Ensure a row exists in public.users with the current user's id and role
+// This is mainly for users who registered before the new system
 export async function ensureUserRow(user) {
   if (!user?.id) return;
   
   const role = user.user_metadata?.role || null;
   const name = user.user_metadata?.name || user.user_metadata?.full_name || null;
   const email = user.email || null;
-  const team_id = user.user_metadata?.team_id || null;
-  const dept_id = user.user_metadata?.dept_id || null;
 
   // Check if user already exists
   const { data: existingUser, error: fetchError } = await supabase
@@ -100,35 +113,36 @@ export async function ensureUserRow(user) {
   }
 
   // If user doesn't exist, create new row with generated userid
+  // This handles legacy users who registered before the new system
   if (!existingUser) {
     const userId = await generateUserId();
     
-    const { error } = await supabase
-      .from('user')
-      .insert({
+    try {
+      const userData = {
         id: user.id,
         userid: userId,
         role: role,
         name: name,
         email: email,
-        team_id: team_id,
-        dept_id: dept_id
+        team_id: null,
+        dept_id: null
+      };
+
+      const response = await fetch(`http://127.0.0.1:5003/users`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(userData)
       });
-    
-    if (error) throw error;
-  } else {
-    // If user exists, update with any new metadata (but keep existing userid)
-    const { error } = await supabase
-      .from('user')
-      .update({
-        role: role,
-        name: name,
-        email: email,
-        team_id: team_id,
-        dept_id: dept_id
-      })
-      .eq('id', user.id);
-    
-    if (error) throw error;
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'Failed to create user record');
+      }
+    } catch (error) {
+      console.error('Failed to create user record via user controller:', error);
+      throw error;
+    }
   }
 }
