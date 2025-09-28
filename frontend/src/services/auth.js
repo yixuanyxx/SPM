@@ -19,8 +19,11 @@ export async function login(email, password) {
   return await supabase.auth.signInWithPassword({ email, password });
 }
 
-// Logout
 export async function logout() {
+  // // Clear localStorage
+  // localStorage.removeItem('userId'); // angela
+  // localStorage.removeItem('userRole'); // angela
+  
   return await supabase.auth.signOut();
 }
 
