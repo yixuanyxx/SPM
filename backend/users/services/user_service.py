@@ -54,3 +54,71 @@ class UserService:
             return {"status": 200, "message": f"User {userid} updated successfully", "data": updated_user.__dict__}
         except Exception as e:
             return {"status": 500, "message": f"Failed to update user: {str(e)}"}
+
+    def get_users_by_dept_id(self, dept_id: int) -> Dict[str, Any]:
+        """
+        Get all users by department ID.
+        """
+        try:
+            users_data = self.repo.get_users_by_dept_id(dept_id)
+            
+            if not users_data:
+                return {
+                    "status": 200, 
+                    "message": f"No users found for department ID {dept_id}",
+                    "data": []
+                }
+            
+            # Convert each user dict to User object for validation
+            users = []
+            for user_data in users_data:
+                try:
+                    user = User(**user_data)
+                    users.append(user.__dict__)
+                except Exception as e:
+                    # Log the error but continue with other users
+                    print(f"Warning: Failed to parse user data: {str(e)}")
+                    continue
+            
+            return {
+                "status": 200, 
+                "message": f"Retrieved {len(users)} user(s) for department ID {dept_id}",
+                "data": users
+            }
+            
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to get users by department: {str(e)}"}
+
+    def get_users_by_team_id(self, team_id: int) -> Dict[str, Any]:
+        """
+        Get all users by team ID.
+        """
+        try:
+            users_data = self.repo.get_users_by_team_id(team_id)
+            
+            if not users_data:
+                return {
+                    "status": 200, 
+                    "message": f"No users found for team ID {team_id}",
+                    "data": []
+                }
+            
+            # Convert each user dict to User object for validation
+            users = []
+            for user_data in users_data:
+                try:
+                    user = User(**user_data)
+                    users.append(user.__dict__)
+                except Exception as e:
+                    # Log the error but continue with other users
+                    print(f"Warning: Failed to parse user data: {str(e)}")
+                    continue
+            
+            return {
+                "status": 200, 
+                "message": f"Retrieved {len(users)} user(s) for team ID {team_id}",
+                "data": users
+            }
+            
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to get users by team: {str(e)}"}

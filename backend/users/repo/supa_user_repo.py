@@ -26,3 +26,17 @@ class SupabaseUserRepo:
         if not res.data:
             raise RuntimeError("Update failed — no data returned")
         return res.data[0]
+
+    def get_users_by_dept_id(self, dept_id: int) -> list:
+        """
+        Get all users by department ID.
+        """
+        res = self.client.table(TABLE).select("*").eq("dept_id", dept_id).execute()
+        return res.data or []
+
+    def get_users_by_team_id(self, team_id: int) -> list:
+        """
+        Get all users by team ID.
+        """
+        res = self.client.table(TABLE).select("*").eq("team_id", team_id).execute()
+        return res.data or []
