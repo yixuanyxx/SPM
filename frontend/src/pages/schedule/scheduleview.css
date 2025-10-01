@@ -495,7 +495,8 @@ button {
 }
 
 .month-day.has-tasks {
-  border-left: 3px solid #3b82f6;
+  /* border-left: 3px solid #3b82f6; */
+  border-left: 3px solid #789dd7;
 }
 
 .day-number {
@@ -672,6 +673,7 @@ button {
 .status-completed {
   border-left-color: #059669 !important;
   background: #d1fae5;
+  opacity: 0.55;
 }
 
 .status-completed .task-status-badge {
@@ -682,11 +684,26 @@ button {
 .status-completed.task-box {
   border-color: #059669 !important;
   background: #d1fae5;
+  opacity: 0.6;
 }
 
 .status-completed .task-box-status {
   background: #059669;
   color: white;
+}
+
+.status-completed .task-box-name,
+.status-completed .task-title,
+.status-completed .task-preview-name {
+  text-decoration: line-through;
+}
+
+.status-completed:hover {
+  opacity: 0.8;
+}
+
+.status-completed.task-box:hover {
+  opacity: 0.8;
 }
 
 .status-default {
