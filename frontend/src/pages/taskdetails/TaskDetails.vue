@@ -303,21 +303,6 @@
       </div>
     </div>
 
-    <!-- Edit Modal
-    <div v-if="showEditModal" class="modal-overlay" @click="showEditModal = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>Edit Task</h3>
-          <button @click="showEditModal = false" class="modal-close">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Edit task functionality will be implemented here...</p>
-        </div>
-      </div>
-    </div> -->
-
     <!-- Edit Popup -->
     <EditPopup
       :isVisible="showEditPopup"
@@ -366,13 +351,11 @@ const project = ref(null)
 const parentTask = ref(null)
 const loading = ref(true)
 const error = ref(null)
-// const showEditModal = ref(false)
 const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
 
-// Team members data for assign popup - replace with real data fetching as needed (this is for testing)
+// Team members data for assign popup - replace with real data fetching as needed
 const teamMembers = ref([
-  // Mock team members - in real app, fetch from API
   { id: 1, name: 'John Manager', role: 'manager' },
   { id: 2, name: 'Jane Manager', role: 'manager' },
   { id: 3, name: 'Alice Staff', role: 'staff' },
@@ -385,35 +368,46 @@ const getCurrentUser = () => {
   try {
     const userRole = localStorage.getItem('userRole') || ''
     const userId = localStorage.getItem('userId') || ''
-    return { role: userRole, id: userId }
+    return { role: userRole, userId: userId }
   } catch (err) {
-    console.warn('Could not retrieve user info from localStorage:', err)
-    return { role: '', id: '' }
+    return { role: '', userId: '' }
   }
 }
 
-// const currentUser = getCurrentUser() //CHANGE BACK TO THIS AFTER TESTING
-const currentUser = { role: 'manager', id: '8' } // dummy user
+const currentUser = getCurrentUser()
 
 // Computed properties for permissions
 const canEditTask = computed(() => {
-  if (!task.value) return false
-  return task.value.owner === currentUser.id || 
-         currentUser.role === 'manager' || 
-         currentUser.role === 'director'
+  if (!task.value || !currentUser.userId) return false
+  
+  const currentUserId = String(currentUser.userId).trim()
+  const taskOwnerId = String(task.value.owner_id).trim()
+  const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
+  const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  
+  return isTaskOwner || hasRolePermission
 })
+
+// const canAssignTask = computed(() => {
+//   if (!task.value || !currentUser.userId) return false
+  
+//   const currentUserId = String(currentUser.userId).trim()
+//   const taskOwnerId = String(task.value.owner_id).trim()
+//   const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
+//   const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  
+//   return isTaskOwner || hasRolePermission
+// })
 
 const canAssignTask = computed(() => {
   if (!task.value) return false
-  return task.value.owner === currentUser.id || 
-         currentUser.role === 'manager' || 
-         currentUser.role === 'director'
+  
+  return currentUser.role === 'manager' || currentUser.role === 'director'
 })
 
 // Watch for route parameter changes to reload task details
 watch(() => route.params.id, async (newId, oldId) => {
   if (newId && newId !== oldId) {
-    console.log('Route changed, fetching new task:', newId)
     await fetchTaskDetails()
   }
 }, { immediate: false })
@@ -428,7 +422,6 @@ const fetchTaskDetails = async () => {
     error.value = null
     
     const taskId = route.params.id
-    console.log('Fetching task details for ID:', taskId)
     
     // Reset current task data
     task.value = null
@@ -443,18 +436,38 @@ const fetchTaskDetails = async () => {
     
     const taskData = await taskResponse.json()
     task.value = taskData.task || taskData
-    console.log('Fetched task data:', task.value)
+
+    // Fetch owner details using owner_id
+    if (task.value.owner_id) {
+      try {
+        const ownerResponse = await fetch(`http://localhost:5003/users/${task.value.owner_id}`)
+        if (ownerResponse.ok) {
+          const responseData = await ownerResponse.json()
+          const ownerData = responseData.data
+          
+          if (ownerData && (ownerData.name || ownerData.username || ownerData.email)) {
+            task.value.owner = ownerData.name || ownerData.username || ownerData.email
+          } else {
+            task.value.owner = null
+          }
+        } else {
+          task.value.owner = null
+        }
+      } catch (err) {
+        task.value.owner = null
+      }
+    } else {
+      task.value.owner = null
+    }
 
     // Fetch subtask details if subtasks array contains IDs
     if (task.value.subtasks && task.value.subtasks.length > 0) {
       try {
         const subtaskPromises = task.value.subtasks.map(async (subtaskId) => {
-          // Check if it's already an object (backwards compatibility)
           if (typeof subtaskId === 'object') {
             return subtaskId
           }
           
-          // Fetch the subtask by ID
           const subtaskResponse = await fetch(`http://localhost:5002/tasks/${subtaskId}`)
           if (subtaskResponse.ok) {
             const subtaskData = await subtaskResponse.json()
@@ -464,26 +477,11 @@ const fetchTaskDetails = async () => {
         })
         
         const subtaskResults = await Promise.all(subtaskPromises)
-        // Filter out null results and update task.value.subtasks with actual subtask objects
         task.value.subtasks = subtaskResults.filter(subtask => subtask !== null)
-        console.log('Fetched subtasks:', task.value.subtasks)
       } catch (err) {
-        console.warn('Could not fetch some subtask details:', err)
+        // Silently handle subtask fetch errors
       }
     }
-    
-    // Fetch project details if project_id exists
-    // if (task.value.project_id) {
-    //   try {
-    //     const projectResponse = await fetch(`http://localhost:5002/projects/${task.value.project_id}`)
-    //     if (projectResponse.ok) {
-    //       const projectData = await projectResponse.json()
-    //       project.value = projectData.project || projectData
-    //     }
-    //   } catch (err) {
-    //     console.warn('Could not fetch project details:', err)
-    //   }
-    // }
     
     // Fetch parent task details if parent_task exists
     if (task.value.parent_task) {
@@ -492,16 +490,14 @@ const fetchTaskDetails = async () => {
         if (parentResponse.ok) {
           const parentData = await parentResponse.json()
           parentTask.value = parentData.task || parentData
-          console.log('Fetched parent task:', parentTask.value)
         }
       } catch (err) {
-        console.warn('Could not fetch parent task details:', err)
+        // Silently handle parent task fetch errors
       }
     }
     
   } catch (err) {
     error.value = err.message
-    console.error('Error fetching task details:', err)
   } finally {
     loading.value = false
   }
@@ -513,11 +509,7 @@ const goBack = () => {
 
 const navigateToTask = async (taskId) => {
   if (taskId) {
-    console.log('Navigating to task:', taskId)
-    // Use router.push with force navigation to ensure the component reloads
     await router.push({ name: 'task-detail', params: { id: taskId.toString() } })
-  } else {
-    console.error('No task ID provided for navigation')
   }
 }
 
@@ -607,14 +599,12 @@ const getCompletedSubtasks = (task) => {
 }
 
 const openAttachment = (attachment) => {
-  // Handle opening/previewing PDF attachment
   if (attachment.url) {
     window.open(attachment.url, '_blank')
   }
 }
 
 const downloadAttachment = (attachment) => {
-  // Handle downloading PDF attachment
   if (attachment.download_url || attachment.url) {
     const link = document.createElement('a')
     link.href = attachment.download_url || attachment.url
@@ -635,8 +625,6 @@ const closeAssignPopup = () => {
 }
 
 const handleAssignmentSuccess = async (assignmentData) => {
-  console.log('Assignment successful:', assignmentData)
-  // Refresh task details to show updated assignment
   await fetchTaskDetails()
   closeAssignPopup()
 }
@@ -651,8 +639,6 @@ const closeEditPopup = () => {
 }
 
 const updateSuccess = async (assignmentData) => {
-  console.log('Update successful:', assignmentData)
-  // Refresh task details to show updated assignment
   await fetchTaskDetails()
   closeEditPopup()
 }
