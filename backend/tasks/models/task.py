@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime, UTC
 
 @dataclass
@@ -15,5 +15,6 @@ class Task:
     parent_task: Optional[int] = None   # References parent task ID, null if this is a parent task
     type: str = "parent"                # Either "parent" or "subtask" default is parent
     subtasks: Optional[List[int]] = field(default_factory=lambda: None)  # List of subtask IDs (JSONB in Supabase)
+    attachments: Optional[List[Dict[str, str]]] = field(default_factory=lambda: None)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 # must include attachments also (PDF only)

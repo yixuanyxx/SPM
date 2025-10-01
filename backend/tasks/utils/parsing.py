@@ -19,6 +19,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     parent_task = g("parent_task")
     task_type = g("type","parent")  # Default to "parent" if not specified
     subtasks_raw = g("subtasks", "")
+    attachments_raw = g("attachments")
 
     if not all([task_name, description, owner_id]):
         missing = [k for k in ["task_name","description","owner_id"] if not g(k)]
@@ -45,6 +46,18 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     elif isinstance(subtasks_raw, list):
         subtasks = [int(x) for x in subtasks_raw]
 
+    attachments = None
+    if attachments_raw:
+        if isinstance(attachments_raw, str):
+        # could be JSON stringified
+            import json
+            try:
+                attachments = json.loads(attachments_raw)
+            except Exception:
+                raise ValueError("attachments must be valid JSON if provided as string")
+        elif isinstance(attachments_raw, list):
+            attachments = attachments_raw
+
     return {
         "task_name": task_name,
         "due_date": due_date,
@@ -56,6 +69,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         "parent_task": int(parent_task) if parent_task not in (None, "",) else None,
         "type": task_type,
         "subtasks": subtasks if subtasks else None,
+        "attachments": attachments,
     }
 
 def parse_subtask_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -128,5 +142,14 @@ def parse_task_update_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             
             if parsed_list:
                 update_data[field_name] = parsed_list
+
+    attachments_raw = g("attachments")
+    if attachments_raw:
+        if isinstance(attachments_raw, str):
+            import json
+            attachments = json.loads(attachments_raw)
+            update_data["attachments"] = attachments
+        elif isinstance(attachments_raw, list):
+            update_data["attachments"] = attachments_raw
     
     return update_data
