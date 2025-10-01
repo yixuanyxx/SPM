@@ -84,56 +84,20 @@ async function onLogin() {
     message.value = "";
     error.value = false;
     loading.value = true;
-    
+
     const { data, error: err } = await login(email.value, password.value);
-    if (err) {
-      throw err;
-    }
-
-    //Angela edited code to get the database user id and role
-    // Check if we have user data
-    if (data && data.user) {
-      // Import supabase
-      const { supabase } = await import("../../services/supabase");
-      
-      // Query the user table for the actual userid and role
-      const { data: userData, error: userError } = await supabase
-        .from('user')
-        .select('userid, role, name')
-        .eq('id', data.user.id)
-        .single();
-
-      if (userError) {
-        if (userError.code === 'PGRST116') {
-          throw new Error('User profile not found. Please contact administrator to set up your account.');
-        } else {
-          throw new Error('Database error: ' + userError.message);
-        }
-      }
-
-      if (!userData || !userData.userid) {
-        throw new Error('User profile data is incomplete. Please contact administrator.');
-      }
-
-      // Store the actual database values
-      localStorage.setItem('userId', userData.userid.toString());
-      localStorage.setItem('userRole', userData.role || 'staff');
-    } else {
-      throw new Error('No user data received from login');
-    }
-
-    //Angela end of edited code
+    if (err) throw err;
 
     message.value = "Login successful!";
     
-    // Wait for success message
+    // Wait for a short moment to show success message
     await new Promise(resolve => setTimeout(resolve, 500));
     
     // Redirect to landing page
     await router.push({ name: "Landing" });
     
   } catch (err) {
-    message.value = err.message || 'Login failed';
+    message.value = err.message;
     error.value = true;
   } finally {
     loading.value = false;
