@@ -214,14 +214,55 @@
           <option value="Completed">Completed</option>
         </select>
 
-        <label>Project ID</label>
-        <input type="text" v-model="newTask.project_id" placeholder="Enter project ID" />
+        <label>Project</label>
+        <select v-model="newTask.project_id">
+          <option value="">-- Select Project --</option>
+          <template v-if="userProjects.length > 0">
+            <option 
+              v-for="project in userProjects" 
+              :key="project.id" 
+              :value="project.id"
+            >
+              {{ project.proj_name }}
+            </option>
+          </template>
+           <option v-else disabled>No projects available</option>
+        </select>
 
-        <label>Collaborators (comma-separated)</label>
-        <input type="text" v-model="newTask.collaborators" placeholder="e.g., 101,102,103" />
+        <label>Collaborators (emails)</label>
+        <div class="autocomplete">
+          <input 
+            type="text"
+            v-model="collaboratorQuery"
+            placeholder="Type email..."
+          />
+
+          <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+            <li 
+              v-for="user in collaboratorSuggestions" 
+              :key="user.id"
+              @click="addCollaborator(user)"
+            >
+              {{ user.email }}
+            </li>
+          </ul>
+
+          <div class="selected-collaborators">
+            <span 
+              v-for="user in selectedCollaborators" 
+              :key="user.id" 
+              class="selected-email"
+            >
+              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+            </span>
+          </div>
+        </div>
 
         <label>Subtask IDs (comma-separated)</label>
         <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" />
+
+        <label>Attach PDF</label>
+        <input type="file" @change="handleFileUpload" accept="application/pdf" />
 
         <div class="modal-actions">
           <button @click="submitNewTask" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
@@ -231,13 +272,16 @@
         </div>
       </div>
     </div>
+    <div v-if="showSuccessMessage" class="success-popup">
+      Task created successfully!
+    </div>
 
   </div>
 </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted,watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
 import "./taskview.css"
@@ -259,9 +303,12 @@ const isManagerOrDirector = computed(() => {
 })
 
 const tasks = ref([]) // where the fetched data will be stored
+const userProjects = ref([])
+const showSuccessMessage = ref(false)
 
 // const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
-const userId = localStorage.getItem("spm_userid") // check the way user id is stored in table
+const userId = parseInt(localStorage.getItem("spm_userid")) // check the way user id is stored in table
+console.log('Fetching projects for userId:', userId)
 
 onMounted(() => {
   fetch(`http://localhost:5002/tasks/user-task/${userId}`)
@@ -279,7 +326,77 @@ onMounted(() => {
     .catch(error => {
       console.error('Error fetching tasks:', error)
     })
+
+  // Fetch projects owned by user
+  fetch(`http://localhost:5001/projects/user/${userId}`)
+    .then(response => {
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.warn('No projects found for this user')
+          userProjects.value = []
+          return
+        }
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      return response.json()
+    })
+    .then(data => {
+    const allProjects = data.data || []
+    // filter projects where user is owner or in collaborators
+    userProjects.value = allProjects.filter(project => {
+      const collabs = project.collaborators || []
+      return project.owner_id == userId || collabs.includes(Number(userId))
+    })
+    console.log('Filtered projects for dropdown:', userProjects.value)
+    })
+    .catch(error => console.error('Error fetching projects:', error))
 })
+
+const collaboratorQuery = ref('');
+const selectedCollaborators = ref([]);
+const collaboratorSuggestions = ref([]);
+
+const addCollaborator = (user) => {
+  if (!selectedCollaborators.value.find(u => u.id === user.id)) {
+    selectedCollaborators.value.push(user)
+  }
+  collaboratorQuery.value = ''
+  collaboratorSuggestions.value = []
+};
+
+const removeCollaborator = (user) => {
+  selectedCollaborators.value = selectedCollaborators.value.filter(u => u.id !== user.id);
+};
+
+// fetch suggestions whenever the query changes
+watch(collaboratorQuery, async (query) => {
+  if (!query) {
+    collaboratorSuggestions.value = [];
+    return;
+  }
+
+  try {
+    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`);
+    if (!res.ok) throw new Error('Failed to fetch user emails');
+    const data = await res.json();
+    collaboratorSuggestions.value = data.data || [];
+  } catch (err) {
+    console.error(err);
+    collaboratorSuggestions.value = [];
+  }
+});
+
+const newTaskFile = ref(null)
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (file && file.type === "application/pdf") {
+    newTaskFile.value = file
+  } else {
+    alert("Only PDF files are allowed")
+    event.target.value = null
+    newTaskFile.value = null
+  }
+}
 
 const newTask = ref({
   owner_id: userId,
@@ -291,7 +408,7 @@ const newTask = ref({
   project_id: '',
   collaborators: '',
   parent_task: '',
-  subtasks: ''
+  subtasks: '', 
 })
 
 const isFormValid = computed(() => {
@@ -314,12 +431,14 @@ const submitNewTask = async () => {
     // convert comma-separated strings to arrays where needed
     const payload = {
       ...newTask.value,
-      collaborators: newTask.value.collaborators
-        ? newTask.value.collaborators.split(',').map(id => id.trim())
-        : [],
+      collaborators: selectedCollaborators.value.map(user => parseInt(user.userid)),
       subtasks: newTask.value.subtasks
         ? newTask.value.subtasks.split(',').map(id => id.trim())
         : []
+    }
+
+    if (newTaskFile.value) {
+      payload.attachments = [{ url: '', name: newTaskFile.value.name }] // url can be empty, backend will handle upload
     }
 
     const response = await fetch(endpoint, {
@@ -345,7 +464,12 @@ const submitNewTask = async () => {
         parent_task: '',
         subtasks: ''
       }
+      newTaskFile.value = null
       showCreateModal.value = false
+      showSuccessMessage.value = true
+      setTimeout(() => {
+        showSuccessMessage.value = false
+      }, 3000)
     } else {
       alert('Failed: ' + data.Message)
     }

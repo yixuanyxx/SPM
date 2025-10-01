@@ -172,3 +172,30 @@ def get_users_by_team_id(team_id: int):
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+@user_bp.route("/users/search", methods=["GET"])
+def search_users_by_email():
+    """
+    Search users by email substring.
+
+    Query Parameters:
+        email (str): substring to search for
+
+    Returns:
+        {
+            "message": "Found X users",
+            "data": [ ... list of matching users ... ],
+            "status": 200
+        }
+    """
+    try:
+        email_query = request.args.get("email", "").strip()
+        if not email_query:
+            return jsonify({"message": "No search query provided", "data": [], "status": 400}), 400
+
+        result = service.search_users_by_email(email_query)
+        status_code = result.pop("status", 200)
+        return jsonify(result), status_code
+
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
