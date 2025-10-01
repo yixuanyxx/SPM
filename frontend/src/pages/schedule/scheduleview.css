@@ -71,6 +71,11 @@
   gap: 0.5rem;
 }
 
+/* all buttons */
+button {
+  height: 35px;
+}
+
 .view-btn {
   display: flex;
   align-items: center;
@@ -149,6 +154,39 @@
 
 .today-button:hover {
   background: #059669;
+}
+
+.refresh-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #6c757d;
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.refresh-button:hover:not(:disabled) {
+  background: #545b62;
+}
+
+.refresh-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 /* Calendar Container */
@@ -402,7 +440,7 @@
 
 .task-item {
   padding: 0.75rem;
-  border-radius: 6px;
+  /* border-radius: 6px; */
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 3px solid;
@@ -420,11 +458,13 @@
 
 .month-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 1px;
   background: #e5e7eb;
   border-radius: 8px;
   overflow: hidden;
+  width: 100%;
+  table-layout: fixed;
 }
 
 .month-day {
@@ -435,6 +475,9 @@
   transition: all 0.2s ease;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .month-day:hover {
@@ -471,6 +514,8 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
+  overflow: hidden;
+  width: 100%;
 }
 
 .task-dot {
@@ -522,6 +567,9 @@
   border: 2px solid;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   background: white;
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .task-box:hover {
@@ -562,22 +610,22 @@
 
 /* Task Status Classes */
 .status-unassigned {
-  border-left-color: #dc2626 !important;
-  background: #fef2f2;
+  border-left-color: #6b7280 !important;
+  background: #f9fafb;
 }
 
 .status-unassigned .task-status-badge {
-  background: #dc2626;
+  background: #6b7280;
   color: white;
 }
 
 .status-unassigned.task-box {
-  border-color: #dc2626 !important;
-  background: #fef2f2;
+  border-color: #6b7280 !important;
+  background: #f9fafb;
 }
 
 .status-unassigned .task-box-status {
-  background: #dc2626;
+  background: #6b7280;
   color: white;
 }
 
@@ -750,7 +798,7 @@
 }
 
 .value.status-unassigned {
-  color: #dc2626;
+  color: #6b7280;
   font-weight: 500;
 }
 

@@ -42,6 +42,10 @@
             <i class="bi bi-calendar-check"></i>
             Today
           </button>
+          <!-- <button @click="fetchTasks" class="refresh-button" :disabled="loading">
+            <i class="bi bi-arrow-clockwise" :class="{ 'spinning': loading }"></i>
+            Refresh
+          </button> -->
         </div>
       </div>
 
@@ -178,6 +182,14 @@
                 </span>
               </div>
               <div class="detail-row">
+                <span class="label">Type:</span>
+                <span class="value">{{ selectedTask.type || 'N/A' }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedTask.project_id">
+                <span class="label">Project ID:</span>
+                <span class="value">{{ selectedTask.project_id }}</span>
+              </div>
+              <div class="detail-row">
                 <span class="label">Due Date:</span>
                 <span class="value">{{ formatDate(selectedTask.due_date, 'EEEE, MMMM d, yyyy') }}</span>
               </div>
@@ -188,6 +200,18 @@
               <div class="detail-row">
                 <span class="label">Description:</span>
                 <span class="value">{{ selectedTask.description || 'No description' }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedTask.collaborators && selectedTask.collaborators.length > 0">
+                <span class="label">Collaborators:</span>
+                <span class="value">{{ selectedTask.collaborators.join(', ') }}</span>
+              </div>
+              <div class="detail-row" v-if="selectedTask.attachments && selectedTask.attachments.length > 0">
+                <span class="label">Attachments:</span>
+                <span class="value">
+                  <div v-for="attachment in selectedTask.attachments" :key="attachment.name">
+                    {{ attachment.name }}
+                  </div>
+                </span>
               </div>
             </div>
           </div>
@@ -331,13 +355,25 @@ const isToday = (date) => {
 const getTasksForDate = (date) => {
   if (!date || !tasks.value || !Array.isArray(tasks.value) || !tasks.value.length) return []
   
-  // Simple string comparison for now
-  const targetDateString = date.toISOString().split('T')[0] // Get YYYY-MM-DD
+  // Convert the target date to Singapore timezone and get YYYY-MM-DD
+  const targetDate = new Date(date)
+  const targetDateString = targetDate.toLocaleDateString('en-CA', { 
+    timeZone: 'Asia/Singapore' 
+  }) // en-CA gives YYYY-MM-DD format
   
   const filteredTasks = tasks.value.filter(task => {
     if (!task.due_date) return false
-    const taskDateString = task.due_date.split('T')[0] // Get YYYY-MM-DD
-    return taskDateString === targetDateString
+    try {
+      // Convert task due date to Singapore timezone and get YYYY-MM-DD
+      const taskDate = new Date(task.due_date)
+      const taskDateString = taskDate.toLocaleDateString('en-CA', { 
+        timeZone: 'Asia/Singapore' 
+      })
+      return taskDateString === targetDateString
+    } catch (error) {
+      console.warn('Error parsing task date:', task.due_date, error)
+      return false
+    }
   })
   
   return filteredTasks
@@ -348,7 +384,13 @@ const getTasksForDateAndHour = (date, hour) => {
   return dayTasks.filter(task => {
     if (!task.due_date) return false
     const taskDate = new Date(task.due_date)
-    return taskDate.getHours() === hour
+    // Get the hour in Singapore timezone
+    const singaporeHour = parseInt(taskDate.toLocaleTimeString('en-US', { 
+      timeZone: 'Asia/Singapore',
+      hour12: false,
+      hour: '2-digit'
+    }))
+    return singaporeHour === hour
   })
 }
 
@@ -414,19 +456,66 @@ const goToToday = () => {
 const fetchTasks = async () => {
   loading.value = true
   
-  // Hardcoded test task for October 15th
-  const testTask = {
-    id: 1,
-    task_name: 'Sample Task',
-    status: 'Ongoing',
-    due_date: '2025-10-15T17:00:00+00:00',
-    description: 'This is a test task'
+  try {
+    // Get user ID from session
+    const userId = sessionState.userid
+    if (!userId) {
+      console.warn('No user ID found in session')
+      tasks.value = []
+      return
+    }
+    
+    // Fetch tasks directly from API endpoint
+    const response = await fetch(`http://127.0.0.1:5002/tasks/user-task/${userId}`, {
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    if (!response.ok) {
+      const msg = await response.text().catch(() => response.statusText)
+      throw new Error(msg || `HTTP ${response.status}`)
+    }
+    
+    const data = await response.json()
+    console.log('API Response:', data)
+    
+    if (data && data.tasks && data.tasks.data) {
+      const allTasks = []
+      
+      // Process parent tasks and their subtasks
+      data.tasks.data.forEach(parentTask => {
+        // Add parent task
+        allTasks.push(parentTask)
+        
+        // Add subtasks if they exist
+        if (parentTask.subtasks && Array.isArray(parentTask.subtasks)) {
+          parentTask.subtasks.forEach(subtask => {
+            allTasks.push(subtask)
+          })
+        }
+      })
+      
+      tasks.value = allTasks
+      console.log('Loaded tasks:', allTasks.length, 'total tasks')
+      
+      // Debug timezone handling
+      allTasks.forEach(task => {
+        if (task.due_date) {
+          const taskDate = new Date(task.due_date)
+          const sgDateString = taskDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
+          const sgTimeString = taskDate.toLocaleTimeString('en-US', { timeZone: 'Asia/Singapore' })
+          console.log(`Task "${task.task_name}": UTC ${task.due_date} -> SG ${sgDateString} ${sgTimeString}`)
+        }
+      })
+    } else {
+      console.warn('Unexpected API response format:', data)
+      tasks.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching tasks:', error)
+    tasks.value = []
+  } finally {
+    loading.value = false
   }
-  
-  tasks.value = [testTask]
-  console.log('Loaded hardcoded task:', testTask)
-  
-  loading.value = false
 }
 
 // Lifecycle
