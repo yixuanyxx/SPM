@@ -63,7 +63,7 @@ For windows:
 
 ### To run the project microservice:
 ```python app.py```
-(task microservice runs on port 5001)
+(projects microservice runs on port 5001)
 
 ===================================================
 
