@@ -24,6 +24,7 @@ class TaskService:
             parent_task=payload.get("parent_task"),
             type=payload.get("type", "parent"),
             subtasks=payload.get("subtasks"),
+            attachments=payload.get("attachments"),
         )
 
         # ⬇️ Do NOT send id=None

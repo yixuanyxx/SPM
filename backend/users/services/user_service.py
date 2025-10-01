@@ -149,3 +149,31 @@ class UserService:
             return {"status": 201, "message": f"User {created_user.userid} created successfully", "data": created_user.__dict__}
         except Exception as e:
             return {"status": 500, "message": f"Failed to create user: {str(e)}"}
+        
+    def search_users_by_email(self, email_substring: str) -> Dict[str, Any]:
+        """
+        Search users whose email contains the given substring.
+        """
+        try:
+            users_data = self.repo.search_users_by_email(email_substring)
+            if not users_data:
+                return {"status": 200, "message": "No users found", "data": []}
+
+            # Convert each to User object
+            users = []
+            for user_data in users_data:
+                try:
+                    user = User(**user_data)
+                    users.append(user.__dict__)
+                except Exception as e:
+                    print(f"Warning: Failed to parse user data: {str(e)}")
+                    continue
+
+            return {
+                "status": 200,
+                "message": f"Found {len(users)} user(s)",
+                "data": users
+            }
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to search users: {str(e)}"}
+
