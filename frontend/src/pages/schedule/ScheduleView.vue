@@ -271,13 +271,25 @@ const monthDays = computed(() => {
   const month = currentDate.value.getMonth()
   
   const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+  
+  // Calculate start date - beginning of the week containing the first day of the month
   const startDate = new Date(firstDay)
   startDate.setDate(startDate.getDate() - firstDay.getDay())
+  
+  // Calculate end date - end of the week containing the last day of the month
+  const endDate = new Date(lastDay)
+  endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
+  
+  // Calculate total weeks needed to show the complete month
+  const totalWeeks = Math.ceil((endDate - startDate) / (7 * 24 * 60 * 60 * 1000))
+  const totalDays = totalWeeks * 7
   
   const days = []
   const current = new Date(startDate)
   
-  for (let i = 0; i < 42; i++) {
+  // Generate the exact number of days needed (either 35 for 5 weeks or 42 for 6 weeks)
+  for (let i = 0; i < totalDays; i++) {
     const dayDate = new Date(current)
     days.push({
       date: dayDate,
