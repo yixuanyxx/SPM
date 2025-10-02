@@ -23,6 +23,7 @@ def manager_create_task():
     - collaborators: List of user IDs or comma-separated string
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
+    - priority: Priority level (integer)
     - attachment: PDF file to be uploaded
 
     RETURNS:
@@ -78,6 +79,7 @@ def staff_create_task():
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask") - defaults to "parent"
+    - priority: Priority level (integer)
     - attachment: PDF file to be uploaded
 
     Note: owner_id is automatically added to the collaborators list
@@ -244,6 +246,7 @@ def update_task():
     - parent_task: Parent task ID
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask")
+    - priority: Priority level (integer)
 
     RETURNS:
     {

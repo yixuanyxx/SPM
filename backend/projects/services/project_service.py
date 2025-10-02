@@ -19,16 +19,11 @@ class ProjectService:
         if not payload.get("proj_name"):
             raise ValueError("proj_name is required")
 
-        # Create project instance
-        project = Project(
-            owner_id=payload["owner_id"],
-            proj_name=payload["proj_name"],
-            collaborators=payload.get("collaborators"),
-            tasks=payload.get("tasks"),
-        )
+        # Use the new Project.from_dict constructor for proper type handling
+        project = Project.from_dict(payload)
 
-        # Convert to dict and remove None id for database insertion
-        data = project.__dict__.copy()
+        # Convert to dictionary for database insertion (excludes id=None)
+        data = project.to_dict()
         data.pop("id", None)
 
         # Insert into database
@@ -59,25 +54,38 @@ class ProjectService:
         """
         project_id = payload.get("project_id")
         if not project_id:
-            raise ValueError("project_id is required for updates")
+            return {"status": 400, "message": "project_id is required for updates"}
         
         # Check if project exists
-        existing_project = self.repo.get_project(project_id)
-        if not existing_project:
+        existing_project_data = self.repo.get_project(project_id)
+        if not existing_project_data:
             return {"status": 404, "message": f"Project with ID {project_id} not found"}
         
         # Extract update fields (exclude project_id from the update data)
         update_fields = {k: v for k, v in payload.items() if k != "project_id"}
         
         if not update_fields:
-            return {"status": 400, "message": "No fields to update provided", "data": existing_project}
+            return {"status": 400, "message": "No fields to update provided", "data": existing_project_data}
+        
+        # Create Project object from existing data for proper type handling
+        existing_project = Project.from_dict(existing_project_data)
+        
+        # Merge update fields with existing data
+        merged_data = existing_project.to_dict()
+        merged_data.update(update_fields)
+        
+        # Create updated project object to ensure proper type conversion
+        updated_project_obj = Project.from_dict(merged_data)
+        
+        # Convert back to dict for database update
+        update_data = updated_project_obj.to_dict()
         
         # Perform the update
         try:
-            updated_project = self.repo.update_project(project_id, update_fields)
-            return {"status": 200, "message": f"Project {project_id} updated successfully", "data": updated_project}
+            updated_project_data = self.repo.update_project(project_id, update_data)
+            return {"status": 200, "message": f"Project {project_id} updated successfully", "data": updated_project_data}
         except Exception as e:
-            raise RuntimeError(f"Failed to update project {project_id}: {str(e)}")
+            return {"status": 500, "message": f"Failed to update project {project_id}: {str(e)}"}
 
     def get_projects_by_owner(self, owner_id: int) -> Dict[str, Any]:
         """
