@@ -186,6 +186,7 @@
 <script>
 export default {
   name: "TaskEditPopup",
+  emits: ['close', 'update-success'],  // ADD THIS LINE
   props: {
     isVisible: { type: Boolean, default: false },
     taskId: { type: [String, Number], required: true },
@@ -302,66 +303,73 @@ export default {
         this.isLoading = false;
       }
     },
-    async handleUpdate() {
-      if (!this.isFormValid) return;
+async handleUpdate() {
+  if (!this.isFormValid) return;
+  
+  this.clearMessages();
+  this.isLoading = true;
+
+  try {
+    // Prepare only the fields that can be updated
+    const updateData = {
+      task_id: this.taskId,
+      task_name: this.editedTask.task_name,
+      description: this.editedTask.description,
+      status: this.editedTask.status,
+      due_date: this.editedTask.due_date,
+      priority: this.editedTask.priority,
+      collaborators: this.editedTask.collaborators,
+    };
+
+    console.log('EditPopup sending:', updateData);
+
+    const response = await fetch("http://localhost:5002/tasks/update", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updateData),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.Message || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log('EditPopup received:', result);
+    
+    // Update the original task data
+    this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
+    
+    this.isLoading = false;
+    
+    // Close the popup
+    this.$emit("close");
+    
+    // Emit success with just the fields that were updated (not the entire response)
+    setTimeout(() => {
+      this.successMessage = "Task updated successfully!";
       
-      // Clear any existing messages and start loading state
-      this.clearMessages();
-      this.isLoading = true;
+      // FIXED: Emit only the update data, not the entire backend response
+      this.$emit("update-success", {
+        task_name: this.editedTask.task_name,
+        description: this.editedTask.description,
+        status: this.editedTask.status,
+        due_date: this.editedTask.due_date,
+        priority: this.editedTask.priority,
+        collaborators: this.editedTask.collaborators,
+      });
+      
+      setTimeout(() => {
+        this.successMessage = "";
+      }, 5000);
+    }, 500);
 
-      try {
-        const updateData = {
-          task_id: this.taskId,
-          ...this.editedTask,
-          due_date: this.editedTask.due_date,
-        };
-
-        const response = await fetch("http://localhost:5002/tasks/update", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(updateData),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        // Update the original task data
-        this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
-        
-        // Turn off loading state
-        this.isLoading = false;
-        
-        // Close the popup immediately
-        this.$emit("close");
-        
-        // After a brief delay to ensure popup is closed, show the success message
-        setTimeout(() => {
-          // Show success message
-          this.successMessage = "Task updated successfully!";
-          
-          // Emit success event
-          this.$emit("update-success", data);
-          
-          // Clear success message after 5 seconds
-          setTimeout(() => {
-            this.successMessage = "";
-          }, 5000);
-        }, 500);
-
-      } catch (err) {
-        console.error("Error updating task:", err);
-        this.errorMessage = err.message || "Failed to update task. Please try again.";
-      } finally {
-        if (this.errorMessage) {
-          // Reset loading only if there was an error
-          this.isLoading = false;
-        }
-      }
-    },
+  } catch (err) {
+    console.error("Error updating task:", err);
+    this.errorMessage = err.message || "Failed to update task. Please try again.";
+    this.isLoading = false;
+  }
+},
     discardChanges() {
       if (this.hasChanges) {
         this.showUnsavedDialog = true;

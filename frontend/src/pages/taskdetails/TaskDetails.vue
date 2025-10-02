@@ -383,9 +383,9 @@ const canEditTask = computed(() => {
   const currentUserId = String(currentUser.userId).trim()
   const taskOwnerId = String(task.value.owner_id).trim()
   const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
-  const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  // const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
   
-  return isTaskOwner || hasRolePermission
+  return isTaskOwner //|| hasRolePermission
 })
 
 // const canAssignTask = computed(() => {
@@ -638,8 +638,16 @@ const closeEditPopup = () => {
   showEditPopup.value = false
 }
 
-const updateSuccess = async (assignmentData) => {
+const updateSuccess = async (updateData) => {
+  console.log('TaskDetails received update data:', updateData);
+  
+  // Close popup
+  closeEditPopup();
+  
+  // Small delay then refresh
+  await new Promise(resolve => setTimeout(resolve, 300))
   await fetchTaskDetails()
-  closeEditPopup()
+  
+  console.log('Task refreshed')
 }
 </script>

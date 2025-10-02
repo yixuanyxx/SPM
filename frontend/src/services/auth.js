@@ -23,8 +23,8 @@ export async function login(email, password) {
 
 export async function logout() {
   // // Clear localStorage
-  // localStorage.removeItem('userId'); // angela
-  // localStorage.removeItem('userRole'); // angela
+  localStorage.removeItem('userId'); // angela
+  localStorage.removeItem('userRole'); // angela
   
   return await supabase.auth.signOut();
 }

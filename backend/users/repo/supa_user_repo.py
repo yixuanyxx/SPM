@@ -49,3 +49,16 @@ class SupabaseUserRepo:
         if not res.data:
             raise RuntimeError("Insert failed — no data returned")
         return res.data[0]
+    
+    def search_users_by_email(self, email_substring: str) -> list:
+        """
+        Search for users whose email contains the substring (case-insensitive).
+        """
+        res = (
+            self.client
+            .table("user")
+            .select("*")
+            .ilike("email", f"%{email_substring}%")
+            .execute()
+        )
+        return res.data or []

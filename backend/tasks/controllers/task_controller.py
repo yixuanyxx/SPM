@@ -24,6 +24,7 @@ def manager_create_task():
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
     - priority: Priority level (integer)
+    - attachment: PDF file to be uploaded
 
     RETURNS:
     {
@@ -41,6 +42,16 @@ def manager_create_task():
     try:
         data = request.form if request.form else (request.get_json(silent=True) or {})
         payload = parse_task_payload(data)
+
+        file = request.files.get("attachment")
+        if file:
+            try:
+                attachments = service.repo.upload_attachment(file)
+                payload["attachments"] = attachments
+            except Exception as e:
+                raise Exception(f"Upload failed: {str(e)}")
+
+
         result = service.manager_create(payload)
         status = result.pop("__status", 201)
         result["Code"] = status
@@ -69,6 +80,7 @@ def staff_create_task():
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask") - defaults to "parent"
     - priority: Priority level (integer)
+    - attachment: PDF file to be uploaded
 
     Note: owner_id is automatically added to the collaborators list
 
@@ -88,6 +100,15 @@ def staff_create_task():
     try:
         data = request.form if request.form else (request.get_json(silent=True) or {})
         payload = parse_task_payload(data)
+
+        file = request.files.get("attachment")
+        if file:
+            try:
+                attachments = service.repo.upload_attachment(file)
+                payload["attachments"] = attachments
+            except Exception as e:
+                raise Exception(f"Upload failed: {str(e)}")
+
         result = service.staff_create(payload)
         status = result.pop("__status", 201)
         result["Code"] = status

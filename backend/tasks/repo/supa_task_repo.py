@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
 
@@ -107,3 +108,34 @@ class SupabaseTaskRepo:
         """
         res = self.client.table(TABLE).select("*").eq("owner_id", owner_id).execute()
         return res.data or []
+    
+    def upload_attachment(self, file) -> list[dict]:
+        """
+        Upload a file to Supabase storage and return attachment info.
+
+        Returns:
+            [{"url": <public_url>, "name": <filename>}]
+        """
+        file_name = f"attachments/{uuid.uuid4()}_{file.filename}"
+        storage = self.client.storage.from_("task-files")
+
+        try:
+            storage.upload(file_name, file.read(), file_options={"content-type": "application/pdf"})
+        
+            public_url_response = storage.get_public_url(file_name)
+            if isinstance(public_url_response, dict):
+                public_url = public_url_response.get("data", {}).get("publicUrl")
+                if not public_url:
+                    raise RuntimeError("Failed to retrieve public URL from Supabase response")
+            elif isinstance(public_url_response, str):
+                public_url = public_url_response
+            else:
+                raise RuntimeError(f"Unexpected type for public URL response: {type(public_url_response)}")
+
+            return [{"url": public_url, "name": file.filename}]
+    
+        except Exception as e:
+            raise RuntimeError(f"Upload failed: {str(e)}")
+    
+    def update_attachments(self, task_id: int, attachments: List[Dict[str, str]]) -> Dict[str, Any]:
+        return self.update_task(task_id, {"attachments": attachments})
