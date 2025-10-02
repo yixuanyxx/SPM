@@ -638,8 +638,16 @@ const closeEditPopup = () => {
   showEditPopup.value = false
 }
 
-const updateSuccess = async (assignmentData) => {
+const updateSuccess = async (updateData) => {
+  console.log('TaskDetails received update data:', updateData);
+  
+  // Close popup
+  closeEditPopup();
+  
+  // Small delay then refresh
+  await new Promise(resolve => setTimeout(resolve, 300))
   await fetchTaskDetails()
-  closeEditPopup()
+  
+  console.log('Task refreshed')
 }
 </script>
