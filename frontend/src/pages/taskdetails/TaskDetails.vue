@@ -383,9 +383,9 @@ const canEditTask = computed(() => {
   const currentUserId = String(currentUser.userId).trim()
   const taskOwnerId = String(task.value.owner_id).trim()
   const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
-  const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  // const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
   
-  return isTaskOwner || hasRolePermission
+  return isTaskOwner //|| hasRolePermission
 })
 
 // const canAssignTask = computed(() => {
