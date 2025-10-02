@@ -19,6 +19,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     parent_task = g("parent_task")
     task_type = g("type","parent")  # Default to "parent" if not specified
     subtasks_raw = g("subtasks", "")
+    priority = g("priority")
 
     if not all([task_name, description, owner_id]):
         missing = [k for k in ["task_name","description","owner_id"] if not g(k)]
@@ -56,6 +57,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         "parent_task": int(parent_task) if parent_task not in (None, "",) else None,
         "type": task_type,
         "subtasks": subtasks if subtasks else None,
+        "priority": int(priority) if priority not in (None, "",) else None,
     }
 
 def parse_subtask_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -106,7 +108,7 @@ def parse_task_update_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             update_data[field] = value
     
     # Optional integer fields
-    for field in ["owner_id", "project_id", "parent_task"]:
+    for field in ["owner_id", "project_id", "parent_task", "priority"]:
         value = g(field)
         if value is not None and value != "":
             update_data[field] = int(value)
