@@ -92,6 +92,7 @@
           </router-link>
         </div>
 
+
         <!-- Profile with dropdown -->
         <div class="nav-item" :class="{ expanded: expandedMenus.includes('profile') }">
           <div class="nav-link" @click="toggleMenu('profile')">
@@ -120,6 +121,7 @@
       </div>
     </div>
   </nav>
+
 </template>
 
 <script setup>
@@ -191,6 +193,7 @@ const handleNavItemClick = () => {
   // Don't auto-close expanded menus - let them stay open to show current page
 }
 
+
 // Watch for route changes to auto-expand relevant menus
 watch(() => route.path, (newPath) => {
   // Auto-expand tasks menu if on any tasks page
@@ -223,8 +226,16 @@ const teamTasksIcon = computed(() => {
 //ADD ROLE-BASED NAVIGATION FOR PROJECTS ALSO (TO BE DONE)
 
 async function onLogout() {
-  await logout()
-  router.push({ name: 'Login' })
+  try {
+    console.log('Logging out...');
+    await logout();
+    console.log('Logout successful, redirecting to login...');
+    router.push({ name: 'Login' });
+  } catch (error) {
+    console.error('Logout failed:', error);
+    // Still redirect to login even if logout fails
+    router.push({ name: 'Login' });
+  }
 }
 </script>
 
@@ -606,6 +617,7 @@ async function onLogout() {
     font-size: 1rem;
   }
 }
+
 
 /* Extra Small Mobile */
 @media (max-width: 360px) {

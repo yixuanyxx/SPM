@@ -2,7 +2,7 @@
   <div v-if="isVisible" class="popup-overlay" @click="closePopup">
     <div class="popup-container" @click.stop>
       <div class="popup-header">
-        <h3>{{ isSubtask ? 'Transfer Subtask Ownership' : 'Transfer Task Ownership' }}</h3>
+        <h3>{{ isSubtask ? 'Assign Subtask' : 'Assign Task' }}</h3>
         <button class="close-btn" @click="closePopup">&times;</button>
       </div>
       
@@ -82,6 +82,8 @@
 </template>
 
 <script>
+import { enhancedNotificationService } from '../services/notifications'
+
 export default {
   name: 'TaskAssignmentPopup',
   props: {
@@ -158,7 +160,10 @@ export default {
         
         await this.updateTask(updateData)
         
-        this.successMessage = `${this.isSubtask ? 'Subtask' : 'Task'} successfully assigned to ${assigneeData.name}`
+        // Trigger assignment notification
+        await this.triggerAssignmentNotification(assigneeData)
+        
+        this.successMessage = `${assigneeData.name} has been assigned to the ${this.isSubtask ? 'subtask' : 'task'} as a collaborator`
         
         // Auto-close after 2 seconds
         setTimeout(() => {
@@ -206,9 +211,14 @@ export default {
     },
 
     prepareUpdateData(assigneeData) {
-      const updateData = {
-        owner: assigneeData.id,
-        ownerName: assigneeData.name
+      const updateData = {}
+
+      // Add user as collaborator (not owner)
+      updateData.addCollaborator = assigneeData.id
+      
+      // If it's a subtask, also add to parent task collaborators
+      if (this.isSubtask && this.parentTaskId) {
+        updateData.addParentTaskCollaborator = assigneeData.id
       }
 
       // Determine status based on assignment rules
@@ -216,15 +226,6 @@ export default {
         updateData.status = 'Ongoing'
       } else if (this.userRole === 'director' && assigneeData.role === 'manager') {
         updateData.status = this.selectedStatus
-      }
-
-      // Handle collaborator additions
-      if (this.userRole === 'manager' && assigneeData.role === 'staff') {
-        updateData.addCollaborator = assigneeData.id
-        
-        if (this.isSubtask && this.parentTaskId) {
-          updateData.addParentTaskCollaborator = assigneeData.id
-        }
       }
 
       return updateData
@@ -260,6 +261,25 @@ export default {
     clearMessages() {
       this.successMessage = ''
       this.errorMessage = ''
+    },
+
+    async triggerAssignmentNotification(assigneeData) {
+      try {
+        // Get current user info
+        const currentUserName = localStorage.getItem('spm_username') || 'System';
+        
+        // Trigger assignment notification
+        await enhancedNotificationService.triggerTaskAssignmentNotification(
+          this.taskId,
+          assigneeData.id,
+          currentUserName
+        );
+        
+        console.log('Task assignment notification sent successfully');
+      } catch (error) {
+        console.error('Failed to send task assignment notification:', error);
+        // Don't throw error to avoid breaking the main assignment flow
+      }
     }
   },
 

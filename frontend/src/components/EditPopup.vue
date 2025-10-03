@@ -184,6 +184,8 @@
 </template>
 
 <script>
+import { enhancedNotificationService } from '../services/notifications'
+
 export default {
   name: "TaskEditPopup",
   emits: ['close', 'update-success'],  // ADD THIS LINE
@@ -337,6 +339,9 @@ async handleUpdate() {
     const result = await response.json();
     console.log('EditPopup received:', result);
     
+    // Trigger notifications for task updates
+    await this.triggerTaskUpdateNotifications();
+    
     // Update the original task data
     this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
     
@@ -400,6 +405,81 @@ async handleUpdate() {
     clearMessages() {
       this.successMessage = "";
       this.errorMessage = "";
+    },
+
+    async triggerTaskUpdateNotifications() {
+      try {
+        // Get current user info
+        const currentUserId = localStorage.getItem('spm_userid');
+        const currentUserName = localStorage.getItem('spm_username') || 'System';
+        
+        if (!currentUserId || !this.originalTask) return;
+
+        // Get collaborators to notify (exclude current user)
+        const collaboratorsToNotify = this.editedTask.collaborators.filter(
+          collaboratorId => String(collaboratorId) !== String(currentUserId)
+        );
+
+        if (collaboratorsToNotify.length === 0) return;
+
+        // Check what changed and send appropriate notifications
+        const promises = [];
+
+        // Status change notification
+        if (this.originalTask.status !== this.editedTask.status) {
+          promises.push(
+            enhancedNotificationService.triggerTaskUpdateNotification(
+              this.taskId,
+              collaboratorsToNotify,
+              'status',
+              this.originalTask.status,
+              this.editedTask.status,
+              currentUserName
+            )
+          );
+        }
+
+        // Due date change notification
+        if (this.originalTask.due_date !== this.editedTask.due_date) {
+          const oldDate = this.originalTask.due_date || 'No due date';
+          const newDate = this.editedTask.due_date || 'No due date';
+          
+          promises.push(
+            enhancedNotificationService.triggerTaskUpdateNotification(
+              this.taskId,
+              collaboratorsToNotify,
+              'due_date',
+              oldDate,
+              newDate,
+              currentUserName
+            )
+          );
+        }
+
+        // Description change notification
+        if (this.originalTask.description !== this.editedTask.description) {
+          promises.push(
+            enhancedNotificationService.triggerTaskUpdateNotification(
+              this.taskId,
+              collaboratorsToNotify,
+              'description',
+              null,
+              null,
+              currentUserName
+            )
+          );
+        }
+
+        // Execute all notification triggers
+        if (promises.length > 0) {
+          await Promise.all(promises);
+          console.log('Task update notifications sent successfully');
+        }
+
+      } catch (error) {
+        console.error('Failed to send task update notifications:', error);
+        // Don't throw error to avoid breaking the main update flow
+      }
     },
     handleOverlayClick() {
       if (this.isLoading) return;
