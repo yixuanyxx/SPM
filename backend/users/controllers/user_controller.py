@@ -199,3 +199,41 @@ def search_users_by_email():
 
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+@user_bp.route("/users/<int:userid>/notification-preferences", methods=["PUT", "PATCH"])
+def update_notification_preferences(userid: int):
+    """
+    Update user notification preferences.
+    
+    Parameters:
+    - userid: The user ID (integer) to update preferences for
+    
+    Required fields in JSON body:
+    - in_app: Boolean for in-app notifications
+    - email: Boolean for email notifications
+    
+    Returns:
+    {
+        "message": "User {userid} updated successfully",
+        "data": { ... updated user data ... },
+        "status": 200
+    }
+    
+    Responses:
+        200: Preferences successfully updated
+        400: Invalid preference data
+        404: User not found
+        500: Internal Server Error
+    """
+    try:
+        # Get JSON data from request
+        data = request.get_json(silent=True) or {}
+        
+        # Call service to update notification preferences
+        result = service.update_notification_preferences(userid, data)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500

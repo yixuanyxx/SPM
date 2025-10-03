@@ -366,8 +366,8 @@ const teamMembers = ref([
 // Get user info from localStorage
 const getCurrentUser = () => {
   try {
-    const userRole = localStorage.getItem('userRole') || ''
-    const userId = localStorage.getItem('userId') || ''
+    const userRole = localStorage.getItem('spm_role') || localStorage.getItem('userRole') || ''
+    const userId = localStorage.getItem('spm_userid') || localStorage.getItem('userId') || ''
     return { role: userRole, userId: userId }
   } catch (err) {
     return { role: '', userId: '' }
