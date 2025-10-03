@@ -168,8 +168,8 @@
 }
 
 .task-details-content .task-status-badge.unassigned {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .task-details-content .task-status-badge.ongoing {
@@ -393,8 +393,8 @@
 }
 
 .task-details-content .task-status-inline.unassigned {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .task-details-content .task-status-inline.ongoing {
@@ -598,8 +598,8 @@
 }
 
 .task-details-content .task-status-mini.unassigned {
-  background: #fef2f2;
-  color: #dc2626;
+  background: #f3f4f6;
+  color: #374151;
 }
 
 .task-details-content .task-status-mini.ongoing {

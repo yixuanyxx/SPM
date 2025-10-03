@@ -117,6 +117,23 @@
                     <span>{{ getStatusLabel(task.status) }}</span>
                   </div>
                 </div>
+                <div class="task-people">
+                  <div v-if="task.owner_id" class="task-owner">
+                    <i class="bi bi-person-fill"></i>
+                    <span class="owner-label">Owner:</span>
+                    <span class="owner-name">{{ getUserName(task.owner_id) }}</span>
+                  </div>
+                  <div v-if="task.collaborators && task.collaborators.length > 0" class="task-collaborators">
+                    <i class="bi bi-people-fill"></i>
+                    <span class="collab-label">Collaborators:</span>
+                    <span class="collab-names">
+                      {{ task.collaborators.slice(0, 2).map(id => getUserName(id)).join(', ') }}
+                      <span v-if="task.collaborators.length > 2" class="more-collabs">
+                        +{{ task.collaborators.length - 2 }} more
+                      </span>
+                    </span>
+                  </div>
+                </div>
                 <div class="task-meta">
                   <div class="task-date">
                     <i class="bi bi-calendar3"></i>
@@ -178,9 +195,15 @@
                       <i :class="getStatusIcon(subtask.status)"></i>
                     </div>
                   </div>
-                  <div class="subtask-date">
-                    <i class="bi bi-calendar3"></i>
-                    <span>{{ formatDate(subtask.due_date) }}</span>
+                  <div class="subtask-meta">
+                    <div class="subtask-date">
+                      <i class="bi bi-calendar3"></i>
+                      <span>{{ formatDate(subtask.due_date) }}</span>
+                    </div>
+                    <div v-if="subtask.owner_id" class="subtask-owner">
+                      <i class="bi bi-person"></i>
+                      <span>{{ getUserName(subtask.owner_id) }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="subtask-action">
@@ -284,18 +307,24 @@
 import { ref, computed, onMounted,watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
+import { getCurrentUserData } from '../../services/session.js'
 import "./taskview.css"
 
 const activeFilter = ref('all')
 const expandedTasks = ref([])
 const userRole = ref('')
+const userId = ref(null)
 const showCreateModal = ref(false);
 
-// Get user role from localStorage on component mount
-// onMounted(() => {
-//   const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
-//   userRole.value = storedRole.toLowerCase()
-// })
+// Get user data from session.js functions on component mount
+onMounted(() => {
+  const userData = getCurrentUserData()
+  userRole.value = userData.role?.toLowerCase() || ''
+  userId.value = parseInt(userData.userid) || null
+  
+  console.log('User data from session:', userData)
+  console.log('Fetching projects for userId:', userId.value)
+})
 
 // Check if user is manager or director
 const isManagerOrDirector = computed(() => {
@@ -305,51 +334,114 @@ const isManagerOrDirector = computed(() => {
 const tasks = ref([]) // where the fetched data will be stored
 const userProjects = ref([])
 const showSuccessMessage = ref(false)
+const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
 
-// const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
-const userId = parseInt(localStorage.getItem("spm_userid")) // check the way user id is stored in table
-console.log('Fetching projects for userId:', userId)
+// Function to fetch user details by userid
+const fetchUserDetails = async (userid) => {
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      const user = data.data
+      users.value[userid] = user
+      return user
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+// Function to get user names for display
+const getUserName = (userid) => {
+  const user = users.value[userid]
+  console.log(`Getting name for userId ${userid}:`, user)
+  return user ? user.name : `User ${userid}`
+}
+
+// Function to fetch all users mentioned in tasks
+const fetchTaskUsers = async () => {
+  const userIds = new Set()
+  
+  // Collect all unique user IDs from tasks
+  tasks.value.forEach(task => {
+    if (task.owner_id) userIds.add(task.owner_id)
+    if (task.collaborators) {
+      task.collaborators.forEach(id => userIds.add(id))
+    }
+    // Also check subtasks
+    if (task.subtasks) {
+      task.subtasks.forEach(subtask => {
+        if (subtask.owner_id) userIds.add(subtask.owner_id)
+        if (subtask.collaborators) {
+          subtask.collaborators.forEach(id => userIds.add(id))
+        }
+      })
+    }
+  })
+  
+  // Fetch user details for all unique IDs
+  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
+  await Promise.all(fetchPromises)
+}
 
 onMounted(() => {
-  fetch(`http://localhost:5002/tasks/user-task/${userId}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
-    .then(data => {
-      // API returns { "tasks": [ {...}, {...} ] }
-      tasks.value = data.tasks.data
-      console.log('Fetched tasks:', tasks.value)
-    })
-    .catch(error => {
-      console.error('Error fetching tasks:', error)
-    })
+  const userData = getCurrentUserData()
+  userRole.value = userData.role?.toLowerCase() || ''
+  userId.value = parseInt(userData.userid) || null
+  
+  console.log('User data from session:', userData)
+  console.log('Fetching projects for userId:', userId.value)
 
-  // Fetch projects owned by user
-  fetch(`http://localhost:5001/projects/user/${userId}`)
-    .then(response => {
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('No projects found for this user')
-          userProjects.value = []
-          return
+  // Only fetch data if userId is available
+  if (userId.value) {
+    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
-    .then(data => {
-    const allProjects = data.data || []
-    // filter projects where user is owner or in collaborators
-    userProjects.value = allProjects.filter(project => {
-      const collabs = project.collaborators || []
-      return project.owner_id == userId || collabs.includes(Number(userId))
-    })
-    console.log('Filtered projects for dropdown:', userProjects.value)
-    })
-    .catch(error => console.error('Error fetching projects:', error))
+        return response.json()
+      })
+      .then(data => {
+        // API returns { "tasks": [ {...}, {...} ] }
+        tasks.value = data.tasks.data
+        console.log('Fetched tasks:', tasks.value)
+        
+        // Fetch user details for all users mentioned in tasks
+        fetchTaskUsers()
+      })
+      .catch(error => {
+        console.error('Error fetching tasks:', error)
+      })
+
+    // Fetch projects owned by user
+    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.warn('No projects found for this user')
+            userProjects.value = []
+            return
+          }
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        return response.json()
+      })
+      .then(data => {
+      const allProjects = data.data || []
+      // filter projects where user is owner or in collaborators
+      userProjects.value = allProjects.filter(project => {
+        const collabs = project.collaborators || []
+        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
+      })
+      console.log('Filtered projects for dropdown:', userProjects.value)
+      })
+      .catch(error => console.error('Error fetching projects:', error))
+  }
 })
 
 const collaboratorQuery = ref('');
@@ -399,7 +491,7 @@ const handleFileUpload = (event) => {
 }
 
 const newTask = ref({
-  owner_id: userId,
+  owner_id: null, // Will be set when userId is available
   task_name: '',
   description: '',
   type: 'parent',
@@ -410,6 +502,13 @@ const newTask = ref({
   parent_task: '',
   subtasks: '', 
 })
+
+// Watch for userId changes and update newTask.owner_id
+watch(userId, (newUserId) => {
+  if (newUserId) {
+    newTask.value.owner_id = newUserId
+  }
+}, { immediate: true })
 
 const isFormValid = computed(() => {
   return newTask.value.task_name.trim() !== '' &&
@@ -453,7 +552,7 @@ const submitNewTask = async () => {
       tasks.value.push(data.data)
       // reset form
       newTask.value = {
-        owner_id: userId,
+        owner_id: userId.value,
         task_name: '',
         description: '',
         type: 'parent',
@@ -510,10 +609,15 @@ const navigateToTask = (taskId) => {
 }
 
 const formatDate = (dateString) => {
+  if (!dateString) return 'No date'
+  
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { 
+  
+  return date.toLocaleDateString('en-SG', { 
+    timeZone: 'Asia/Singapore',
     month: 'short', 
-    day: 'numeric'
+    day: 'numeric',
+    year: 'numeric'
   })
 }
 

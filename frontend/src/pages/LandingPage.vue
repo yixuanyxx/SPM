@@ -180,7 +180,7 @@ async function fetchUserName() {
                       <div class="task-meta">
                         <div class="task-date">
                           <i class="bi bi-calendar3"></i>
-                          <span>{{ new Date(task.due_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) }}</span>
+                          <span>{{ new Date(task.due_date).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', month: 'short', day: 'numeric' }) }}</span>
                         </div>
                       </div>
                     </div>

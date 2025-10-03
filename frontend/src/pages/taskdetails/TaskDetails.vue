@@ -515,8 +515,13 @@ const navigateToTask = async (taskId) => {
 
 const formatDate = (dateString) => {
   if (!dateString) return 'No date'
+  
+  // Parse the UTC date and convert to Singapore timezone
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { 
+  
+  // Convert to Singapore timezone (UTC+8)
+  return date.toLocaleDateString('en-SG', { 
+    timeZone: 'Asia/Singapore',
     year: 'numeric',
     month: 'short', 
     day: 'numeric'
@@ -525,9 +530,13 @@ const formatDate = (dateString) => {
 
 const getRelativeDate = (dateString) => {
   if (!dateString) return ''
+  
   const date = new Date(dateString)
-  const now = new Date()
-  const diffTime = date - now
+  
+  const nowSG = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Singapore"}))
+  const dateSG = new Date(date.toLocaleString("en-US", {timeZone: "Asia/Singapore"}))
+  
+  const diffTime = dateSG.setHours(0,0,0,0) - nowSG.setHours(0,0,0,0)
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
   
   if (diffDays < 0) {

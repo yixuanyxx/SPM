@@ -258,7 +258,8 @@ export default {
     formatDate(dateString) {
       if (!dateString) return '';
       const date = new Date(dateString);
-      return date.toLocaleDateString('en-US', { 
+      return date.toLocaleDateString('en-SG', { 
+        timeZone: 'Asia/Singapore',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
