@@ -301,10 +301,10 @@ const showErrorPopup = ref(false)
 
 
 // Get user role from localStorage on component mount
-onMounted(() => {
-  const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
-  userRole.value = storedRole.toLowerCase()
-})
+// onMounted(() => {
+//   const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
+//   userRole.value = storedRole.toLowerCase()
+// })
 
 // Check if user is manager or director
 const isManagerOrDirector = computed(() => {
