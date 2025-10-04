@@ -85,11 +85,39 @@
 
     <!-- Main Content -->
     <div class="main-content">
+      <!-- Sort Controls -->
+      <div class="sort-controls">
+        <div class="sort-container">
+          <label for="sortBy">Sort by:</label>
+          <select id="sortBy" v-model="sortBy" class="sort-dropdown">
+            <option value="due_date">Due Date</option>
+            <option value="priority">Priority</option>
+            <option value="status">Status</option>
+            <option value="name">Task Name</option>
+          </select>
+          <button 
+            @click="toggleSortOrder" 
+            class="sort-order-btn"
+            :title="sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'"
+          >
+            <i :class="sortOrder === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down'"></i>
+          </button>
+        </div>
+      </div>
+      
       <!-- Tasks -->
       <div class="tasks-container">
 
+        <!-- Loading state -->
+        <div v-if="isLoadingTasks" class="loading-state">
+          <div class="loading-spinner">
+            <i class="bi bi-arrow-clockwise spin"></i>
+          </div>
+          <p class="loading-text">Loading your tasks...</p>
+        </div>
+
         <!-- if no tasks found -->
-        <div v-if="filteredTasks.length === 0" class="empty-state">
+        <div v-else-if="!isLoadingTasks && filteredTasks.length === 0" class="empty-state">
           <div class="empty-icon">
             <i class="bi bi-clipboard"></i>
           </div>
@@ -98,6 +126,7 @@
         </div>
 
         <div 
+          v-else
           v-for="(task, index) in filteredTasks" 
           :key="task.id"
           class="task-card"
@@ -112,9 +141,15 @@
                   <h3 class="task-title" :class="{ completed: task.status === 'Completed' }">
                     {{ task.task_name }}
                   </h3>
-                  <div class="task-status" :class="getStatusClass(task.status)">
-                    <i :class="getStatusIcon(task.status)"></i>
-                    <span>{{ getStatusLabel(task.status) }}</span>
+                  <div class="task-badges">
+                    <div class="task-status" :class="getStatusClass(task.status)">
+                      <i :class="getStatusIcon(task.status)"></i>
+                      <span>{{ getStatusLabel(task.status) }}</span>
+                    </div>
+                    <div class="task-priority" :class="getPriorityClass(task.priority)">
+                      <i class="bi bi-flag-fill"></i>
+                      <span>{{ task.priority }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="task-people">
@@ -229,6 +264,23 @@
         <label>Due Date* </label>
         <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
 
+        <!-- Priority Level -->
+        <label for="priority">Priority Level: {{ newTask.priority }}</label>
+        <div class="priority-slider-container">
+          <input
+            id="priority"
+            type="range"
+            min="1"
+            max="10"
+            v-model="newTask.priority"
+            class="priority-slider"
+          />
+          <div class="priority-labels">
+            <span class="priority-label-left">1 - Least Important</span>
+            <span class="priority-label-right">10 - Most Important</span>
+          </div>
+        </div>
+
         <label>Status</label>
         <select v-model="newTask.status">
           <option v-if="isManagerOrDirector" value="Unassigned">Unassigned</option>
@@ -311,6 +363,8 @@ import { getCurrentUserData } from '../../services/session.js'
 import "./taskview.css"
 
 const activeFilter = ref('all')
+const sortBy = ref('due_date')
+const sortOrder = ref('asc')
 const expandedTasks = ref([])
 const userRole = ref('')
 const userId = ref(null)
@@ -335,6 +389,7 @@ const tasks = ref([]) // where the fetched data will be stored
 const userProjects = ref([])
 const showSuccessMessage = ref(false)
 const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
+const isLoadingTasks = ref(false) // Loading state for tasks
 
 // Function to fetch user details by userid
 const fetchUserDetails = async (userid) => {
@@ -399,6 +454,8 @@ onMounted(() => {
 
   // Only fetch data if userId is available
   if (userId.value) {
+    isLoadingTasks.value = true // Start loading
+    
     fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
       .then(response => {
         if (!response.ok) {
@@ -416,6 +473,9 @@ onMounted(() => {
       })
       .catch(error => {
         console.error('Error fetching tasks:', error)
+      })
+      .finally(() => {
+        isLoadingTasks.value = false // End loading
       })
 
     // Fetch projects owned by user
@@ -496,6 +556,7 @@ const newTask = ref({
   description: '',
   type: 'parent',
   due_date: '',
+  priority: '5',
   status: 'Ongoing',
   project_id: '',
   collaborators: '',
@@ -557,12 +618,14 @@ const submitNewTask = async () => {
         description: '',
         type: 'parent',
         due_date: '',
+        priority: '5',
         status: 'Unassigned',
         project_id: '',
         collaborators: '',
         parent_task: '',
         subtasks: ''
       }
+      selectedCollaborators.value = []
       newTaskFile.value = null
       showCreateModal.value = false
       showSuccessMessage.value = true
@@ -578,6 +641,10 @@ const submitNewTask = async () => {
   }
 }
 
+const toggleSortOrder = () => {
+  sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
 const filteredTasks = computed(() => {
   let filtered = tasks.value
   
@@ -586,9 +653,33 @@ const filteredTasks = computed(() => {
   }
   
   return filtered.sort((a, b) => {
-    if (a.status === 'Completed' && b.status !== 'Completed') return 1
-    if (a.status !== 'Completed' && b.status === 'Completed') return -1
-    return new Date(a.due_date) - new Date(b.due_date)
+    // Always keep completed tasks at the bottom if not sorting by status
+    if (sortBy.value !== 'status') {
+      if (a.status === 'Completed' && b.status !== 'Completed') return 1
+      if (a.status !== 'Completed' && b.status === 'Completed') return -1
+    }
+    
+    let comparison = 0
+    
+    switch (sortBy.value) {
+      case 'due_date':
+        comparison = new Date(a.due_date) - new Date(b.due_date)
+        break
+      case 'priority':
+        comparison = parseInt(b.priority) - parseInt(a.priority) // Higher priority first by default
+        break
+      case 'status':
+        const statusOrder = { 'Unassigned': 0, 'Ongoing': 1, 'Under Review': 2, 'Completed': 3 }
+        comparison = statusOrder[a.status] - statusOrder[b.status]
+        break
+      case 'name':
+        comparison = a.task_name.localeCompare(b.task_name)
+        break
+      default:
+        comparison = new Date(a.due_date) - new Date(b.due_date)
+    }
+    
+    return sortOrder.value === 'asc' ? comparison : -comparison
   })
 })
 
@@ -649,6 +740,13 @@ const getStatusLabel = (status) => {
     'Unassigned': 'Unassigned'
   }
   return labels[status]
+}
+
+const getPriorityClass = (priority) => {
+  const level = parseInt(priority)
+  if (level >= 8) return 'priority-high'
+  if (level >= 5) return 'priority-medium'
+  return 'priority-low'
 }
 
 const getSubtaskProgress = (task) => {

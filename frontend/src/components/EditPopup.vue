@@ -682,13 +682,13 @@ async handleUpdate() {
 }
 
 .btn-primary {
-  background-color: #6366f1;
+  background-color: #3b82f6;
   color: white;
   border: none;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background-color: #4f46e5;
+  background-color: #2563eb;
 }
 
 .btn-secondary {
