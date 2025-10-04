@@ -205,20 +205,8 @@
 
 .autocomplete input[type="text"] {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  background: #f9fafb;
-  transition: all 0.2s ease;
+  padding: 8px;
   box-sizing: border-box;
-}
-
-.autocomplete input[type="text"]:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
 }
 
 .suggestions-list {
@@ -228,120 +216,70 @@
   right: 0;
   z-index: 10;
   background: white;
-  border: 2px solid #e5e7eb;
-  border-top: none;
-  border-radius: 0 0 8px 8px;
+  border: 1px solid #ccc;
   max-height: 200px;
   overflow-y: auto;
   list-style: none;
   margin: 0;
   padding: 0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 
 .suggestions-list li {
-  padding: 0.75rem;
+  padding: 8px;
   cursor: pointer;
-  transition: background-color 0.15s ease;
-  border-bottom: 1px solid #f3f4f6;
 }
 
 .suggestions-list li:hover {
-  background-color: #f8faff;
-}
-
-.suggestions-list li:last-child {
-  border-bottom: none;
+  background-color: #f0f0f0;
 }
 
 .selected-collaborators {
-  margin-top: 0.75rem;
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 4px;
+  margin-top: 4px;
 }
 
 .selected-email {
-  display: inline-flex;
+  background-color: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 12px;
+  display: flex;
   align-items: center;
-  gap: 0.5rem;
-  background: #f0f9ff;
-  color: #3b82f6;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  border: 1px solid #e0f2fe;
 }
 
 .selected-email i {
+  margin-left: 4px;
   cursor: pointer;
-  padding: 0.125rem;
-  border-radius: 2px;
-  transition: background-color 0.15s ease;
-}
-
-.selected-email i:hover {
-  background-color: #3b82f6;
-  color: white;
 }
 
 .create-task-btn {
-  background: #3b82f6;
-  color: white;
+  background-color: #007bff;
+  color: #fff;
   border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 12px;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
-  letter-spacing: 0.025em;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
 }
 
 .create-task-btn:hover {
-  background: #3b82f6;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.create-task-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
-}
-
-.create-task-btn i {
-  font-size: 1rem;
+  background-color: #258dfd;
 }
 
 .success-popup {
   position: fixed;
-  top: 2rem;
-  right: 2rem;
-  background: #d1fae5;
+  top: 20px;
+  right: 20px;
+  background-color: #28a745; /* green */
   color: #059669;
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  z-index: 1001;
-  font-weight: 600;
-  font-size: 0.875rem;
-  animation: slideInRight 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0px 4px 12px rgba(0,0,0,0.2);
+  z-index: 1000;
+  font-weight: bold;
+  animation: fadeInOut 3s forwards;
 }
 
 @keyframes fadeInOut {
@@ -645,108 +583,55 @@
 }
 
 /* Modal */
+/* Modal overlay */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.5);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  animation: fadeIn 0.2s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
+/* Modal content */
 .modal-content {
   background: white;
-  border-radius: 16px;
-  padding: 2rem;
-  width: 90%;
-  max-width: 560px;
-  max-height: 85vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  animation: slideUp 0.3s ease;
+  border-radius: 12px;
+  padding: 20px;
+  width: 500px;          /* adjust width as needed */
+  max-height: 80vh;      /* maximum height relative to viewport */
+  overflow-y: auto;      /* scroll inside modal if content too tall */
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-content h2 {
-  margin: 0 0 1.5rem 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #1a1a1a;
-  letter-spacing: -0.025em;
-}
-
-.modal-content label {
-  display: block;
-  margin: 1.5rem 0 0.5rem 0;
-  font-weight: 600;
-  color: #374151;
-  font-size: 0.875rem;
-  letter-spacing: 0.025em;
-}
-
-.modal-content label:first-of-type {
-  margin-top: 0;
-}
-
-.modal-content input,
-.modal-content select,
 .modal-content textarea {
   width: 100%;
-  padding: 0.75rem;
-  border: 2px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
+  min-height: 120px;   /* makes it taller */
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  resize: vertical;    /* user can still resize vertically */
   box-sizing: border-box;
-  background: #f9fafb;
+  font-size: 14px;
 }
-
-.modal-content input:focus,
-.modal-content select:focus,
-.modal-content textarea:focus {
-  outline: none;
-  border-color: #3b82f6;
-  background: white;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-}
-
-.modal-content textarea {
-  min-height: 120px;
-  resize: vertical;
-  font-family: inherit;
-  line-height: 1.5;
-}
-
 .input-error {
-  border-color: #ef4444 !important;
-  background-color: #fef2f2 !important;
+  border: 1px solid #e74c3c !important; /* red border */
+  background-color: #fff5f5;             /* subtle red background */
 }
 
-.input-error:focus {
-  border-color: #ef4444 !important;
-  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+/* Optional: style the form inputs */
+.modal-content input,
+.modal-content select {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
 }
 
 /* optional slide-down animation */
@@ -757,56 +642,25 @@
 
 .modal-actions {
   display: flex;
-  gap: 0.75rem;
   justify-content: flex-end;
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid #e5e7eb;
 }
 
 .modal-actions button {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
+  margin-left: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
   border: none;
   cursor: pointer;
-  font-weight: 600;
-  font-size: 0.875rem;
-  transition: all 0.2s ease;
-  letter-spacing: 0.025em;
-  min-width: 100px;
 }
 
 .modal-actions button:first-child {
-  background: #3b82f6;
+  background-color: #007bff;
   color: white;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
-}
-
-.modal-actions button:first-child:hover:not(:disabled) {
-  background: #3b82f6;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
-}
-
-.modal-actions button:first-child:disabled,
-.modal-actions button.btn-disabled {
-  background: #d1d5db;
-  color: #9ca3af;
-  cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
 .modal-actions button:last-child {
-  background: #f3f4f6;
-  color: #374151;
-  border: 2px solid #e5e7eb;
-}
-
-.modal-actions button:last-child:hover {
-  background: #e5e7eb;
-  border-color: #d1d5db;
-  transform: translateY(-1px);
+  background-color: #ccc;
+  color: black;
 }
 
 /* Animations */
