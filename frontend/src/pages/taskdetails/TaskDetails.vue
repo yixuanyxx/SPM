@@ -38,7 +38,7 @@
             <i class="bi bi-chevron-right breadcrumb-separator"></i>
             <span v-if="project" class="breadcrumb-item">
               <div class="project-dot" :style="{ backgroundColor: project.color || '#6366f1' }"></div>
-              {{ project.name }}
+              {{ project.proj_name  }}
               <i class="bi bi-chevron-right breadcrumb-separator"></i>
             </span>
             <span v-if="parentTask" class="breadcrumb-item" @click="navigateToTask(parentTask.id)">
@@ -139,6 +139,19 @@
 
                 <div class="property-item">
                   <label class="property-label">
+                    <i class="bi bi-flag-fill"></i>
+                    Priority
+                  </label>
+                  <div class="property-value">
+                    <div class="task-priority-badge" :class="getPriorityClass(task.priority)">
+                      <i class="bi bi-flag-fill"></i>
+                      <span>Priority {{ task.priority }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="property-item">
+                  <label class="property-label">
                     <i class="bi bi-person"></i>
                     Owner
                   </label>
@@ -161,7 +174,7 @@
                   <div class="property-value">
                     <div class="project-chip">
                       <div class="project-dot" :style="{ backgroundColor: project.color || '#6366f1' }"></div>
-                      <span>{{ project.name }}</span>
+                      <span>{{ project.proj_name }}</span>
                     </div>
                   </div>
                 </div>
@@ -183,11 +196,11 @@
                   </label>
                   <div class="property-value">
                     <div class="collaborators-list">
-                      <div v-for="collaborator in task.collaborators" :key="collaborator.id" class="user-chip">
+                      <div v-for="collaboratorId in task.collaborators" :key="collaboratorId" class="user-chip">
                         <div class="user-avatar">
                           <i class="bi bi-person-circle"></i>
                         </div>
-                        <span>{{ collaborator.name }}</span>
+                        <span>{{ getUserName(collaboratorId) }}</span>
                       </div>
                     </div>
                   </div>
@@ -196,28 +209,105 @@
             </div>
           </div>
 
-          <!-- PDF Attachments Section -->
-          <div v-if="task.pdf_attachments && task.pdf_attachments.length > 0" class="content-block">
+          <!-- Attachments Section -->
+          <div v-if="hasAttachments" class="content-block">
             <h3 class="block-title">
               <i class="bi bi-paperclip"></i>
               Attachments
             </h3>
             <div class="block-content">
               <div class="attachments-grid">
+                <!-- PDF Attachments -->
                 <div 
-                  v-for="attachment in task.pdf_attachments" 
-                  :key="attachment.id || attachment.name"
+                  v-for="attachment in parsedAttachments" 
+                  :key="`pdf-${attachment.name}`"
                   class="attachment-card"
                   @click="openAttachment(attachment)"
                 >
-                  <div class="attachment-icon">
+                  <div class="attachment-icon pdf">
                     <i class="bi bi-file-earmark-pdf"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• PDF</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Image Attachments -->
+                <div 
+                  v-for="attachment in task.image_attachments || []" 
+                  :key="`img-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon image">
+                    <i class="bi bi-file-earmark-image"></i>
                   </div>
                   <div class="attachment-info">
                     <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
                     <p class="attachment-meta">
                       <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
                       <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• Image</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Document Attachments -->
+                <div 
+                  v-for="attachment in task.document_attachments || []" 
+                  :key="`doc-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon document">
+                    <i class="bi bi-file-earmark-text"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• Document</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Other Attachments -->
+                <div 
+                  v-for="attachment in task.other_attachments || []" 
+                  :key="`other-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon other">
+                    <i class="bi bi-file-earmark"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span v-if="attachment.type" class="attachment-type">• {{ attachment.type.toUpperCase() }}</span>
                     </p>
                   </div>
                   <div class="attachment-actions">
@@ -353,6 +443,7 @@ const loading = ref(true)
 const error = ref(null)
 const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
+const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
 
 // Team members data for assign popup - replace with real data fetching as needed
 const teamMembers = ref([
@@ -405,12 +496,88 @@ const canAssignTask = computed(() => {
   return currentUser.role === 'manager' || currentUser.role === 'director'
 })
 
+// Computed property to check if task has any attachments
+const hasAttachments = computed(() => {
+  if (!task.value) return false
+  
+  return (parsedAttachments.value && parsedAttachments.value.length > 0) ||
+         (task.value.image_attachments && task.value.image_attachments.length > 0) ||
+         (task.value.document_attachments && task.value.document_attachments.length > 0) ||
+         (task.value.other_attachments && task.value.other_attachments.length > 0)
+})
+
+// Computed property to parse attachments from JSON string
+const parsedAttachments = computed(() => {
+  if (!task.value?.attachments) return []
+  
+  try {
+    if (Array.isArray(task.value.attachments)) {
+      return task.value.attachments
+    }
+    return JSON.parse(task.value.attachments)
+  } catch (error) {
+    console.error('Error parsing attachments:', error)
+    return []
+  }
+})
+
 // Watch for route parameter changes to reload task details
 watch(() => route.params.id, async (newId, oldId) => {
   if (newId && newId !== oldId) {
     await fetchTaskDetails()
   }
 }, { immediate: false })
+
+// Function to fetch user details by userid
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+// Function to get user names for display
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `Invalid user`
+}
+
+// Function to fetch all users mentioned in task
+const fetchTaskUsers = async () => {
+  const userIds = new Set()
+  
+  // Collect all unique user IDs from task
+  if (task.value.owner_id) userIds.add(task.value.owner_id)
+  if (task.value.collaborators) {
+    task.value.collaborators.forEach(id => userIds.add(id))
+  }
+  
+  // Fetch user details for all unique IDs
+  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
+  const results = await Promise.all(fetchPromises)
+  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+}
 
 onMounted(async () => {
   await fetchTaskDetails()
@@ -436,6 +603,24 @@ const fetchTaskDetails = async () => {
     
     const taskData = await taskResponse.json()
     task.value = taskData.task || taskData
+
+    // Fetch project details if project_id exists
+    if (task.value.project_id) {
+      try {
+        const projectResponse = await fetch(`http://localhost:5001/projects/${task.value.project_id}`)
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json()
+          project.value = projectData.data || projectData
+        } else {
+          project.value = null
+        }
+      } catch (err) {
+        console.error('Error fetching project:', err)
+        project.value = null
+      }
+    } else {
+      project.value = null
+    }
 
     // Fetch owner details using owner_id
     if (task.value.owner_id) {
@@ -495,6 +680,9 @@ const fetchTaskDetails = async () => {
         // Silently handle parent task fetch errors
       }
     }
+    
+    // Fetch user details for all users mentioned in task
+    await fetchTaskUsers()
     
   } catch (err) {
     error.value = err.message
@@ -586,6 +774,13 @@ const getStatusLabel = (status) => {
     'Unassigned': 'Unassigned'
   }
   return labels[status]
+}
+
+const getPriorityClass = (priority) => {
+  const level = parseInt(priority)
+  if (level >= 8) return 'priority-high'
+  if (level >= 5) return 'priority-medium'
+  return 'priority-low'
 }
 
 const getTaskTypeClass = () => {

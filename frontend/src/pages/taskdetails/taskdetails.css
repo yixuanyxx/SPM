@@ -414,6 +414,33 @@
   color: #059669;
 }
 
+/* Priority Badge */
+.task-details-content .task-priority-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.task-details-content .task-priority-badge.priority-low {
+  background: #f0f9ff;
+  color: #0284c7;
+}
+
+.task-details-content .task-priority-badge.priority-medium {
+  background: #ffe8c9;
+  color: #bf6720;
+}
+
+.task-details-content .task-priority-badge.priority-high {
+  background: #fef0e2;
+  color: #dc2626;
+}
+
 /* PDF Attachments */
 .task-details-content .attachments-grid {
   display: grid;
@@ -451,6 +478,27 @@
   justify-content: center;
   font-size: 1.25rem;
   flex-shrink: 0;
+}
+
+.task-details-content .attachment-icon.pdf {
+  background: #dc2626;
+}
+
+.task-details-content .attachment-icon.image {
+  background: #059669;
+}
+
+.task-details-content .attachment-icon.document {
+  background: #3b82f6;
+}
+
+.task-details-content .attachment-icon.other {
+  background: #6b7280;
+}
+
+.task-details-content .attachment-type {
+  font-weight: 500;
+  color: #374151;
 }
 
 .task-details-content .attachment-info {

@@ -425,8 +425,7 @@ const fetchUserDetails = async (userid) => {
 const getUserName = (userid) => {
   if (!userid) return 'Unknown User'
   const user = users.value[userid]
-  console.log(`Getting name for userId ${userid}:`, user)
-  return user?.name || `Loading...`
+  return user?.name || `Invalid user`
 }
 
 // Function to fetch all users mentioned in tasks
