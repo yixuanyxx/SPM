@@ -597,7 +597,9 @@ const submitNewTask = async () => {
     return
   }
   try {
-    let endpoint = userRole.value === 'manager'
+    // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
+    // Staff uses the staff endpoint (automatically adds owner as collaborator)
+    let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
       ? 'http://localhost:5002/tasks/manager-task/create'
       : 'http://localhost:5002/tasks/staff-task/create'
 
@@ -621,9 +623,27 @@ const submitNewTask = async () => {
       formData.append('parent_task', newTask.value.parent_task)
     }
     
-    // Add collaborators as comma-separated string
-    if (selectedCollaborators.value.length > 0) {
-      formData.append('collaborators', selectedCollaborators.value.map(user => parseInt(user.userid)).join(','))
+    // Add collaborators as comma-separated string with role-based logic
+    const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
+    
+    // Role-based owner inclusion in collaborators:
+    // - Staff: Include owner as collaborator
+    // - Manager/Director: Owner only, NOT in collaborators
+    if (userRole.value === 'staff') {
+      // For staff, ensure owner is always included in collaborators
+      if (!collaboratorIds.includes(newTask.value.owner_id)) {
+        collaboratorIds.push(newTask.value.owner_id)
+        console.log('Added staff owner to collaborators')
+      }
+    }
+    
+    // Only append collaborators if there are any
+    if (collaboratorIds.length > 0) 
+      const collaboratorString = collaboratorIds.join(',')
+      console.log('Appending collaborators string:', collaboratorString)
+      formData.append('collaborators', collaboratorString)
+    } else {
+      console.log('No collaborators to append - skipping collaborators field entirely')
     }
     
     // Add subtasks as comma-separated string
