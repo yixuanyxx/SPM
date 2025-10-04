@@ -265,19 +265,21 @@
         <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
 
         <!-- Priority Level -->
-        <label for="priority">Priority Level: {{ newTask.priority }}</label>
-        <div class="priority-slider-container">
-          <input
-            id="priority"
-            type="range"
-            min="1"
-            max="10"
-            v-model="newTask.priority"
-            class="priority-slider"
-          />
-          <div class="priority-labels">
-            <span class="priority-label-left">1 - Least Important</span>
-            <span class="priority-label-right">10 - Most Important</span>
+        <div class="form-group mt-4">
+          <label for="priority">Priority Level: {{ newTask.priority }}</label>
+          <div class="priority-slider-container">
+            <input
+              id="priority"
+              type="range"
+              min="1"
+              max="10"
+              v-model="newTask.priority"
+              class="priority-slider"
+            />
+            <div class="priority-labels">
+              <span class="priority-label-left">1 - Least Important</span>
+              <span class="priority-label-right">10 - Most Important</span>
+            </div>
           </div>
         </div>
 
@@ -393,17 +395,25 @@ const isLoadingTasks = ref(false) // Loading state for tasks
 
 // Function to fetch user details by userid
 const fetchUserDetails = async (userid) => {
+  if (!userid) return null
   if (users.value[userid]) {
     return users.value[userid] // Return cached user
   }
   
   try {
+    console.log(`Fetching user details for userid: ${userid}`)
     const response = await fetch(`http://localhost:5003/users/${userid}`)
     if (response.ok) {
       const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
       const user = data.data
-      users.value[userid] = user
-      return user
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
     }
   } catch (error) {
     console.error(`Error fetching user ${userid}:`, error)
@@ -413,9 +423,10 @@ const fetchUserDetails = async (userid) => {
 
 // Function to get user names for display
 const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
   const user = users.value[userid]
   console.log(`Getting name for userId ${userid}:`, user)
-  return user ? user.name : `User ${userid}`
+  return user?.name || `Loading...`
 }
 
 // Function to fetch all users mentioned in tasks
@@ -439,9 +450,12 @@ const fetchTaskUsers = async () => {
     }
   })
   
+  console.log(`Found user IDs to fetch:`, Array.from(userIds))
+  
   // Fetch user details for all unique IDs
   const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
-  await Promise.all(fetchPromises)
+  const results = await Promise.all(fetchPromises)
+  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
 }
 
 onMounted(() => {
