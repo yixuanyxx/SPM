@@ -206,12 +206,14 @@
 }
 
 .task-details-content .btn-primary {
-  background: #3b82f6;
-  color: white;
+  background: transparent;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
 }
 
 .task-details-content .btn-primary:hover {
-  background: #2563eb;
+    background: #f8fafc;
+    color: #1e40af;
 }
 
 .task-details-content .btn-ghost {
