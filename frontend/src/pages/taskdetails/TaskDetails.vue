@@ -809,13 +809,27 @@ const openAttachment = (attachment) => {
 }
 
 const downloadAttachment = (attachment) => {
-  if (attachment.download_url || attachment.url) {
+  console.log('Attempting to download attachment:', attachment)
+  
+  if (attachment.url) {
+    console.log('Downloading from URL:', attachment.url)
     const link = document.createElement('a')
-    link.href = attachment.download_url || attachment.url
+    link.href = attachment.url
     link.download = attachment.name || attachment.filename
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  } else if (attachment.download_url) {
+    console.log('Downloading from download_url:', attachment.download_url)
+    const link = document.createElement('a')
+    link.href = attachment.download_url
+    link.download = attachment.name || attachment.filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } else {
+    console.error('No URL available for attachment:', attachment)
+    alert(`Cannot download "${attachment.name}": No URL available. This usually means the file wasn't uploaded properly.`)
   }
 }
 

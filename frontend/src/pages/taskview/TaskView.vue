@@ -601,23 +601,44 @@ const submitNewTask = async () => {
       ? 'http://localhost:5002/tasks/manager-task/create'
       : 'http://localhost:5002/tasks/staff-task/create'
 
-    // convert comma-separated strings to arrays where needed
-    const payload = {
-      ...newTask.value,
-      collaborators: selectedCollaborators.value.map(user => parseInt(user.userid)),
-      subtasks: newTask.value.subtasks
-        ? newTask.value.subtasks.split(',').map(id => id.trim())
-        : []
+    // Use FormData to handle file uploads properly
+    const formData = new FormData()
+    
+    // Add all task fields to FormData
+    formData.append('owner_id', newTask.value.owner_id)
+    formData.append('task_name', newTask.value.task_name)
+    formData.append('description', newTask.value.description)
+    formData.append('type', newTask.value.type)
+    formData.append('due_date', newTask.value.due_date)
+    formData.append('priority', newTask.value.priority)
+    formData.append('status', newTask.value.status)
+    
+    if (newTask.value.project_id) {
+      formData.append('project_id', newTask.value.project_id)
     }
-
+    
+    if (newTask.value.parent_task) {
+      formData.append('parent_task', newTask.value.parent_task)
+    }
+    
+    // Add collaborators as comma-separated string
+    if (selectedCollaborators.value.length > 0) {
+      formData.append('collaborators', selectedCollaborators.value.map(user => parseInt(user.userid)).join(','))
+    }
+    
+    // Add subtasks as comma-separated string
+    if (newTask.value.subtasks) {
+      formData.append('subtasks', newTask.value.subtasks)
+    }
+    
+    // Add the actual file for upload
     if (newTaskFile.value) {
-      payload.attachments = [{ url: '', name: newTaskFile.value.name }] // url can be empty, backend will handle upload
+      formData.append('attachment', newTaskFile.value)
     }
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
     })
 
     const data = await response.json()
@@ -632,7 +653,7 @@ const submitNewTask = async () => {
         type: 'parent',
         due_date: '',
         priority: '5',
-        status: 'Unassigned',
+        status: 'Ongoing',
         project_id: '',
         collaborators: '',
         parent_task: '',
@@ -640,6 +661,11 @@ const submitNewTask = async () => {
       }
       selectedCollaborators.value = []
       newTaskFile.value = null
+      // Clear the file input element
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) {
+        fileInput.value = ''
+      }
       showCreateModal.value = false
       showSuccessMessage.value = true
       setTimeout(() => {
