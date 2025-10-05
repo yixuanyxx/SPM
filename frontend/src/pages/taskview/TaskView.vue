@@ -638,14 +638,14 @@ const submitNewTask = async () => {
     }
     
     // Only append collaborators if there are any
-    if (collaboratorIds.length > 0) 
+    if (collaboratorIds.length > 0) {
       const collaboratorString = collaboratorIds.join(',')
       console.log('Appending collaborators string:', collaboratorString)
       formData.append('collaborators', collaboratorString)
     } else {
       console.log('No collaborators to append - skipping collaborators field entirely')
     }
-    
+  
     // Add subtasks as comma-separated string
     if (newTask.value.subtasks) {
       formData.append('subtasks', newTask.value.subtasks)
