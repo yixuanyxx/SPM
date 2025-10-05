@@ -83,28 +83,112 @@
             </div>
           </div>
 
-          <!-- Collaborators -->
+          <!-- Collaborators Section -->
           <div class="form-group">
             <label>Collaborators</label>
-            <div class="collaborators-list">
-              <div
-                v-for="member in teamMembers"
-                :key="member.id"
-                class="collaborator-item"
-              >
-                <input
-                  type="checkbox"
-                  :id="`collab-${member.id}`"
-                  :value="member.id"
-                  v-model="editedTask.collaborators"
-                  :disabled="isLoading || member.id === editedTask.owner"
-                  class="form-checkbox"
+            <div class="collaborator-management">
+              <!-- Add Collaborator Input -->
+              <div class="add-collaborator">
+                <input 
+                  type="text"
+                  v-model="collaboratorQuery"
+                  placeholder="Search by email to add collaborators..."
+                  class="form-input"
+                  :disabled="isLoading"
                 />
-                <label :for="`collab-${member.id}`" class="collaborator-label">
-                  {{ member.name }}
-                  <span class="role-badge" :class="member.role">{{ member.role }}</span>
-                  <span v-if="member.id === editedTask.owner" class="owner-badge">Owner</span>
-                </label>
+                <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+                  <li 
+                    v-for="user in collaboratorSuggestions" 
+                    :key="user.id"
+                    @click="addCollaborator(user)"
+                    class="suggestion-item"
+                  >
+                    <div class="user-info">
+                      <span class="user-name">{{ user.name }}</span>
+                      <span class="user-email">{{ user.email }}</span>
+                      <span class="user-role">{{ user.role }}</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+
+              <!-- Current Collaborators -->
+              <div class="current-collaborators">
+                <div v-if="selectedCollaborators.length === 0" class="no-collaborators">
+                  No collaborators assigned
+                </div>
+                <div
+                  v-for="collaborator in selectedCollaborators"
+                  :key="collaborator.id"
+                  class="collaborator-item"
+                >
+                  <div class="collaborator-info">
+                    <span class="collaborator-name">{{ collaborator.name }}</span>
+                    <span class="collaborator-email">{{ collaborator.email }}</span>
+                    <span class="role-badge" :class="collaborator.role">{{ collaborator.role }}</span>
+                    <span v-if="collaborator.userid == editedTask.owner_id" class="owner-badge">Owner</span>
+                  </div>
+                  <button
+                    v-if="collaborator.userid != editedTask.owner_id"
+                    type="button"
+                    @click="removeCollaborator(collaborator)"
+                    class="remove-btn"
+                    :disabled="isLoading"
+                  >
+                    <i class="bi bi-x"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Attachments Section -->
+          <div class="form-group">
+            <label>Attachments</label>
+            <div class="attachment-section">
+              <!-- Current Attachments -->
+              <div v-if="currentAttachments.length > 0" class="current-attachments">
+                <div
+                  v-for="(attachment, index) in currentAttachments"
+                  :key="index"
+                  class="attachment-item"
+                >
+                  <div class="attachment-info">
+                    <i class="bi bi-file-earmark-pdf"></i>
+                    <span class="attachment-name">{{ attachment.name || `Attachment ${index + 1}` }}</span>
+                  </div>
+                  <div class="attachment-actions">
+                    <a 
+                      :href="attachment.url" 
+                      target="_blank" 
+                      class="view-btn"
+                      title="View PDF"
+                    >
+                      <i class="bi bi-eye"></i>
+                    </a>
+                    <button
+                      type="button"
+                      @click="removeAttachment(index)"
+                      class="remove-btn"
+                      :disabled="isLoading"
+                      title="Remove attachment"
+                    >
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Add New Attachment -->
+              <div class="add-attachment">
+                <input 
+                  type="file" 
+                  @change="handleFileUpload" 
+                  accept="application/pdf" 
+                  class="file-input"
+                  :disabled="isLoading"
+                />
+                <span class="file-hint">Only PDF files are allowed</span>
               </div>
             </div>
           </div>
@@ -112,7 +196,7 @@
           <!-- Task Type Information -->
           <div v-if="isSubtask" class="info-box">
             <i class="bi bi-info-circle"></i>
-            <span>This is a subtask of "{{ parentTaskTitle }}"</span>
+            <span>This is a subtask of "{{ parentTaskTitle }}". Adding collaborators here will also add them to the parent task.</span>
           </div>
 
           <!-- Actions -->
@@ -188,7 +272,7 @@ import { enhancedNotificationService } from '../services/notifications'
 
 export default {
   name: "TaskEditPopup",
-  emits: ['close', 'update-success'],  // ADD THIS LINE
+  emits: ['close', 'update-success'],
   props: {
     isVisible: { type: Boolean, default: false },
     taskId: { type: [String, Number], required: true },
@@ -212,10 +296,16 @@ export default {
         status: "Unassigned",
         due_date: "",
         priority: "5",
-        owner: "",
+        owner_id: null,
         collaborators: [],
+        attachments: [],
       },
       originalTask: null,
+      selectedCollaborators: [],
+      currentAttachments: [],
+      newAttachmentFile: null,
+      collaboratorQuery: '',
+      collaboratorSuggestions: [],
       isLoading: false,
       successMessage: "",
       errorMessage: "",
@@ -225,14 +315,27 @@ export default {
   },
   computed: {
     isFormValid() {
-      // Only validate that required fields are filled
       return (
         this.editedTask.task_name?.trim() &&
         this.editedTask.status
       );
     },
     hasChanges() {
-      return JSON.stringify(this.editedTask) !== JSON.stringify(this.originalTask);
+      const current = {
+        ...this.editedTask,
+        collaborators: this.selectedCollaborators.map(c => c.userid),
+        attachments: this.currentAttachments
+      };
+      const original = {
+        ...this.originalTask,
+        collaborators: this.originalTask?.collaborators || [],
+        attachments: this.originalTask?.attachments || []
+      };
+      
+      // Also check if there's a new file to upload
+      const hasNewFile = this.newAttachmentFile !== null;
+      
+      return JSON.stringify(current) !== JSON.stringify(original) || hasNewFile;
     },
     isDateChanged() {
       return this.originalTask && this.editedTask.due_date !== this.originalTask.due_date;
@@ -248,6 +351,12 @@ export default {
       },
       immediate: true
     },
+    collaboratorQuery: {
+      handler(query) {
+        this.fetchCollaboratorSuggestions(query);
+      },
+      immediate: false
+    }
   },
   methods: {
     getCurrentDate() {
@@ -257,16 +366,7 @@ export default {
       const day = String(today.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     },
-    formatDate(dateString) {
-      if (!dateString) return '';
-      const date = new Date(dateString);
-      return date.toLocaleDateString('en-SG', { 
-        timeZone: 'Asia/Singapore',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-    },
+    
     async fetchTaskDetails() {
       if (!this.taskId) return;
       
@@ -292,13 +392,25 @@ export default {
           status: task.status || "Unassigned",
           due_date: dueDate,
           priority: task.priority || "5",
-          owner: task.owner || this.currentOwner,
+          owner_id: task.owner_id || this.currentOwner,
           collaborators: Array.isArray(task.collaborators) 
-            ? task.collaborators.map(c => c.id || c)
+            ? task.collaborators.map(c => parseInt(c))
             : [],
+          attachments: task.attachments || [],
         };
 
-        this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
+        // Load current attachments
+        this.currentAttachments = Array.isArray(task.attachments) ? [...task.attachments] : [];
+        console.log('Loaded attachments:', this.currentAttachments);
+
+        // Fetch collaborator details
+        await this.fetchCollaboratorDetails();
+
+        this.originalTask = JSON.parse(JSON.stringify({
+          ...this.editedTask,
+          collaborators: this.selectedCollaborators.map(c => c.userid),
+          attachments: [...this.currentAttachments]
+        }));
       } catch (err) {
         console.error("Error fetching task details:", err);
         this.errorMessage = "Failed to load task details. Please try again.";
@@ -306,76 +418,231 @@ export default {
         this.isLoading = false;
       }
     },
-async handleUpdate() {
-  if (!this.isFormValid) return;
-  
-  this.clearMessages();
-  this.isLoading = true;
 
-  try {
-    // Prepare only the fields that can be updated
-    const updateData = {
-      task_id: this.taskId,
-      task_name: this.editedTask.task_name,
-      description: this.editedTask.description,
-      status: this.editedTask.status,
-      due_date: this.editedTask.due_date,
-      priority: this.editedTask.priority,
-      collaborators: this.editedTask.collaborators,
-    };
+    async fetchCollaboratorDetails() {
+      if (!this.editedTask.collaborators || this.editedTask.collaborators.length === 0) {
+        this.selectedCollaborators = [];
+        return;
+      }
 
-    console.log('EditPopup sending:', updateData);
+      try {
+        const collaboratorPromises = this.editedTask.collaborators.map(async (userId) => {
+          const response = await fetch(`http://localhost:5003/users/${userId}`);
+          if (response.ok) {
+            const data = await response.json();
+            return data.data;
+          }
+          return null;
+        });
 
-    const response = await fetch("http://localhost:5002/tasks/update", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(updateData),
-    });
+        const collaborators = await Promise.all(collaboratorPromises);
+        this.selectedCollaborators = collaborators.filter(c => c !== null);
+      } catch (error) {
+        console.error('Error fetching collaborator details:', error);
+      }
+    },
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.Message || `HTTP error! status: ${response.status}`);
-    }
+    async fetchCollaboratorSuggestions(query) {
+      if (!query || query.length < 2) {
+        this.collaboratorSuggestions = [];
+        return;
+      }
 
-    const result = await response.json();
-    console.log('EditPopup received:', result);
-    
-    // Trigger notifications for task updates
-    await this.triggerTaskUpdateNotifications();
-    
-    // Update the original task data
-    this.originalTask = JSON.parse(JSON.stringify(this.editedTask));
-    
-    this.isLoading = false;
-    
-    // Close the popup
-    this.$emit("close");
-    
-    // Emit success with just the fields that were updated (not the entire response)
-    setTimeout(() => {
-      this.successMessage = "Task updated successfully!";
+      try {
+        const response = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`);
+        if (!response.ok) throw new Error('Failed to fetch user suggestions');
+        
+        const data = await response.json();
+        const allUsers = data.data || [];
+        
+        // Filter out already selected collaborators
+        const selectedIds = this.selectedCollaborators.map(c => c.userid);
+        this.collaboratorSuggestions = allUsers.filter(user => 
+          !selectedIds.includes(user.userid)
+        ).slice(0, 10); // Limit to 10 suggestions
+      } catch (error) {
+        console.error('Error fetching collaborator suggestions:', error);
+        this.collaboratorSuggestions = [];
+      }
+    },
+
+    addCollaborator(user) {
+      if (!this.selectedCollaborators.find(c => c.userid === user.userid)) {
+        this.selectedCollaborators.push(user);
+      }
+      this.collaboratorQuery = '';
+      this.collaboratorSuggestions = [];
+    },
+
+    removeCollaborator(user) {
+      this.selectedCollaborators = this.selectedCollaborators.filter(c => c.userid !== user.userid);
+    },
+
+    handleFileUpload(event) {
+      const file = event.target.files[0];
+      if (file && file.type === "application/pdf") {
+        this.newAttachmentFile = file;
+      } else {
+        alert("Only PDF files are allowed");
+        event.target.value = null;
+        this.newAttachmentFile = null;
+      }
+    },
+
+    removeAttachment(index) {
+      console.log('Removing attachment at index:', index);
+      console.log('Before removal:', this.currentAttachments);
+      this.currentAttachments.splice(index, 1);
+      console.log('After removal:', this.currentAttachments);
+    },
+
+    async handleUpdate() {
+      if (!this.isFormValid) return;
       
-      // FIXED: Emit only the update data, not the entire backend response
-      this.$emit("update-success", {
-        task_name: this.editedTask.task_name,
-        description: this.editedTask.description,
-        status: this.editedTask.status,
-        due_date: this.editedTask.due_date,
-        priority: this.editedTask.priority,
-        collaborators: this.editedTask.collaborators,
-      });
-      
-      setTimeout(() => {
-        this.successMessage = "";
-      }, 5000);
-    }, 500);
+      this.clearMessages();
+      this.isLoading = true;
 
-  } catch (err) {
-    console.error("Error updating task:", err);
-    this.errorMessage = err.message || "Failed to update task. Please try again.";
-    this.isLoading = false;
-  }
-},
+      try {
+        // Prepare collaborator IDs
+        const collaboratorIds = this.selectedCollaborators.map(c => c.userid);
+
+        // Use FormData for file uploads
+        const formData = new FormData();
+        
+        // Add basic task fields
+        formData.append('task_id', this.taskId);
+        formData.append('task_name', this.editedTask.task_name);
+        formData.append('description', this.editedTask.description);
+        formData.append('status', this.editedTask.status);
+        formData.append('due_date', this.editedTask.due_date);
+        formData.append('priority', this.editedTask.priority);
+        
+        // Add collaborators
+        if (collaboratorIds.length > 0) {
+          formData.append('collaborators', collaboratorIds.join(','));
+        }
+
+        // Add current attachments as JSON (this will replace all attachments)
+        formData.append('attachments', JSON.stringify(this.currentAttachments));
+
+        // Add new attachment file if exists (this will be merged with existing)
+        if (this.newAttachmentFile) {
+          formData.append('attachment', this.newAttachmentFile);
+        }
+
+        console.log('EditPopup sending update for task:', this.taskId);
+        console.log('Current attachments being sent:', this.currentAttachments);
+        console.log('New attachment file:', this.newAttachmentFile ? this.newAttachmentFile.name : 'None');
+
+        const response = await fetch("http://localhost:5002/tasks/update", {
+          method: "PUT",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.Message || `HTTP error! status: ${response.status}`);
+        }
+
+        const result = await response.json();
+        console.log('EditPopup received:', result);
+
+        // Update current attachments with the result from backend
+        if (result.data && result.data.attachments) {
+          this.currentAttachments = result.data.attachments;
+        }
+
+        // Clear the new attachment file since it's now been uploaded
+        this.newAttachmentFile = null;
+        // Clear the file input
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) {
+          fileInput.value = '';
+        }
+
+        // If this is a subtask, sync collaborators with parent task
+        if (this.isSubtask && this.parentTaskId) {
+          await this.syncParentTaskCollaborators(collaboratorIds);
+        }
+        
+        // Trigger notifications for task updates
+        await this.triggerTaskUpdateNotifications();
+        
+        // Update the original task data
+        this.originalTask = JSON.parse(JSON.stringify({
+          ...this.editedTask,
+          collaborators: collaboratorIds,
+          attachments: this.currentAttachments
+        }));
+        
+        this.isLoading = false;
+        
+        // Close the popup
+        this.$emit("close");
+        
+        // Show success message and emit update
+        setTimeout(() => {
+          this.successMessage = "Task updated successfully!";
+          
+          this.$emit("update-success", {
+            task_name: this.editedTask.task_name,
+            description: this.editedTask.description,
+            status: this.editedTask.status,
+            due_date: this.editedTask.due_date,
+            priority: this.editedTask.priority,
+            collaborators: collaboratorIds,
+            attachments: this.currentAttachments,
+          });
+          
+          setTimeout(() => {
+            this.successMessage = "";
+          }, 5000);
+        }, 500);
+
+      } catch (err) {
+        console.error("Error updating task:", err);
+        this.errorMessage = err.message || "Failed to update task. Please try again.";
+        this.isLoading = false;
+      }
+    },
+
+    async syncParentTaskCollaborators(subtaskCollaboratorIds) {
+      try {
+        // Get current parent task details
+        const parentResponse = await fetch(`http://localhost:5002/tasks/${this.parentTaskId}`);
+        if (!parentResponse.ok) return;
+        
+        const parentData = await parentResponse.json();
+        const parentTask = parentData.task || parentData;
+        
+        // Merge parent collaborators with subtask collaborators
+        const parentCollaborators = Array.isArray(parentTask.collaborators) 
+          ? parentTask.collaborators.map(c => parseInt(c))
+          : [];
+        
+        const mergedCollaborators = [...new Set([...parentCollaborators, ...subtaskCollaboratorIds])];
+        
+        // Update parent task if there are new collaborators
+        if (mergedCollaborators.length > parentCollaborators.length) {
+          const updateData = {
+            task_id: this.parentTaskId,
+            collaborators: mergedCollaborators.join(',')
+          };
+
+          await fetch("http://localhost:5002/tasks/update", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateData),
+          });
+          
+          console.log('Parent task collaborators synced successfully');
+        }
+      } catch (error) {
+        console.error('Error syncing parent task collaborators:', error);
+        // Don't throw error to avoid breaking the main update flow
+      }
+    },
+
     discardChanges() {
       if (this.hasChanges) {
         this.showUnsavedDialog = true;
@@ -383,6 +650,7 @@ async handleUpdate() {
         this.closePopup();
       }
     },
+    
     closePopup() {
       if (this.isLoading) return;
       
@@ -392,17 +660,28 @@ async handleUpdate() {
         this.clearMessages();
         this.showUnsavedDialog = false;
         this.pendingClose = false;
+        this.collaboratorQuery = '';
+        this.collaboratorSuggestions = [];
+        this.newAttachmentFile = null;
+        // Clear the file input
+        const fileInput = document.querySelector('input[type="file"]');
+        if (fileInput) {
+          fileInput.value = '';
+        }
         this.$emit("close");
       }
     },
+    
     confirmClose() {
       this.pendingClose = true;
       this.closePopup();
     },
+    
     cancelClose() {
       this.showUnsavedDialog = false;
       this.pendingClose = false;
     },
+    
     clearMessages() {
       this.successMessage = "";
       this.errorMessage = "";
@@ -417,9 +696,9 @@ async handleUpdate() {
         if (!currentUserId || !this.originalTask) return;
 
         // Get collaborators to notify (exclude current user)
-        const collaboratorsToNotify = this.editedTask.collaborators.filter(
-          collaboratorId => String(collaboratorId) !== String(currentUserId)
-        );
+        const collaboratorsToNotify = this.selectedCollaborators
+          .map(c => c.userid)
+          .filter(collaboratorId => String(collaboratorId) !== String(currentUserId));
 
         if (collaboratorsToNotify.length === 0) return;
 
@@ -482,6 +761,7 @@ async handleUpdate() {
         // Don't throw error to avoid breaking the main update flow
       }
     },
+    
     handleOverlayClick() {
       if (this.isLoading) return;
       if (this.showUnsavedDialog) return;
@@ -1003,9 +1283,255 @@ async handleUpdate() {
   color: #6b7280;
 }
 
-.priority-label-left,
-.priority-label-right {
-  font-size: 0.75rem;
+/* Collaborator Management Styles */
+.collaborator-management {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  background-color: #f9fafb;
 }
 
+.add-collaborator {
+  position: relative;
+  margin-bottom: 1rem;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.suggestion-item {
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.suggestion-item:hover {
+  background-color: #f3f4f6;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.user-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.user-email {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.user-role {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  text-transform: capitalize;
+}
+
+.current-collaborators {
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.no-collaborators {
+  text-align: center;
+  color: #6b7280;
+  font-style: italic;
+  padding: 2rem;
+}
+
+.collaborator-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border-radius: 6px;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 0.5rem;
+}
+
+.collaborator-item:last-child {
+  margin-bottom: 0;
+}
+
+.collaborator-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.collaborator-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.collaborator-email {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.remove-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remove-btn:hover {
+  background-color: #fee2e2;
+  color: #dc2626;
+}
+
+.remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Attachment Management Styles */
+.attachment-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  background-color: #f9fafb;
+}
+
+.current-attachments {
+  margin-bottom: 1rem;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  background-color: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.attachment-item:last-child {
+  margin-bottom: 0;
+}
+
+.attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.attachment-info i {
+  color: #ef4444;
+  font-size: 1.25rem;
+}
+
+.attachment-name {
+  font-weight: 500;
+  color: #111827;
+}
+
+.attachment-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.view-btn {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.view-btn:hover {
+  background-color: #dbeafe;
+  color: #2563eb;
+}
+
+.add-attachment {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.file-input {
+  padding: 0.5rem;
+  border: 2px dashed #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.file-input:hover {
+  border-color: #9ca3af;
+}
+
+.file-hint {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* Updated Role Badge Styles */
+.role-badge.director {
+  background-color: #fef3c7;
+  color: #d97706;
+}
+
+/* Enhanced Info Box for Subtasks */
+.info-box {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: linear-gradient(145deg, #dbeafe 0%, #bfdbfe 100%);
+  border: 1px solid #93c5fd;
+  border-radius: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: #1e40af;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.info-box i {
+  color: #3b82f6;
+  font-size: 1rem;
+  margin-top: 0.125rem;
+  flex-shrink: 0;
+}
 </style>

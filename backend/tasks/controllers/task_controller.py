@@ -264,6 +264,22 @@ def update_task():
     try:
         data = request.form if request.form else (request.get_json(silent=True) or {})
         payload = parse_task_update_payload(data)
+
+        # Handle file upload for new attachments
+        file = request.files.get("attachment")
+        if file:
+            try:
+                new_attachments = service.repo.upload_attachment(file)
+                # If there are existing attachments, merge them
+                existing_attachments = payload.get("attachments", [])
+                if isinstance(existing_attachments, list):
+                    # Merge existing and new attachments
+                    payload["attachments"] = existing_attachments + new_attachments
+                else:
+                    payload["attachments"] = new_attachments
+            except Exception as e:
+                raise Exception(f"Upload failed: {str(e)}")
+
         result = service.update_task_by_id(payload)
         status = result.pop("__status", 200)
         result["Code"] = status
