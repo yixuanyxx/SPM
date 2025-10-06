@@ -8,70 +8,154 @@
       <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
-          <h1 class="page-title">Department Tasks</h1>
-          <p class="page-subtitle">View Tasks for Your Department</p>
+          <h1 class="page-title">Department's Workload</h1>
+          <p class="page-subtitle">Monitor and manage your department's task distribution</p>
+        </div>
+        <div class="header-actions">
+          <button 
+            class="view-toggle-btn" 
+            :class="{ active: viewMode === 'members' }"
+            @click="viewMode = 'members'"
+          >
+            <i class="bi bi-people-fill"></i>
+            Member View
+          </button>
+          <button 
+            class="view-toggle-btn" 
+            :class="{ active: viewMode === 'tasks' }"
+            @click="viewMode = 'tasks'"
+          >
+            <i class="bi bi-list-task"></i>
+            Task View
+          </button>
         </div>
       </div>
       
     <!-- Stats Section -->
-    <div class="stats-section">
+    <div class="stats-section" :class="{ 'stats-section-member': viewMode === 'members' }">
       <div class="stats-container">
-        <div class="stat-card" @click="activeFilter = 'all'" :class="{ active: activeFilter === 'all' }">
-          <div class="stat-content">
-            <div class="stat-icon total">
-              <i class="bi bi-list-task"></i>
+        <!-- Member View Stats -->
+        <div v-if="viewMode === 'members'" class="workload-stats">
+          <div class="stat-card workload-stat" @click="workloadFilter = 'all'" :class="{ active: workloadFilter === 'all' }">
+            <div class="stat-content">
+              <div class="stat-icon members">
+                <i class="bi bi-people"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ departmentMembers.filter(m => m.userid !== userId).length }}</div>
+                <div class="stat-title">All Members</div>
+              </div>
             </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ totalTasks }}</div>
-              <div class="stat-title">Total</div>
+          </div>
+
+          <div class="stat-card workload-light" @click="workloadFilter = 'low'" :class="{ active: workloadFilter === 'low' }">
+            <div class="stat-content">
+              <div class="stat-icon light">
+                <i class="bi bi-circle"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ lightLoadMembers }}</div>
+                <div class="stat-title">Light Load</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-card workload-moderate" @click="workloadFilter = 'moderate'" :class="{ active: workloadFilter === 'moderate' }">
+            <div class="stat-content">
+              <div class="stat-icon moderate">
+                <i class="bi bi-circle-half"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ moderateLoadMembers }}</div>
+                <div class="stat-title">Moderate Load</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-card workload-heavy" @click="workloadFilter = 'high'" :class="{ active: workloadFilter === 'high' }">
+            <div class="stat-content">
+              <div class="stat-icon heavy">
+                <i class="bi bi-circle-fill"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ heavyLoadMembers }}</div>
+                <div class="stat-title">Heavy Load</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="stat-card overload-stat" @click="workloadFilter = 'overload'" :class="{ active: workloadFilter === 'overload' }">
+            <div class="stat-content">
+              <div class="stat-icon overload">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ overloadedMembers }}</div>
+                <div class="stat-title">Over Load</div>
+              </div>
             </div>
           </div>
         </div>
 
-        <div class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
-          <div class="stat-content">
-            <div class="stat-icon unassigned">
-              <i class="bi bi-person-dash"></i>
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ unassignedTasks }}</div>
-              <div class="stat-title">Unassigned</div>
-            </div>
-          </div>
-        </div>
-        
-        <div class="stat-card" @click="activeFilter = 'Ongoing'" :class="{ active: activeFilter === 'Ongoing' }">
-          <div class="stat-content">
-            <div class="stat-icon ongoing">
-              <i class="bi bi-play-circle"></i>
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ ongoingTasks }}</div>
-              <div class="stat-title">Ongoing</div>
+        <!-- Task View Stats -->
+        <div v-else class="task-stats">
+          <div class="stat-card" @click="activeFilter = 'all'" :class="{ active: activeFilter === 'all' }">
+            <div class="stat-content">
+              <div class="stat-icon total">
+                <i class="bi bi-list-task"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ selectedTaskMember ? memberTaskStats.total : totalTasks }}</div>
+                <div class="stat-title">Total</div>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div class="stat-card" @click="activeFilter = 'Under Review'" :class="{ active: activeFilter === 'Under Review' }">
-          <div class="stat-content">
-            <div class="stat-icon under-review">
-              <i class="bi bi-eye"></i>
-            </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ underReviewTasks }}</div>
-              <div class="stat-title">Under Review</div>
+
+          <div class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
+            <div class="stat-content">
+              <div class="stat-icon unassigned">
+                <i class="bi bi-person-dash"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ selectedTaskMember ? memberTaskStats.unassigned : unassignedTasks }}</div>
+                <div class="stat-title">Unassigned</div>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div class="stat-card" @click="activeFilter = 'Completed'" :class="{ active: activeFilter === 'Completed' }">
-          <div class="stat-content">
-            <div class="stat-icon completed">
-              <i class="bi bi-check-circle-fill"></i>
+          
+          <div class="stat-card" @click="activeFilter = 'Ongoing'" :class="{ active: activeFilter === 'Ongoing' }">
+            <div class="stat-content">
+              <div class="stat-icon ongoing">
+                <i class="bi bi-play-circle"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ selectedTaskMember ? memberTaskStats.ongoing : ongoingTasks }}</div>
+                <div class="stat-title">Ongoing</div>
+              </div>
             </div>
-            <div class="stat-info">
-              <div class="stat-number">{{ completedTasks }}</div>
-              <div class="stat-title">Completed</div>
+          </div>
+          
+          <div class="stat-card" @click="activeFilter = 'Under Review'" :class="{ active: activeFilter === 'Under Review' }">
+            <div class="stat-content">
+              <div class="stat-icon under-review">
+                <i class="bi bi-eye"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ selectedTaskMember ? memberTaskStats.underReview : underReviewTasks }}</div>
+                <div class="stat-title">Under Review</div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="stat-card" @click="activeFilter = 'Completed'" :class="{ active: activeFilter === 'Completed' }">
+            <div class="stat-content">
+              <div class="stat-icon completed">
+                <i class="bi bi-check-circle-fill"></i>
+              </div>
+              <div class="stat-info">
+                <div class="stat-number">{{ selectedTaskMember ? memberTaskStats.completed : completedTasks }}</div>
+                <div class="stat-title">Completed</div>
+              </div>
             </div>
           </div>
         </div>
@@ -79,26 +163,168 @@
     </div>
 
     <!-- Main Content -->
-    <div class="main-content">
-      <!-- Sort Controls -->
-      <div class="sort-controls">
-        <div class="sort-container">
-          <label for="sortBy">Sort by:</label>
-          <select id="sortBy" v-model="sortBy" class="sort-dropdown">
-            <option value="due_date">Due Date</option>
-            <option value="priority">Priority</option>
-            <option value="status">Status</option>
-            <option value="name">Task Name</option>
-          </select>
-          <button 
-            @click="toggleSortOrder" 
-            class="sort-order-btn"
-            :title="sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'"
+    <div class="main-content" :class="{ 'main-content-member': viewMode === 'members' }">
+
+      
+      <!-- Member View -->
+      <div v-if="viewMode === 'members'" class="members-view">
+        <!-- Filter Controls for Member View -->
+        <div class="sort-controls">
+          <div class="sort-container">
+            <div class="filter-group ms-4">
+              <label for="memberFilter">Filter by member:</label>
+              <select id="memberFilter" v-model="selectedMember" class="filter-dropdown">
+                <option value="">All Members</option>
+                <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                  {{ member.name }}
+                </option>
+              </select>
+            </div>
+            
+            <div class="workload-legend me-4">
+              <span class="legend-item low">
+                <div class="legend-color low"></div>
+                Light
+              </span>
+              <span class="legend-item moderate">
+                <div class="legend-color moderate"></div>
+                Moderate
+              </span>
+              <span class="legend-item high">
+                <div class="legend-color high"></div>
+                Heavy
+              </span>
+              <span class="legend-item overload">
+                <div class="legend-color overload"></div>
+                Overloaded
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Loading State for Member View -->
+        <div v-if="isLoadingTasks" class="loading-state">
+          <div class="loading-spinner">
+            <i class="bi bi-arrow-clockwise spin"></i>
+          </div>
+          <p class="loading-text">Loading department members and tasks...</p>
+        </div>
+
+        <!-- Empty State for No Members -->
+        <div v-else-if="departmentMembers.length === 0 && !isLoadingTasks" class="empty-state">
+          <div class="empty-icon">
+            <i class="bi bi-people"></i>
+          </div>
+          <div class="empty-title">No department members found</div>
+          <p class="empty-subtitle">No team members found in this department.</p>
+        </div>
+
+        <!-- Empty State for No Filtered Members -->
+        <div v-else-if="filteredMembers.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <i class="bi bi-people"></i>
+          </div>
+          <div class="empty-title">No team members match filter</div>
+          <p class="empty-subtitle">Try adjusting your filter criteria.</p>
+        </div>
+
+        <!-- Member Cards -->
+        <div v-else class="members-container">
+          <div 
+            v-for="(member, index) in filteredMembers" 
+            :key="member.userid"
+            class="member-card"
+            :class="getWorkloadClass(member)"
+            :style="{ animationDelay: `${index * 0.1}s` }"
           >
-            <i :class="sortOrder === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down'"></i>
-          </button>
+            <div class="member-header">
+              <div class="member-info">
+                <div class="member-avatar">
+                  <i class="bi bi-person-circle"></i>
+                </div>
+                <div class="member-details">
+                  <h3 class="member-name">{{ member.name }}</h3>
+                  <p class="member-role">{{ member.role || 'Team Member' }}</p>
+                  <p class="member-email">{{ member.email }}</p>
+                </div>
+              </div>
+              <div class="workload-indicator" :class="getWorkloadClass(member)">
+                <div class="workload-level">{{ getWorkloadLevel(member) }}</div>
+                <div class="task-count">{{ getMemberTasks(member.userid).length }} tasks</div>
+              </div>
+            </div>
+
+            <div class="member-tasks-summary">
+              <div class="task-breakdown">
+                <div class="breakdown-item ongoing">
+                  <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Ongoing').length }}</span>
+                  <span class="breakdown-label">Ongoing</span>
+                </div>
+                <div class="breakdown-item under-review">
+                  <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Under Review').length }}</span>
+                  <span class="breakdown-label">Review</span>
+                </div>
+                <div class="breakdown-item completed">
+                  <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Completed').length }}</span>
+                  <span class="breakdown-label">Done</span>
+                </div>
+              </div>
+              
+              <div class="priority-breakdown">
+                <div class="priority-item high" v-if="getMemberHighPriorityTasks(member.userid) > 0">
+                  <i class="bi bi-flag-fill"></i>
+                  <span>{{ getMemberHighPriorityTasks(member.userid) }} high priority</span>
+                </div>
+                <div class="upcoming-tasks" v-if="getMemberUpcomingTasks(member.userid) > 0">
+                  <i class="bi bi-clock"></i>
+                  <span>{{ getMemberUpcomingTasks(member.userid) }} due soon</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="member-actions">
+              <button class="view-tasks-btn" @click="viewMemberTasks(member.userid)">
+                <i class="bi bi-eye"></i>
+                View Tasks
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
+      <!-- Task View -->
+      <div v-else class="tasks-view">
+
+        <!-- Sort Controls -->
+        <div class="sort-controls">
+          <div class="sort-container">
+            <label for="sortBy">Sort by:</label>
+            <select id="sortBy" v-model="sortBy" class="sort-dropdown">
+              <option value="due_date">Due Date</option>
+              <option value="priority">Priority</option>
+              <option value="status">Status</option>
+              <option value="name">Task Name</option>
+              <option value="owner">Assignee</option>
+            </select>
+            <button 
+              @click="toggleSortOrder" 
+              class="sort-order-btn"
+              :title="sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'"
+            >
+              <i :class="sortOrder === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down'"></i>
+            </button>
+            
+            <div class="filter-group">
+              <label for="memberTaskFilter">Filter by member:</label>
+              <select id="memberTaskFilter" v-model="selectedTaskMember" class="filter-dropdown">
+                <option value="">All Members</option>
+                <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                  {{ member.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
       
       <!-- Tasks -->
       <div class="tasks-container">
@@ -168,6 +394,14 @@
                   <div class="task-date">
                     <i class="bi bi-calendar3"></i>
                     <span>{{ formatDate(task.due_date) }}</span>
+                  </div>
+                  <div v-if="isTaskOverdue(task)" class="task-overdue">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <span>Overdue</span>
+                  </div>
+                  <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
+                    <i class="bi bi-clock"></i>
+                    <span>Due Soon</span>
                   </div>
                 </div>
               </div>
@@ -243,10 +477,11 @@
             </div>
           </transition>
         </div>
+        </div>
       </div>
     </div>
-    </div>
   </div>
+</div>
 </template>
 
 <script setup>
@@ -263,9 +498,14 @@ const expandedTasks = ref([])
 const userRole = ref('')
 const userId = ref(null)
 const deptId = ref(null)
+const viewMode = ref('members')
+const selectedMember = ref('')
+const selectedTaskMember = ref('')
+const workloadFilter = ref('all')
 
 const tasks = ref([])
 const users = ref({})
+const departmentMembers = ref([])
 const isLoadingTasks = ref(false)
 
 // Get user data from session
@@ -286,14 +526,49 @@ onMounted(async () => {
         console.log('User dept_id:', deptId.value)
         
         if (deptId.value) {
-          await fetchDepartmentTasks()
+          await Promise.all([
+            fetchDepartmentTasks(),
+            fetchDepartmentMembers()
+          ])
+        } else {
+          console.log('No department ID found for user')
         }
+      } else {
+        console.error('Failed to fetch user details:', response.status)
       }
     } catch (error) {
       console.error('Error fetching user details:', error)
     }
+  } else {
+    console.log('No user ID found in session')
   }
 })
+
+// Function to fetch department members
+const fetchDepartmentMembers = async () => {
+  if (!deptId.value) {
+    console.log('No department ID available')
+    return
+  }
+  
+  console.log('Fetching department members for dept:', deptId.value)
+  
+  try {
+    // Use the correct endpoint to get users by department ID
+    const response = await fetch(`http://localhost:5003/users/department/${deptId.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      departmentMembers.value = data.data || []
+      console.log('Fetched department members:', departmentMembers.value.length, departmentMembers.value)
+    } else {
+      console.error('Failed to fetch department members:', response.status)
+      departmentMembers.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching department members:', error)
+    departmentMembers.value = []
+  }
+}
 
 // Function to fetch user details by userid
 const fetchUserDetails = async (userid) => {
@@ -350,19 +625,25 @@ const fetchTaskUsers = async () => {
 
 // Fetch department tasks
 const fetchDepartmentTasks = async () => {
-  if (!deptId.value) return
+  if (!deptId.value) {
+    console.log('No department ID for tasks')
+    return
+  }
   
   isLoadingTasks.value = true
+  console.log('Fetching department tasks for dept:', deptId.value)
   
   try {
     const response = await fetch(`http://localhost:5002/tasks/department/${deptId.value}`)
+    console.log('Tasks response status:', response.status)
+    
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
     const data = await response.json()
     tasks.value = data.data || []
-    console.log('Fetched department tasks:', tasks.value)
+    console.log('Fetched department tasks:', tasks.value.length, tasks.value)
     
     await fetchTaskUsers()
   } catch (error) {
@@ -371,6 +652,101 @@ const fetchDepartmentTasks = async () => {
   } finally {
     isLoadingTasks.value = false
   }
+}
+
+// Workload management functions
+const getMemberTasks = (memberId) => {
+  return tasks.value.filter(task => 
+    task.owner_id === memberId || 
+    (task.collaborators && task.collaborators.includes(memberId))
+  )
+}
+
+const getMemberTasksByStatus = (memberId, status) => {
+  return getMemberTasks(memberId).filter(task => task.status === status)
+}
+
+const getMemberHighPriorityTasks = (memberId) => {
+  return getMemberTasks(memberId).filter(task => parseInt(task.priority) >= 8).length
+}
+
+const getMemberUpcomingTasks = (memberId) => {
+  const now = new Date()
+  const threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000))
+  
+  return getMemberTasks(memberId).filter(task => {
+    if (!task.due_date || task.status === 'Completed') return false
+    const dueDate = new Date(task.due_date)
+    return dueDate >= now && dueDate <= threeDaysFromNow
+  }).length
+}
+
+const getWorkloadClass = (member) => {
+  const taskCount = getMemberTasks(member.userid).filter(task => task.status !== 'Completed').length
+  const highPriorityCount = getMemberHighPriorityTasks(member.userid)
+  
+  if (taskCount >= 8 || highPriorityCount >= 4) return 'overload'
+  if (taskCount >= 5 || highPriorityCount >= 2) return 'high'
+  if (taskCount >= 3) return 'moderate'
+  return 'low'
+}
+
+const getWorkloadLevel = (member) => {
+  const workloadClass = getWorkloadClass(member)
+  const levels = {
+    'low': 'Light',
+    'moderate': 'Moderate', 
+    'high': 'Heavy',
+    'overload': 'Overloaded'
+  }
+  return levels[workloadClass] || 'Light'
+}
+
+const filteredMembers = computed(() => {
+  // Filter out the current user from the member list
+  let membersExcludingCurrentUser = departmentMembers.value.filter(member => member.userid !== userId.value)
+  
+  // Apply individual member filter
+  if (selectedMember.value) {
+    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => member.userid === parseInt(selectedMember.value))
+  }
+  
+  // Apply workload filter
+  if (workloadFilter.value !== 'all') {
+    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => getWorkloadClass(member) === workloadFilter.value)
+  }
+  
+  return membersExcludingCurrentUser
+})
+
+const viewMemberTasks = (memberId) => {
+  viewMode.value = 'tasks'
+  selectedTaskMember.value = memberId.toString()
+}
+
+const getWorkloadFilterLabel = (filter) => {
+  const labels = {
+    'low': 'Light Load',
+    'moderate': 'Moderate Load',
+    'high': 'Heavy Load',
+    'overload': 'Overloaded'
+  }
+  return labels[filter] || 'All'
+}
+
+
+
+const isTaskOverdue = (task) => {
+  if (!task.due_date || task.status === 'Completed') return false
+  return new Date(task.due_date) < new Date()
+}
+
+const isTaskDueSoon = (task) => {
+  if (!task.due_date || task.status === 'Completed') return false
+  const dueDate = new Date(task.due_date)
+  const now = new Date()
+  const threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000))
+  return dueDate >= now && dueDate <= threeDaysFromNow
 }
 
 const toggleSortOrder = () => {
@@ -382,6 +758,14 @@ const filteredTasks = computed(() => {
   
   if (activeFilter.value !== 'all') {
     filtered = filtered.filter(task => task.status === activeFilter.value)
+  }
+  
+  if (selectedTaskMember.value) {
+    const memberId = parseInt(selectedTaskMember.value)
+    filtered = filtered.filter(task => 
+      task.owner_id === memberId || 
+      (task.collaborators && task.collaborators.includes(memberId))
+    )
   }
   
   return filtered.sort((a, b) => {
@@ -405,6 +789,11 @@ const filteredTasks = computed(() => {
         break
       case 'name':
         comparison = a.task_name.localeCompare(b.task_name)
+        break
+      case 'owner':
+        const ownerA = getUserName(a.owner_id)
+        const ownerB = getUserName(b.owner_id)
+        comparison = ownerA.localeCompare(ownerB)
         break
       default:
         comparison = new Date(a.due_date) - new Date(b.due_date)
@@ -498,4 +887,46 @@ const ongoingTasks = computed(() => tasks.value.filter(task => task.status === '
 const underReviewTasks = computed(() => tasks.value.filter(task => task.status === 'Under Review').length)
 const completedTasks = computed(() => tasks.value.filter(task => task.status === 'Completed').length)
 const unassignedTasks = computed(() => tasks.value.filter(task => task.status === 'Unassigned').length)
+const overloadedMembers = computed(() => {
+  if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
+  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'overload').length
+})
+
+const lightLoadMembers = computed(() => {
+  if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
+  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'low').length
+})
+
+const moderateLoadMembers = computed(() => {
+  if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
+  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'moderate').length
+})
+
+const heavyLoadMembers = computed(() => {
+  if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
+  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'high').length
+})
+
+const memberTaskStats = computed(() => {
+  if (!selectedTaskMember.value) {
+    return {
+      total: 0,
+      ongoing: 0,
+      underReview: 0,
+      completed: 0,
+      unassigned: 0
+    }
+  }
+  
+  const memberId = parseInt(selectedTaskMember.value)
+  const memberTasks = getMemberTasks(memberId)
+  
+  return {
+    total: memberTasks.length,
+    ongoing: memberTasks.filter(task => task.status === 'Ongoing').length,
+    underReview: memberTasks.filter(task => task.status === 'Under Review').length,
+    completed: memberTasks.filter(task => task.status === 'Completed').length,
+    unassigned: memberTasks.filter(task => task.status === 'Unassigned').length
+  }
+})
 </script>
