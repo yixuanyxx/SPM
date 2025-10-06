@@ -455,3 +455,57 @@ def get_subtasks_by_parent(parent_task_id: int):
         
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/team/<int:team_id>", methods=["GET"])
+def get_tasks_by_team(team_id: int):
+    """
+    Get all tasks for users in a specific team.
+    
+    Parameters:
+    - team_id: ID of the team
+    
+    RETURNS:
+    {
+        "data": [ ... list of tasks for all team members ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: Tasks found and returned
+        404: No tasks found for this team
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_tasks_by_team(team_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/department/<int:dept_id>", methods=["GET"])
+def get_tasks_by_department(dept_id: int):
+    """
+    Get all tasks for users in a specific department.
+    
+    Parameters:
+    - dept_id: ID of the department
+    
+    RETURNS:
+    {
+        "data": [ ... list of tasks for all department members ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: Tasks found and returned
+        404: No tasks found for this department
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_tasks_by_department(dept_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500

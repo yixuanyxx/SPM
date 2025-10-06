@@ -8,13 +8,9 @@
       <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
-          <h1 class="page-title">My Personal Tasks</h1>
-          <p class="page-subtitle">View and Create Your Personal Tasks</p>
+          <h1 class="page-title">Department Tasks</h1>
+          <p class="page-subtitle">View Tasks for Your Department</p>
         </div>
-        <button class="create-task-btn" @click="showCreateModal = true">
-            <i class="bi bi-plus-lg"></i>
-            Create New Task
-        </button>
       </div>
       
     <!-- Stats Section -->
@@ -32,8 +28,7 @@
           </div>
         </div>
 
-        <!-- Unassigned status card - only show for managers and directors -->
-        <div v-if="isManagerOrDirector" class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
+        <div class="stat-card" @click="activeFilter = 'Unassigned'" :class="{ active: activeFilter === 'Unassigned' }">
           <div class="stat-content">
             <div class="stat-icon unassigned">
               <i class="bi bi-person-dash"></i>
@@ -113,7 +108,7 @@
           <div class="loading-spinner">
             <i class="bi bi-arrow-clockwise spin"></i>
           </div>
-          <p class="loading-text">Loading your tasks...</p>
+          <p class="loading-text">Loading department tasks...</p>
         </div>
 
         <!-- if no tasks found -->
@@ -250,119 +245,16 @@
         </div>
       </div>
     </div>
-    <!-- Create Task Modal -->
-    <div v-if="showCreateModal" class="modal-overlay">
-      <div class="modal-content">
-        <h2>Create New Task</h2>
-
-        <label>Task Name* </label>
-        <input v-model="newTask.task_name" placeholder="Enter task name" :class="{ 'input-error': newTask.task_name.trim() === '' }" required/>
-
-        <label>Description* </label>
-        <textarea v-model="newTask.description" placeholder="Enter description" :class="{ 'input-error': newTask.description.trim() === '' }" required></textarea>
-
-        <label>Due Date* </label>
-        <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
-
-        <!-- Priority Level -->
-        <div class="form-group mt-4">
-          <label for="priority">Priority Level: {{ newTask.priority }}</label>
-          <div class="priority-slider-container">
-            <input
-              id="priority"
-              type="range"
-              min="1"
-              max="10"
-              v-model="newTask.priority"
-              class="priority-slider"
-            />
-            <div class="priority-labels">
-              <span class="priority-label-left">1 - Least Important</span>
-              <span class="priority-label-right">10 - Most Important</span>
-            </div>
-          </div>
-        </div>
-
-        <label>Status</label>
-        <select v-model="newTask.status">
-          <option v-if="isManagerOrDirector" value="Unassigned">Unassigned</option>
-          <option value="Ongoing">Ongoing</option>
-          <option value="Under Review">Under Review</option>
-          <option value="Completed">Completed</option>
-        </select>
-
-        <label>Project</label>
-        <select v-model="newTask.project_id">
-          <option value="">-- Select Project --</option>
-          <template v-if="userProjects.length > 0">
-            <option 
-              v-for="project in userProjects" 
-              :key="project.id" 
-              :value="project.id"
-            >
-              {{ project.proj_name }}
-            </option>
-          </template>
-           <option v-else disabled>No projects available</option>
-        </select>
-
-        <label>Collaborators (emails)</label>
-        <div class="autocomplete">
-          <input 
-            type="text"
-            v-model="collaboratorQuery"
-            placeholder="Type email..."
-          />
-
-          <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
-            <li 
-              v-for="user in collaboratorSuggestions" 
-              :key="user.id"
-              @click="addCollaborator(user)"
-            >
-              {{ user.email }}
-            </li>
-          </ul>
-
-          <div class="selected-collaborators">
-            <span 
-              v-for="user in selectedCollaborators" 
-              :key="user.id" 
-              class="selected-email"
-            >
-              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
-            </span>
-          </div>
-        </div>
-
-        <label>Subtask IDs (comma-separated)</label>
-        <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" />
-
-        <label>Attach PDF</label>
-        <input type="file" @change="handleFileUpload" accept="application/pdf" />
-
-        <div class="modal-actions">
-          <button @click="submitNewTask" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
-            Create
-          </button>
-          <button @click="showCreateModal = false">Cancel</button>
-        </div>
-      </div>
     </div>
-    <div v-if="showSuccessMessage" class="success-popup">
-      Task created successfully!
-    </div>
-
   </div>
-</div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted,watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
 import { getCurrentUserData } from '../../services/session.js'
-import "./taskview.css"
+import "../taskview/taskview.css"
 
 const activeFilter = ref('all')
 const sortBy = ref('due_date')
@@ -370,50 +262,55 @@ const sortOrder = ref('asc')
 const expandedTasks = ref([])
 const userRole = ref('')
 const userId = ref(null)
-const showCreateModal = ref(false);
+const deptId = ref(null)
 
-// Get user data from session.js functions on component mount
-onMounted(() => {
+const tasks = ref([])
+const users = ref({})
+const isLoadingTasks = ref(false)
+
+// Get user data from session
+onMounted(async () => {
   const userData = getCurrentUserData()
   userRole.value = userData.role?.toLowerCase() || ''
   userId.value = parseInt(userData.userid) || null
   
-  console.log('User data from session:', userData)
-  console.log('Fetching projects for userId:', userId.value)
+  console.log('Department Task View - User data from session:', userData)
+  
+  // Get user's dept_id
+  if (userId.value) {
+    try {
+      const response = await fetch(`http://localhost:5003/users/${userId.value}`)
+      if (response.ok) {
+        const data = await response.json()
+        deptId.value = data.data?.dept_id
+        console.log('User dept_id:', deptId.value)
+        
+        if (deptId.value) {
+          await fetchDepartmentTasks()
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error)
+    }
+  }
 })
-
-// Check if user is manager or director
-const isManagerOrDirector = computed(() => {
-  return ['manager', 'director'].includes(userRole.value)
-})
-
-const tasks = ref([]) // where the fetched data will be stored
-const userProjects = ref([])
-const showSuccessMessage = ref(false)
-const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
-const isLoadingTasks = ref(false) // Loading state for tasks
 
 // Function to fetch user details by userid
 const fetchUserDetails = async (userid) => {
   if (!userid) return null
   if (users.value[userid]) {
-    return users.value[userid] // Return cached user
+    return users.value[userid]
   }
   
   try {
-    console.log(`Fetching user details for userid: ${userid}`)
     const response = await fetch(`http://localhost:5003/users/${userid}`)
     if (response.ok) {
       const data = await response.json()
-      console.log(`User data received for ${userid}:`, data)
       const user = data.data
       if (user) {
         users.value[userid] = user
-        console.log(`Cached user ${userid}:`, user)
         return user
       }
-    } else {
-      console.error(`Failed to fetch user ${userid}: ${response.status}`)
     }
   } catch (error) {
     console.error(`Error fetching user ${userid}:`, error)
@@ -425,20 +322,18 @@ const fetchUserDetails = async (userid) => {
 const getUserName = (userid) => {
   if (!userid) return 'Unknown User'
   const user = users.value[userid]
-  return user?.name || `Invalid user`
+  return user?.name || `User ${userid}`
 }
 
 // Function to fetch all users mentioned in tasks
 const fetchTaskUsers = async () => {
   const userIds = new Set()
   
-  // Collect all unique user IDs from tasks
   tasks.value.forEach(task => {
     if (task.owner_id) userIds.add(task.owner_id)
     if (task.collaborators) {
       task.collaborators.forEach(id => userIds.add(id))
     }
-    // Also check subtasks
     if (task.subtasks) {
       task.subtasks.forEach(subtask => {
         if (subtask.owner_id) userIds.add(subtask.owner_id)
@@ -449,254 +344,32 @@ const fetchTaskUsers = async () => {
     }
   })
   
-  console.log(`Found user IDs to fetch:`, Array.from(userIds))
-  
-  // Fetch user details for all unique IDs
   const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
-  const results = await Promise.all(fetchPromises)
-  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+  await Promise.all(fetchPromises)
 }
 
-onMounted(() => {
-  const userData = getCurrentUserData()
-  userRole.value = userData.role?.toLowerCase() || ''
-  userId.value = parseInt(userData.userid) || null
+// Fetch department tasks
+const fetchDepartmentTasks = async () => {
+  if (!deptId.value) return
   
-  console.log('User data from session:', userData)
-  console.log('Fetching projects for userId:', userId.value)
-
-  // Only fetch data if userId is available
-  if (userId.value) {
-    isLoadingTasks.value = true // Start loading
-    
-    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(data => {
-        // API returns { "tasks": [ {...}, {...} ] }
-        tasks.value = data.tasks.data
-        console.log('Fetched tasks:', tasks.value)
-        
-        // Fetch user details for all users mentioned in tasks
-        fetchTaskUsers()
-      })
-      .catch(error => {
-        console.error('Error fetching tasks:', error)
-      })
-      .finally(() => {
-        isLoadingTasks.value = false // End loading
-      })
-
-    // Fetch projects owned by user
-    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.warn('No projects found for this user')
-            userProjects.value = []
-            return
-          }
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(data => {
-      const allProjects = data.data || []
-      // filter projects where user is owner or in collaborators
-      userProjects.value = allProjects.filter(project => {
-        const collabs = project.collaborators || []
-        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
-      })
-      console.log('Filtered projects for dropdown:', userProjects.value)
-      })
-      .catch(error => console.error('Error fetching projects:', error))
-  }
-})
-
-const collaboratorQuery = ref('');
-const selectedCollaborators = ref([]);
-const collaboratorSuggestions = ref([]);
-
-const addCollaborator = (user) => {
-  if (!selectedCollaborators.value.find(u => u.id === user.id)) {
-    selectedCollaborators.value.push(user)
-  }
-  collaboratorQuery.value = ''
-  collaboratorSuggestions.value = []
-};
-
-const removeCollaborator = (user) => {
-  selectedCollaborators.value = selectedCollaborators.value.filter(u => u.id !== user.id);
-};
-
-// fetch suggestions whenever the query changes
-watch(collaboratorQuery, async (query) => {
-  if (!query) {
-    collaboratorSuggestions.value = [];
-    return;
-  }
-
-  try {
-    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`);
-    if (!res.ok) throw new Error('Failed to fetch user emails');
-    const data = await res.json();
-    collaboratorSuggestions.value = data.data || [];
-  } catch (err) {
-    console.error(err);
-    collaboratorSuggestions.value = [];
-  }
-});
-
-const newTaskFile = ref(null)
-const handleFileUpload = (event) => {
-  const file = event.target.files[0]
-  if (file && file.type === "application/pdf") {
-    newTaskFile.value = file
-  } else {
-    alert("Only PDF files are allowed")
-    event.target.value = null
-    newTaskFile.value = null
-  }
-}
-
-const newTask = ref({
-  owner_id: null, // Will be set when userId is available
-  task_name: '',
-  description: '',
-  type: 'parent',
-  due_date: '',
-  priority: '5',
-  status: 'Ongoing',
-  project_id: '',
-  collaborators: '',
-  parent_task: '',
-  subtasks: '', 
-})
-
-// Watch for userId changes and update newTask.owner_id
-watch(userId, (newUserId) => {
-  if (newUserId) {
-    newTask.value.owner_id = newUserId
-  }
-}, { immediate: true })
-
-const isFormValid = computed(() => {
-  return newTask.value.task_name.trim() !== '' &&
-         newTask.value.description.trim() !== '' &&
-         newTask.value.due_date.trim() !== ''   
-})
-
-// send POST to backend
-const submitNewTask = async () => {
-  if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
-    alert('Please fill out all required fields: Task Name, Description, and Due Date.')
-    return
-  }
-  try {
-    // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
-    // Staff uses the staff endpoint (automatically adds owner as collaborator)
-    let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
-      ? 'http://localhost:5002/tasks/manager-task/create'
-      : 'http://localhost:5002/tasks/staff-task/create'
-
-    // Use FormData to handle file uploads properly
-    const formData = new FormData()
-    
-    // Add all task fields to FormData
-    formData.append('owner_id', newTask.value.owner_id)
-    formData.append('task_name', newTask.value.task_name)
-    formData.append('description', newTask.value.description)
-    formData.append('type', newTask.value.type)
-    formData.append('due_date', newTask.value.due_date)
-    formData.append('priority', newTask.value.priority)
-    formData.append('status', newTask.value.status)
-    
-    if (newTask.value.project_id) {
-      formData.append('project_id', newTask.value.project_id)
-    }
-    
-    if (newTask.value.parent_task) {
-      formData.append('parent_task', newTask.value.parent_task)
-    }
-    
-    // Add collaborators as comma-separated string with role-based logic
-    const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
-    
-    // Role-based owner inclusion in collaborators:
-    // - Staff: Include owner as collaborator
-    // - Manager/Director: Owner only, NOT in collaborators
-    if (userRole.value === 'staff') {
-      // For staff, ensure owner is always included in collaborators
-      if (!collaboratorIds.includes(newTask.value.owner_id)) {
-        collaboratorIds.push(newTask.value.owner_id)
-        console.log('Added staff owner to collaborators')
-      }
-    }
-    
-    // Only append collaborators if there are any
-    if (collaboratorIds.length > 0) {
-      const collaboratorString = collaboratorIds.join(',')
-      console.log('Appending collaborators string:', collaboratorString)
-      formData.append('collaborators', collaboratorString)
-    } else {
-      console.log('No collaborators to append - skipping collaborators field entirely')
-    }
+  isLoadingTasks.value = true
   
-    // Add subtasks as comma-separated string
-    if (newTask.value.subtasks) {
-      formData.append('subtasks', newTask.value.subtasks)
+  try {
+    const response = await fetch(`http://localhost:5002/tasks/department/${deptId.value}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
     
-    // Add the actual file for upload
-    if (newTaskFile.value) {
-      formData.append('attachment', newTaskFile.value)
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
-    })
-
     const data = await response.json()
-
-    if (response.ok && data.Code === 201) {
-      tasks.value.push(data.data)
-      // reset form
-      newTask.value = {
-        owner_id: userId.value,
-        task_name: '',
-        description: '',
-        type: 'parent',
-        due_date: '',
-        priority: '5',
-        status: 'Ongoing',
-        project_id: '',
-        collaborators: '',
-        parent_task: '',
-        subtasks: ''
-      }
-      selectedCollaborators.value = []
-      newTaskFile.value = null
-      // Clear the file input element
-      const fileInput = document.querySelector('input[type="file"]')
-      if (fileInput) {
-        fileInput.value = ''
-      }
-      showCreateModal.value = false
-      showSuccessMessage.value = true
-      setTimeout(() => {
-        showSuccessMessage.value = false
-      }, 3000)
-    } else {
-      alert('Failed: ' + data.Message)
-    }
-  } catch (err) {
-    console.error(err)
-    alert('Error creating task')
+    tasks.value = data.data || []
+    console.log('Fetched department tasks:', tasks.value)
+    
+    await fetchTaskUsers()
+  } catch (error) {
+    console.error('Error fetching department tasks:', error)
+    tasks.value = []
+  } finally {
+    isLoadingTasks.value = false
   }
 }
 
@@ -712,7 +385,6 @@ const filteredTasks = computed(() => {
   }
   
   return filtered.sort((a, b) => {
-    // Always keep completed tasks at the bottom if not sorting by status
     if (sortBy.value !== 'status') {
       if (a.status === 'Completed' && b.status !== 'Completed') return 1
       if (a.status !== 'Completed' && b.status === 'Completed') return -1
@@ -725,7 +397,7 @@ const filteredTasks = computed(() => {
         comparison = new Date(a.due_date) - new Date(b.due_date)
         break
       case 'priority':
-        comparison = parseInt(b.priority) - parseInt(a.priority) // Higher priority first by default
+        comparison = parseInt(b.priority) - parseInt(a.priority)
         break
       case 'status':
         const statusOrder = { 'Unassigned': 0, 'Ongoing': 1, 'Under Review': 2, 'Completed': 3 }
@@ -754,15 +426,12 @@ const toggleSubtasks = (taskId) => {
 const router = useRouter()
 
 const navigateToTask = (taskId) => {
-  console.log(`Navigating to task ${taskId}`)
   router.push(`/tasks/${taskId}`)
 }
 
 const formatDate = (dateString) => {
   if (!dateString) return 'No date'
-  
   const date = new Date(dateString)
-  
   return date.toLocaleDateString('en-SG', { 
     timeZone: 'Asia/Singapore',
     month: 'short', 
@@ -792,13 +461,7 @@ const getStatusIcon = (status) => {
 }
 
 const getStatusLabel = (status) => {
-  const labels = {
-    'Ongoing': 'Ongoing',
-    'Under Review': 'Under Review',
-    'Completed': 'Completed',
-    'Unassigned': 'Unassigned'
-  }
-  return labels[status]
+  return status
 }
 
 const getPriorityClass = (priority) => {
@@ -821,13 +484,13 @@ const getCompletedSubtasks = (task) => {
 
 const getEmptyMessage = () => {
   const messages = {
-    'all': 'Add some tasks to get started!',
-    'Ongoing': 'No tasks in progress.',
-    'Under Review': 'No tasks under review.',
-    'Completed': 'No completed tasks yet.',
-    'Unassigned': 'No unassigned tasks.'
+    'all': 'No department tasks found.',
+    'Ongoing': 'No ongoing department tasks.',
+    'Under Review': 'No department tasks under review.',
+    'Completed': 'No completed department tasks.',
+    'Unassigned': 'No unassigned department tasks.'
   }
-  return messages[activeFilter.value] || 'No tasks found.'
+  return messages[activeFilter.value] || 'No department tasks found.'
 }
 
 const totalTasks = computed(() => tasks.value.length)

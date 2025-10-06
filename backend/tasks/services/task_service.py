@@ -391,3 +391,113 @@ class TaskService:
                 "Message": f"Successfully retrieved {len(subtask_details)} subtasks for parent task {parent_task_id}",
                 "data": response_data
             }
+
+    def get_tasks_by_team(self, team_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks for users in a specific team.
+        """
+        try:
+            # Get all parent tasks for team members
+            parent_tasks = self.repo.find_parent_tasks_by_team(team_id)
+            
+            # For each parent task, get its subtasks
+            for parent_task in parent_tasks:
+                parent_task_id = parent_task["id"]
+                subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+                
+                # Format subtasks for frontend
+                formatted_subtasks = []
+                for subtask in subtasks:
+                    formatted_subtask = {
+                        "id": subtask["id"],
+                        "task_name": subtask["task_name"], 
+                        "description": subtask["description"],
+                        "due_date": subtask["due_date"],  
+                        "status": subtask["status"],
+                        "owner_id": subtask["owner_id"],
+                        "collaborators": subtask["collaborators"] or [],
+                        "project_id": subtask["project_id"],
+                        "created_at": subtask["created_at"],
+                        "parent_task": subtask["parent_task"],
+                        "type": "subtask",
+                        "priority": subtask["priority"],
+                        "attachments": subtask["attachments"] or []
+                    }
+                    formatted_subtasks.append(formatted_subtask)
+                
+                # Add subtasks to parent task
+                parent_task["subtasks"] = formatted_subtasks
+            
+            if not parent_tasks:
+                return {
+                    "__status": 404,
+                    "Message": f"No tasks found for team {team_id}",
+                    "data": []
+                }
+            
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(parent_tasks)} tasks for team {team_id}",
+                "data": parent_tasks
+            }
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving team tasks: {str(e)}",
+                "data": []
+            }
+
+    def get_tasks_by_department(self, dept_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks for users in a specific department.
+        """
+        try:
+            # Get all parent tasks for department members
+            parent_tasks = self.repo.find_parent_tasks_by_department(dept_id)
+            
+            # For each parent task, get its subtasks
+            for parent_task in parent_tasks:
+                parent_task_id = parent_task["id"]
+                subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+                
+                # Format subtasks for frontend
+                formatted_subtasks = []
+                for subtask in subtasks:
+                    formatted_subtask = {
+                        "id": subtask["id"],
+                        "task_name": subtask["task_name"], 
+                        "description": subtask["description"],
+                        "due_date": subtask["due_date"],  
+                        "status": subtask["status"],
+                        "owner_id": subtask["owner_id"],
+                        "collaborators": subtask["collaborators"] or [],
+                        "project_id": subtask["project_id"],
+                        "created_at": subtask["created_at"],
+                        "parent_task": subtask["parent_task"],
+                        "type": "subtask",
+                        "priority": subtask["priority"],
+                        "attachments": subtask["attachments"] or []
+                    }
+                    formatted_subtasks.append(formatted_subtask)
+                
+                # Add subtasks to parent task
+                parent_task["subtasks"] = formatted_subtasks
+            
+            if not parent_tasks:
+                return {
+                    "__status": 404,
+                    "Message": f"No tasks found for department {dept_id}",
+                    "data": []
+                }
+            
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(parent_tasks)} tasks for department {dept_id}",
+                "data": parent_tasks
+            }
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving department tasks: {str(e)}",
+                "data": []
+            }

@@ -8,6 +8,8 @@ import ResetPassword from "../pages/account/ResetPassword.vue";
 import UpdatePassword from "../pages/account/UpdatePassword.vue";
 import { sessionState } from "../services/session";
 const TaskView = () => import('../pages/taskview/TaskView.vue')
+const TeamTaskView = () => import('../pages/taskview/TeamTaskView.vue')
+const DepartmentTaskView = () => import('../pages/taskview/DepartmentTaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
 const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 const ProjectDetail = () => import('../pages/projectdetails/ProjectDetails.vue')
@@ -27,9 +29,21 @@ const routes = [
     props: true,
   },
   
-  { path: '/tasks',  // change to '/tasks/:id'
+  { path: '/tasks',  // Personal tasks (staff only)
     name: 'task-view', 
     component: TaskView 
+    // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/tasks/team',  // Team tasks (manager only)
+    name: 'team-task-view', 
+    component: TeamTaskView
+    // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/tasks/department',  // Department tasks (director only)
+    name: 'department-task-view', 
+    component: DepartmentTaskView
     // ,meta: { requiresAuth: true }
   },
 
