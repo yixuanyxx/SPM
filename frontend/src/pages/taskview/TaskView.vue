@@ -263,7 +263,7 @@
         <textarea v-model="newTask.description" placeholder="Enter description" :class="{ 'input-error': newTask.description.trim() === '' }" required></textarea>
 
         <label>Due Date* </label>
-        <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
+        <input type="datetime-local" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
 
         <!-- Priority Level -->
         <div class="form-group mt-4">
@@ -380,8 +380,6 @@ const showCreateModal = ref(false);
 const errorMessage = ref('')
 const showErrorPopup = ref(false)
 
-
-// Get user data from session.js functions on component mount
 onMounted(() => {
   const userData = getCurrentUserData()
   userRole.value = userData.role?.toLowerCase() || ''
@@ -389,6 +387,57 @@ onMounted(() => {
   
   console.log('User data from session:', userData)
   console.log('Fetching projects for userId:', userId.value)
+
+  // Only fetch data if userId is available
+  if (userId.value) {
+    isLoadingTasks.value = true // Start loading
+    
+    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        return response.json()
+      })
+      .then(data => {
+        // API returns { "tasks": [ {...}, {...} ] }
+        tasks.value = data.tasks.data
+        console.log('Fetched tasks:', tasks.value)
+        
+        // Fetch user details for all users mentioned in tasks
+        fetchTaskUsers()
+      })
+      .catch(error => {
+        console.error('Error fetching tasks:', error)
+      })
+      .finally(() => {
+        isLoadingTasks.value = false // End loading
+      })
+
+    // Fetch projects owned by user
+    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.warn('No projects found for this user')
+            userProjects.value = []
+            return
+          }
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        return response.json()
+      })
+      .then(data => {
+      const allProjects = data.data || []
+      // filter projects where user is owner or in collaborators
+      userProjects.value = allProjects.filter(project => {
+        const collabs = project.collaborators || []
+        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
+      })
+      console.log('Filtered projects for dropdown:', userProjects.value)
+      })
+      .catch(error => console.error('Error fetching projects:', error))
+  }
 })
 
 // Check if user is manager or director
@@ -466,65 +515,6 @@ const fetchTaskUsers = async () => {
   console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
 }
 
-onMounted(() => {
-  const userData = getCurrentUserData()
-  userRole.value = userData.role?.toLowerCase() || ''
-  userId.value = parseInt(userData.userid) || null
-  
-  console.log('User data from session:', userData)
-  console.log('Fetching projects for userId:', userId.value)
-
-  // Only fetch data if userId is available
-  if (userId.value) {
-    isLoadingTasks.value = true // Start loading
-    
-    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(data => {
-        // API returns { "tasks": [ {...}, {...} ] }
-        tasks.value = data.tasks.data
-        console.log('Fetched tasks:', tasks.value)
-        
-        // Fetch user details for all users mentioned in tasks
-        fetchTaskUsers()
-      })
-      .catch(error => {
-        console.error('Error fetching tasks:', error)
-      })
-      .finally(() => {
-        isLoadingTasks.value = false // End loading
-      })
-
-    // Fetch projects owned by user
-    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.warn('No projects found for this user')
-            userProjects.value = []
-            return
-          }
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(data => {
-      const allProjects = data.data || []
-      // filter projects where user is owner or in collaborators
-      userProjects.value = allProjects.filter(project => {
-        const collabs = project.collaborators || []
-        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
-      })
-      console.log('Filtered projects for dropdown:', userProjects.value)
-      })
-      .catch(error => console.error('Error fetching projects:', error))
-  }
-})
 
 const collaboratorQuery = ref('');
 const selectedCollaborators = ref([]);
@@ -597,12 +587,6 @@ watch(userId, (newUserId) => {
   }
 }, { immediate: true })
 
-const isFormValid = computed(() => {
-  return newTask.value.task_name.trim() !== '' &&
-         newTask.value.description.trim() !== '' &&
-         newTask.value.due_date.trim() !== ''   
-})
-
 // send POST to backend
 const submitNewTask = async () => {
   if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
@@ -625,7 +609,12 @@ const submitNewTask = async () => {
     formData.append('task_name', newTask.value.task_name)
     formData.append('description', newTask.value.description)
     formData.append('type', newTask.value.type)
-    formData.append('due_date', newTask.value.due_date)
+    if (newTask.value.due_date) {
+      const localDate = new Date(newTask.value.due_date)
+      // Convert to ISO string in UTC
+      const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
+      formData.append('due_date', utcDateString)
+    }
     formData.append('priority', newTask.value.priority)
     formData.append('status', newTask.value.status)
     
@@ -780,11 +769,13 @@ const formatDate = (dateString) => {
   
   const date = new Date(dateString)
   
-  return date.toLocaleDateString('en-SG', { 
-    timeZone: 'Asia/Singapore',
+  return date.toLocaleDateString(undefined, { 
     month: 'short', 
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   })
 }
 
