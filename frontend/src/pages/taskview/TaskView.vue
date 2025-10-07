@@ -253,6 +253,7 @@
     <!-- Create Task Modal -->
     <div v-if="showCreateModal" class="modal-overlay">
       <div class="modal-content">
+
         <h2>Create New Task</h2>
 
         <label>Task Name* </label>
@@ -342,12 +343,17 @@
         <input type="file" @change="handleFileUpload" accept="application/pdf" />
 
         <div class="modal-actions">
-          <button @click="submitNewTask" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
+          <button @click="submitNewTask">
             Create
           </button>
           <button @click="showCreateModal = false">Cancel</button>
         </div>
       </div>
+    </div>
+    <div v-if="showErrorPopup" class="error-popup">
+      <i class="bi bi-exclamation-triangle"></i>
+      {{ errorMessage }}
+      <button class="close-btn" @click="showErrorPopup = false">×</button>
     </div>
     <div v-if="showSuccessMessage" class="success-popup">
       Task created successfully!
@@ -371,6 +377,9 @@ const expandedTasks = ref([])
 const userRole = ref('')
 const userId = ref(null)
 const showCreateModal = ref(false);
+const errorMessage = ref('')
+const showErrorPopup = ref(false)
+
 
 // Get user data from session.js functions on component mount
 onMounted(() => {
@@ -554,10 +563,14 @@ watch(collaboratorQuery, async (query) => {
 const newTaskFile = ref(null)
 const handleFileUpload = (event) => {
   const file = event.target.files[0]
+  console.log("File type:", file.type)
   if (file && file.type === "application/pdf") {
     newTaskFile.value = file
+    errorMessage.value = ''
   } else {
-    alert("Only PDF files are allowed")
+    errorMessage.value = "Only PDF files are allowed"
+    showErrorPopup.value = true
+    console.log("error",errorMessage.value)
     event.target.value = null
     newTaskFile.value = null
   }
@@ -593,7 +606,8 @@ const isFormValid = computed(() => {
 // send POST to backend
 const submitNewTask = async () => {
   if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
-    alert('Please fill out all required fields: Task Name, Description, and Due Date.')
+    errorMessage.value = 'Please fill out all required fields: Task Name, Description, and Due Date.'
+    showErrorPopup.value = true
     return
   }
   try {
@@ -687,16 +701,19 @@ const submitNewTask = async () => {
         fileInput.value = ''
       }
       showCreateModal.value = false
+      errorMessage.value = ''
       showSuccessMessage.value = true
       setTimeout(() => {
         showSuccessMessage.value = false
       }, 3000)
     } else {
-      alert('Failed: ' + data.Message)
+      errorMessage.value = data.Message
+      showErrorPopup.value = true
     }
   } catch (err) {
     console.error(err)
-    alert('Error creating task')
+    errorMessage.value = 'Error creating task'
+    showErrorPopup.value = true
   }
 }
 
