@@ -64,10 +64,14 @@
                 <i class="bi bi-person-check"></i>
                 <span>My Tasks</span>
               </router-link>
-              <router-link :to="teamTasksRoute" class="dropdown-item" @click="handleNavItemClick">
-                <i :class="teamTasksIcon"></i>
-                <span>{{ teamTasksLabel }}</span>
-              </router-link>
+
+              <!-- Role-based. If staff do not show. -->
+              <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'">
+                <router-link :to="teamTasksRoute" class="dropdown-item" @click="handleNavItemClick">
+                  <i :class="teamTasksIcon"></i>
+                  <span>{{ teamTasksLabel }}</span>
+                </router-link>
+              </div>
             </div>
           </transition>
         </div>
@@ -91,6 +95,7 @@
             <span class="nav-text">Schedule</span>
           </router-link>
         </div>
+
 
         <!-- Profile with dropdown -->
         <div class="nav-item" :class="{ expanded: expandedMenus.includes('profile') }">
@@ -120,6 +125,7 @@
       </div>
     </div>
   </nav>
+
 </template>
 
 <script setup>
@@ -139,17 +145,10 @@ onMounted(async () => {
   const storedUserId = localStorage.getItem('spm_userid') || localStorage.getItem('UID') || localStorage.getItem('userId') || localStorage.getItem('user_id')
   userId.value = storedUserId
 
-  // Fetch user role from backend
-  if (storedUserId) {
-    try {
-      const response = await fetch(`http://127.0.0.1:5003/users/${storedUserId}`)
-      if (response.ok) {
-        const userData = await response.json()
-        userRole.value = userData?.data?.role || ''
-      }
-    } catch (error) {
-      console.error('Error fetching user role:', error)
-    }
+  // get role from localStorage if available
+  const storedUserRole = localStorage.getItem('spm_userrole') || localStorage.getItem('userRole') || localStorage.getItem('role')
+  if (storedUserRole) {
+    userRole.value = storedUserRole
   }
 
   // Add resize listener to close mobile menu on desktop
@@ -191,6 +190,7 @@ const handleNavItemClick = () => {
   // Don't auto-close expanded menus - let them stay open to show current page
 }
 
+
 // Watch for route changes to auto-expand relevant menus
 watch(() => route.path, (newPath) => {
   // Auto-expand tasks menu if on any tasks page
@@ -223,8 +223,16 @@ const teamTasksIcon = computed(() => {
 //ADD ROLE-BASED NAVIGATION FOR PROJECTS ALSO (TO BE DONE)
 
 async function onLogout() {
-  await logout()
-  router.push({ name: 'Login' })
+  try {
+    console.log('Logging out...');
+    await logout();
+    console.log('Logout successful, redirecting to login...');
+    router.push({ name: 'Login' });
+  } catch (error) {
+    console.error('Logout failed:', error);
+    // Still redirect to login even if logout fails
+    router.push({ name: 'Login' });
+  }
 }
 </script>
 
@@ -606,6 +614,7 @@ async function onLogout() {
     font-size: 1rem;
   }
 }
+
 
 /* Extra Small Mobile */
 @media (max-width: 360px) {

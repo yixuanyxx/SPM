@@ -8,8 +8,8 @@
       <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
-          <h1 class="page-title">My Tasks</h1>
-          <p class="page-subtitle">View and Create Tasks Here</p>
+          <h1 class="page-title">My Personal Tasks</h1>
+          <p class="page-subtitle">View and Create Your Personal Tasks</p>
         </div>
         <button class="create-task-btn" @click="showCreateModal = true">
             <i class="bi bi-plus-lg"></i>
@@ -85,11 +85,39 @@
 
     <!-- Main Content -->
     <div class="main-content">
+      <!-- Sort Controls -->
+      <div class="sort-controls">
+        <div class="sort-container">
+          <label for="sortBy">Sort by:</label>
+          <select id="sortBy" v-model="sortBy" class="sort-dropdown">
+            <option value="due_date">Due Date</option>
+            <option value="priority">Priority</option>
+            <option value="status">Status</option>
+            <option value="name">Task Name</option>
+          </select>
+          <button 
+            @click="toggleSortOrder" 
+            class="sort-order-btn"
+            :title="sortOrder === 'asc' ? 'Sort Descending' : 'Sort Ascending'"
+          >
+            <i :class="sortOrder === 'asc' ? 'bi bi-sort-up' : 'bi bi-sort-down'"></i>
+          </button>
+        </div>
+      </div>
+      
       <!-- Tasks -->
       <div class="tasks-container">
 
+        <!-- Loading state -->
+        <div v-if="isLoadingTasks" class="loading-state">
+          <div class="loading-spinner">
+            <i class="bi bi-arrow-clockwise spin"></i>
+          </div>
+          <p class="loading-text">Loading your tasks...</p>
+        </div>
+
         <!-- if no tasks found -->
-        <div v-if="filteredTasks.length === 0" class="empty-state">
+        <div v-else-if="!isLoadingTasks && filteredTasks.length === 0" class="empty-state">
           <div class="empty-icon">
             <i class="bi bi-clipboard"></i>
           </div>
@@ -98,6 +126,7 @@
         </div>
 
         <div 
+          v-else
           v-for="(task, index) in filteredTasks" 
           :key="task.id"
           class="task-card"
@@ -112,9 +141,32 @@
                   <h3 class="task-title" :class="{ completed: task.status === 'Completed' }">
                     {{ task.task_name }}
                   </h3>
-                  <div class="task-status" :class="getStatusClass(task.status)">
-                    <i :class="getStatusIcon(task.status)"></i>
-                    <span>{{ getStatusLabel(task.status) }}</span>
+                  <div class="task-badges">
+                    <div class="task-status" :class="getStatusClass(task.status)">
+                      <i :class="getStatusIcon(task.status)"></i>
+                      <span>{{ getStatusLabel(task.status) }}</span>
+                    </div>
+                    <div class="task-priority" :class="getPriorityClass(task.priority)">
+                      <i class="bi bi-flag-fill"></i>
+                      <span>{{ task.priority }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="task-people">
+                  <div v-if="task.owner_id" class="task-owner">
+                    <i class="bi bi-person-fill"></i>
+                    <span class="owner-label">Owner:</span>
+                    <span class="owner-name">{{ getUserName(task.owner_id) }}</span>
+                  </div>
+                  <div v-if="task.collaborators && task.collaborators.length > 0" class="task-collaborators">
+                    <i class="bi bi-people-fill"></i>
+                    <span class="collab-label">Collaborators:</span>
+                    <span class="collab-names">
+                      {{ task.collaborators.slice(0, 2).map(id => getUserName(id)).join(', ') }}
+                      <span v-if="task.collaborators.length > 2" class="more-collabs">
+                        +{{ task.collaborators.length - 2 }} more
+                      </span>
+                    </span>
                   </div>
                 </div>
                 <div class="task-meta">
@@ -178,9 +230,15 @@
                       <i :class="getStatusIcon(subtask.status)"></i>
                     </div>
                   </div>
-                  <div class="subtask-date">
-                    <i class="bi bi-calendar3"></i>
-                    <span>{{ formatDate(subtask.due_date) }}</span>
+                  <div class="subtask-meta">
+                    <div class="subtask-date">
+                      <i class="bi bi-calendar3"></i>
+                      <span>{{ formatDate(subtask.due_date) }}</span>
+                    </div>
+                    <div v-if="subtask.owner_id" class="subtask-owner">
+                      <i class="bi bi-person"></i>
+                      <span>{{ getUserName(subtask.owner_id) }}</span>
+                    </div>
                   </div>
                 </div>
                 <div class="subtask-action">
@@ -206,6 +264,25 @@
 
         <label>Due Date* </label>
         <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
+
+        <!-- Priority Level -->
+        <div class="form-group mt-4">
+          <label for="priority">Priority Level: {{ newTask.priority }}</label>
+          <div class="priority-slider-container">
+            <input
+              id="priority"
+              type="range"
+              min="1"
+              max="10"
+              v-model="newTask.priority"
+              class="priority-slider"
+            />
+            <div class="priority-labels">
+              <span class="priority-label-left">1 - Least Important</span>
+              <span class="priority-label-right">10 - Most Important</span>
+            </div>
+          </div>
+        </div>
 
         <label>Status</label>
         <select v-model="newTask.status">
@@ -290,21 +367,29 @@
 import { ref, computed, onMounted,watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
+import { getCurrentUserData } from '../../services/session.js'
 import "./taskview.css"
 
 const activeFilter = ref('all')
+const sortBy = ref('due_date')
+const sortOrder = ref('asc')
 const expandedTasks = ref([])
 const userRole = ref('')
+const userId = ref(null)
 const showCreateModal = ref(false);
 const errorMessage = ref('')
 const showErrorPopup = ref(false)
 
 
-// Get user role from localStorage on component mount
-// onMounted(() => {
-//   const storedRole = localStorage.getItem('userRole') || localStorage.getItem('role') || ''
-//   userRole.value = storedRole.toLowerCase()
-// })
+// Get user data from session.js functions on component mount
+onMounted(() => {
+  const userData = getCurrentUserData()
+  userRole.value = userData.role?.toLowerCase() || ''
+  userId.value = parseInt(userData.userid) || null
+  
+  console.log('User data from session:', userData)
+  console.log('Fetching projects for userId:', userId.value)
+})
 
 // Check if user is manager or director
 const isManagerOrDirector = computed(() => {
@@ -314,51 +399,131 @@ const isManagerOrDirector = computed(() => {
 const tasks = ref([]) // where the fetched data will be stored
 const userProjects = ref([])
 const showSuccessMessage = ref(false)
+const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
+const isLoadingTasks = ref(false) // Loading state for tasks
 
-// const userId = 101 // CHANGE THIS TO GET FROM LOCAL STORAGE (CODE BELOW)
-const userId = parseInt(localStorage.getItem("spm_userid")) // check the way user id is stored in table
-console.log('Fetching projects for userId:', userId)
+// Function to fetch user details by userid
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+// Function to get user names for display
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `Invalid user`
+}
+
+// Function to fetch all users mentioned in tasks
+const fetchTaskUsers = async () => {
+  const userIds = new Set()
+  
+  // Collect all unique user IDs from tasks
+  tasks.value.forEach(task => {
+    if (task.owner_id) userIds.add(task.owner_id)
+    if (task.collaborators) {
+      task.collaborators.forEach(id => userIds.add(id))
+    }
+    // Also check subtasks
+    if (task.subtasks) {
+      task.subtasks.forEach(subtask => {
+        if (subtask.owner_id) userIds.add(subtask.owner_id)
+        if (subtask.collaborators) {
+          subtask.collaborators.forEach(id => userIds.add(id))
+        }
+      })
+    }
+  })
+  
+  console.log(`Found user IDs to fetch:`, Array.from(userIds))
+  
+  // Fetch user details for all unique IDs
+  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
+  const results = await Promise.all(fetchPromises)
+  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+}
 
 onMounted(() => {
-  fetch(`http://localhost:5002/tasks/user-task/${userId}`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
-    .then(data => {
-      // API returns { "tasks": [ {...}, {...} ] }
-      tasks.value = data.tasks.data
-      console.log('Fetched tasks:', tasks.value)
-    })
-    .catch(error => {
-      console.error('Error fetching tasks:', error)
-    })
+  const userData = getCurrentUserData()
+  userRole.value = userData.role?.toLowerCase() || ''
+  userId.value = parseInt(userData.userid) || null
+  
+  console.log('User data from session:', userData)
+  console.log('Fetching projects for userId:', userId.value)
 
-  // Fetch projects owned by user
-  fetch(`http://localhost:5001/projects/user/${userId}`)
-    .then(response => {
-      if (!response.ok) {
-        if (response.status === 404) {
-          console.warn('No projects found for this user')
-          userProjects.value = []
-          return
+  // Only fetch data if userId is available
+  if (userId.value) {
+    isLoadingTasks.value = true // Start loading
+    
+    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
         }
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      return response.json()
-    })
-    .then(data => {
-    const allProjects = data.data || []
-    // filter projects where user is owner or in collaborators
-    userProjects.value = allProjects.filter(project => {
-      const collabs = project.collaborators || []
-      return project.owner_id == userId || collabs.includes(Number(userId))
-    })
-    console.log('Filtered projects for dropdown:', userProjects.value)
-    })
-    .catch(error => console.error('Error fetching projects:', error))
+        return response.json()
+      })
+      .then(data => {
+        // API returns { "tasks": [ {...}, {...} ] }
+        tasks.value = data.tasks.data
+        console.log('Fetched tasks:', tasks.value)
+        
+        // Fetch user details for all users mentioned in tasks
+        fetchTaskUsers()
+      })
+      .catch(error => {
+        console.error('Error fetching tasks:', error)
+      })
+      .finally(() => {
+        isLoadingTasks.value = false // End loading
+      })
+
+    // Fetch projects owned by user
+    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
+      .then(response => {
+        if (!response.ok) {
+          if (response.status === 404) {
+            console.warn('No projects found for this user')
+            userProjects.value = []
+            return
+          }
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+        return response.json()
+      })
+      .then(data => {
+      const allProjects = data.data || []
+      // filter projects where user is owner or in collaborators
+      userProjects.value = allProjects.filter(project => {
+        const collabs = project.collaborators || []
+        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
+      })
+      console.log('Filtered projects for dropdown:', userProjects.value)
+      })
+      .catch(error => console.error('Error fetching projects:', error))
+  }
 })
 
 const collaboratorQuery = ref('');
@@ -412,16 +577,30 @@ const handleFileUpload = (event) => {
 }
 
 const newTask = ref({
-  owner_id: userId,
+  owner_id: null, // Will be set when userId is available
   task_name: '',
   description: '',
   type: 'parent',
   due_date: '',
+  priority: '5',
   status: 'Ongoing',
   project_id: '',
   collaborators: '',
   parent_task: '',
   subtasks: '', 
+})
+
+// Watch for userId changes and update newTask.owner_id
+watch(userId, (newUserId) => {
+  if (newUserId) {
+    newTask.value.owner_id = newUserId
+  }
+}, { immediate: true })
+
+const isFormValid = computed(() => {
+  return newTask.value.task_name.trim() !== '' &&
+         newTask.value.description.trim() !== '' &&
+         newTask.value.due_date.trim() !== ''   
 })
 
 // send POST to backend
@@ -432,27 +611,68 @@ const submitNewTask = async () => {
     return
   }
   try {
-    let endpoint = userRole.value === 'manager'
+    // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
+    // Staff uses the staff endpoint (automatically adds owner as collaborator)
+    let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
       ? 'http://localhost:5002/tasks/manager-task/create'
       : 'http://localhost:5002/tasks/staff-task/create'
 
-    // convert comma-separated strings to arrays where needed
-    const payload = {
-      ...newTask.value,
-      collaborators: selectedCollaborators.value.map(user => parseInt(user.userid)),
-      subtasks: newTask.value.subtasks
-        ? newTask.value.subtasks.split(',').map(id => id.trim())
-        : []
+    // Use FormData to handle file uploads properly
+    const formData = new FormData()
+    
+    // Add all task fields to FormData
+    formData.append('owner_id', newTask.value.owner_id)
+    formData.append('task_name', newTask.value.task_name)
+    formData.append('description', newTask.value.description)
+    formData.append('type', newTask.value.type)
+    formData.append('due_date', newTask.value.due_date)
+    formData.append('priority', newTask.value.priority)
+    formData.append('status', newTask.value.status)
+    
+    if (newTask.value.project_id) {
+      formData.append('project_id', newTask.value.project_id)
     }
-
+    
+    if (newTask.value.parent_task) {
+      formData.append('parent_task', newTask.value.parent_task)
+    }
+    
+    // Add collaborators as comma-separated string with role-based logic
+    const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
+    
+    // Role-based owner inclusion in collaborators:
+    // - Staff: Include owner as collaborator
+    // - Manager/Director: Owner only, NOT in collaborators
+    if (userRole.value === 'staff') {
+      // For staff, ensure owner is always included in collaborators
+      if (!collaboratorIds.includes(newTask.value.owner_id)) {
+        collaboratorIds.push(newTask.value.owner_id)
+        console.log('Added staff owner to collaborators')
+      }
+    }
+    
+    // Only append collaborators if there are any
+    if (collaboratorIds.length > 0) {
+      const collaboratorString = collaboratorIds.join(',')
+      console.log('Appending collaborators string:', collaboratorString)
+      formData.append('collaborators', collaboratorString)
+    } else {
+      console.log('No collaborators to append - skipping collaborators field entirely')
+    }
+  
+    // Add subtasks as comma-separated string
+    if (newTask.value.subtasks) {
+      formData.append('subtasks', newTask.value.subtasks)
+    }
+    
+    // Add the actual file for upload
     if (newTaskFile.value) {
-      payload.attachments = [{ url: '', name: newTaskFile.value.name }] // url can be empty, backend will handle upload
+      formData.append('attachment', newTaskFile.value)
     }
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
     })
 
     const data = await response.json()
@@ -461,18 +681,25 @@ const submitNewTask = async () => {
       tasks.value.push(data.data)
       // reset form
       newTask.value = {
-        owner_id: userId,
+        owner_id: userId.value,
         task_name: '',
         description: '',
         type: 'parent',
         due_date: '',
-        status: 'Unassigned',
+        priority: '5',
+        status: 'Ongoing',
         project_id: '',
         collaborators: '',
         parent_task: '',
         subtasks: ''
       }
+      selectedCollaborators.value = []
       newTaskFile.value = null
+      // Clear the file input element
+      const fileInput = document.querySelector('input[type="file"]')
+      if (fileInput) {
+        fileInput.value = ''
+      }
       showCreateModal.value = false
       errorMessage.value = ''
       showSuccessMessage.value = true
@@ -490,6 +717,10 @@ const submitNewTask = async () => {
   }
 }
 
+const toggleSortOrder = () => {
+  sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
+}
+
 const filteredTasks = computed(() => {
   let filtered = tasks.value
   
@@ -498,9 +729,33 @@ const filteredTasks = computed(() => {
   }
   
   return filtered.sort((a, b) => {
-    if (a.status === 'Completed' && b.status !== 'Completed') return 1
-    if (a.status !== 'Completed' && b.status === 'Completed') return -1
-    return new Date(a.due_date) - new Date(b.due_date)
+    // Always keep completed tasks at the bottom if not sorting by status
+    if (sortBy.value !== 'status') {
+      if (a.status === 'Completed' && b.status !== 'Completed') return 1
+      if (a.status !== 'Completed' && b.status === 'Completed') return -1
+    }
+    
+    let comparison = 0
+    
+    switch (sortBy.value) {
+      case 'due_date':
+        comparison = new Date(a.due_date) - new Date(b.due_date)
+        break
+      case 'priority':
+        comparison = parseInt(b.priority) - parseInt(a.priority) // Higher priority first by default
+        break
+      case 'status':
+        const statusOrder = { 'Unassigned': 0, 'Ongoing': 1, 'Under Review': 2, 'Completed': 3 }
+        comparison = statusOrder[a.status] - statusOrder[b.status]
+        break
+      case 'name':
+        comparison = a.task_name.localeCompare(b.task_name)
+        break
+      default:
+        comparison = new Date(a.due_date) - new Date(b.due_date)
+    }
+    
+    return sortOrder.value === 'asc' ? comparison : -comparison
   })
 })
 
@@ -521,10 +776,15 @@ const navigateToTask = (taskId) => {
 }
 
 const formatDate = (dateString) => {
+  if (!dateString) return 'No date'
+  
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { 
+  
+  return date.toLocaleDateString('en-SG', { 
+    timeZone: 'Asia/Singapore',
     month: 'short', 
-    day: 'numeric'
+    day: 'numeric',
+    year: 'numeric'
   })
 }
 
@@ -556,6 +816,13 @@ const getStatusLabel = (status) => {
     'Unassigned': 'Unassigned'
   }
   return labels[status]
+}
+
+const getPriorityClass = (priority) => {
+  const level = parseInt(priority)
+  if (level >= 8) return 'priority-high'
+  if (level >= 5) return 'priority-medium'
+  return 'priority-low'
 }
 
 const getSubtaskProgress = (task) => {

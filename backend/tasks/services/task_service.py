@@ -13,22 +13,12 @@ class TaskService:
             # convention: 200 with message (kept from your original)
             return {"__status": 200, "Message": f"Task '{payload['task_name']}' already exists for this user.", "data": existing}
 
-        task = Task(
-            owner_id=payload["owner_id"],
-            task_name=payload["task_name"],
-            due_date=payload["due_date"],
-            description=payload["description"],
-            collaborators=payload.get("collaborators"),
-            status=payload.get("status"),
-            project_id=payload.get("project_id"),
-            parent_task=payload.get("parent_task"),
-            type=payload.get("type", "parent"),
-            subtasks=payload.get("subtasks"),
-            attachments=payload.get("attachments"),
-        )
 
-        # ⬇️ Do NOT send id=None
-        data = task.__dict__.copy()
+        # Use the new Task.from_dict constructor for proper type handling
+        task = Task.from_dict(payload)
+
+        # Convert to dictionary for database insertion (excludes id=None)
+        data = task.to_dict()
         data.pop("id", None)
 
         created = self.repo.insert_task(data)
@@ -112,25 +102,38 @@ class TaskService:
         """
         task_id = payload.get("task_id")
         if not task_id:
-            raise ValueError("task_id is required for updates")
+            return {"__status": 400, "Message": "task_id is required for updates"}
         
         # Check if task exists
-        existing_task = self.repo.get_task(task_id)
-        if not existing_task:
-            raise ValueError(f"Task with ID {task_id} not found")
+        existing_task_data = self.repo.get_task(task_id)
+        if not existing_task_data:
+            return {"__status": 404, "Message": f"Task with ID {task_id} not found"}
         
         # Extract update fields (exclude task_id from the update data)
         update_fields = {k: v for k, v in payload.items() if k != "task_id"}
         
         if not update_fields:
-            return {"__status": 400, "Message": "No fields to update provided", "data": existing_task}
+            return {"__status": 400, "Message": "No fields to update provided", "data": existing_task_data}
+        
+        # Create Task object from existing data for proper type handling
+        existing_task = Task.from_dict(existing_task_data)
+        
+        # Merge update fields with existing data
+        merged_data = existing_task.to_dict()
+        merged_data.update(update_fields)
+        
+        # Create updated task object to ensure proper type conversion
+        updated_task_obj = Task.from_dict(merged_data)
+        
+        # Convert back to dict for database update
+        update_data = updated_task_obj.to_dict()
         
         # Perform the update
         try:
-            updated_task = self.repo.update_task(task_id, update_fields)
-            return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task}
+            updated_task_data = self.repo.update_task(task_id, update_data)
+            return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task_data}
         except Exception as e:
-            raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
+            return {"__status": 500, "Message": f"Failed to update task {task_id}: {str(e)}"}
 
     def get_task(self, task_id: int) -> Dict[str, Any]:
         task = self.repo.get_task(task_id)
@@ -204,32 +207,6 @@ class TaskService:
                 print(f"Warning: Failed to update parent task {parent_task_id} with subtask {subtask_id}: {e}")
         
         return result
-
-    def update_task_by_id(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Update a task with the provided fields. Only task_id is required.
-        """
-        task_id = payload.get("task_id")
-        if not task_id:
-            raise ValueError("task_id is required for updates")
-        
-        # Check if task exists
-        existing_task = self.repo.get_task(task_id)
-        if not existing_task:
-            raise ValueError(f"Task with ID {task_id} not found")
-        
-        # Extract update fields (exclude task_id from the update data)
-        update_fields = {k: v for k, v in payload.items() if k != "task_id"}
-        
-        if not update_fields:
-            return {"__status": 400, "Message": "No fields to update provided", "data": existing_task}
-        
-        # Perform the update
-        try:
-            updated_task = self.repo.update_task(task_id, update_fields)
-            return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task}
-        except Exception as e:
-            raise RuntimeError(f"Failed to update task {task_id}: {str(e)}")
 
     # def get_task_by_id(self, task_id: int) -> Dict[str, Any]:
     #     """
@@ -413,4 +390,114 @@ class TaskService:
                 "__status": 200,
                 "Message": f"Successfully retrieved {len(subtask_details)} subtasks for parent task {parent_task_id}",
                 "data": response_data
+            }
+
+    def get_tasks_by_team(self, team_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks for users in a specific team.
+        """
+        try:
+            # Get all parent tasks for team members
+            parent_tasks = self.repo.find_parent_tasks_by_team(team_id)
+            
+            # For each parent task, get its subtasks
+            for parent_task in parent_tasks:
+                parent_task_id = parent_task["id"]
+                subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+                
+                # Format subtasks for frontend
+                formatted_subtasks = []
+                for subtask in subtasks:
+                    formatted_subtask = {
+                        "id": subtask["id"],
+                        "task_name": subtask["task_name"], 
+                        "description": subtask["description"],
+                        "due_date": subtask["due_date"],  
+                        "status": subtask["status"],
+                        "owner_id": subtask["owner_id"],
+                        "collaborators": subtask["collaborators"] or [],
+                        "project_id": subtask["project_id"],
+                        "created_at": subtask["created_at"],
+                        "parent_task": subtask["parent_task"],
+                        "type": "subtask",
+                        "priority": subtask["priority"],
+                        "attachments": subtask["attachments"] or []
+                    }
+                    formatted_subtasks.append(formatted_subtask)
+                
+                # Add subtasks to parent task
+                parent_task["subtasks"] = formatted_subtasks
+            
+            if not parent_tasks:
+                return {
+                    "__status": 404,
+                    "Message": f"No tasks found for team {team_id}",
+                    "data": []
+                }
+            
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(parent_tasks)} tasks for team {team_id}",
+                "data": parent_tasks
+            }
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving team tasks: {str(e)}",
+                "data": []
+            }
+
+    def get_tasks_by_department(self, dept_id: int) -> Dict[str, Any]:
+        """
+        Get all tasks for users in a specific department.
+        """
+        try:
+            # Get all parent tasks for department members
+            parent_tasks = self.repo.find_parent_tasks_by_department(dept_id)
+            
+            # For each parent task, get its subtasks
+            for parent_task in parent_tasks:
+                parent_task_id = parent_task["id"]
+                subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+                
+                # Format subtasks for frontend
+                formatted_subtasks = []
+                for subtask in subtasks:
+                    formatted_subtask = {
+                        "id": subtask["id"],
+                        "task_name": subtask["task_name"], 
+                        "description": subtask["description"],
+                        "due_date": subtask["due_date"],  
+                        "status": subtask["status"],
+                        "owner_id": subtask["owner_id"],
+                        "collaborators": subtask["collaborators"] or [],
+                        "project_id": subtask["project_id"],
+                        "created_at": subtask["created_at"],
+                        "parent_task": subtask["parent_task"],
+                        "type": "subtask",
+                        "priority": subtask["priority"],
+                        "attachments": subtask["attachments"] or []
+                    }
+                    formatted_subtasks.append(formatted_subtask)
+                
+                # Add subtasks to parent task
+                parent_task["subtasks"] = formatted_subtasks
+            
+            if not parent_tasks:
+                return {
+                    "__status": 404,
+                    "Message": f"No tasks found for department {dept_id}",
+                    "data": []
+                }
+            
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(parent_tasks)} tasks for department {dept_id}",
+                "data": parent_tasks
+            }
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving department tasks: {str(e)}",
+                "data": []
             }

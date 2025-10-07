@@ -2,7 +2,7 @@
   <div v-if="isVisible" class="popup-overlay" @click="closePopup">
     <div class="popup-container" @click.stop>
       <div class="popup-header">
-        <h3>{{ isSubtask ? 'Transfer Subtask Ownership' : 'Transfer Task Ownership' }}</h3>
+        <h3>{{ isSubtask ? 'Assign Subtask' : 'Assign Task' }}</h3>
         <button class="close-btn" @click="closePopup">&times;</button>
       </div>
       
@@ -25,8 +25,8 @@
               <option value="">Select team member</option>
               <option 
                 v-for="member in eligibleMembers" 
-                :key="member.id" 
-                :value="member.id"
+                :key="member.userid" 
+                :value="member.userid"
               >
                 {{ member.name }} ({{ member.role }})
               </option>
@@ -82,6 +82,8 @@
 </template>
 
 <script>
+import { enhancedNotificationService } from '../services/notifications'
+
 export default {
   name: 'TaskAssignmentPopup',
   props: {
@@ -124,25 +126,88 @@ export default {
       selectedStatus: 'Ongoing',
       isLoading: false,
       successMessage: '',
-      errorMessage: ''
+      errorMessage: '',
+      currentUserDetails: null,
+      eligibleUsers: []
     }
   },
   computed: {
     eligibleMembers() {
-      if (this.userRole === 'director') {
-        return this.teamMembers.filter(member => member.role === 'manager')
-      } else if (this.userRole === 'manager') {
-        return this.teamMembers.filter(member => member.role === 'staff')
-      }
-      return []
+      // Use dynamically fetched eligible users instead of static teamMembers
+      return this.eligibleUsers
     },
     showStatusSelection() {
       if (this.userRole !== 'director') return false
-      const selectedMember = this.teamMembers.find(m => m.id === this.selectedAssignee)
+      const selectedMember = this.eligibleUsers.find(m => m.userid === this.selectedAssignee)
       return selectedMember && selectedMember.role === 'manager'
     }
   },
   methods: {
+    async fetchCurrentUserDetails() {
+      try {
+        const currentUserId = localStorage.getItem('spm_userid')
+        if (!currentUserId) {
+          throw new Error('No user ID found in session')
+        }
+
+        const response = await fetch(`http://localhost:5003/users/${currentUserId}`)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch user details: ${response.status}`)
+        }
+
+        const result = await response.json()
+        this.currentUserDetails = result.data
+        console.log('Current user details:', this.currentUserDetails)
+      } catch (error) {
+        console.error('Error fetching current user details:', error)
+        this.errorMessage = 'Failed to load user details'
+      }
+    },
+
+    async fetchEligibleUsers() {
+      try {
+        if (!this.currentUserDetails) {
+          await this.fetchCurrentUserDetails()
+        }
+
+        if (!this.currentUserDetails) {
+          throw new Error('Could not load current user details')
+        }
+
+        let eligibleUsers = []
+
+        if (this.userRole === 'director') {
+          // Director can assign to managers in the same department
+          if (this.currentUserDetails.dept_id) {
+            const response = await fetch(`http://localhost:5003/users/department/${this.currentUserDetails.dept_id}`)
+            if (response.ok) {
+              const result = await response.json()
+              eligibleUsers = result.data.filter(user => 
+                user.role === 'manager' && user.userid !== this.currentUserDetails.userid
+              )
+            }
+          }
+        } else if (this.userRole === 'manager') {
+          // Manager can assign to staff in the same team
+          if (this.currentUserDetails.team_id) {
+            const response = await fetch(`http://localhost:5003/users/team/${this.currentUserDetails.team_id}`)
+            if (response.ok) {
+              const result = await response.json()
+              eligibleUsers = result.data.filter(user => 
+                user.role === 'staff' && user.userid !== this.currentUserDetails.userid
+              )
+            }
+          }
+        }
+
+        this.eligibleUsers = eligibleUsers
+        console.log('Eligible users for assignment:', this.eligibleUsers)
+      } catch (error) {
+        console.error('Error fetching eligible users:', error)
+        this.errorMessage = 'Failed to load eligible users for assignment'
+      }
+    },
+
     async handleAssignment() {
       this.clearMessages()
       
@@ -153,12 +218,15 @@ export default {
       this.isLoading = true
 
       try {
-        const assigneeData = this.teamMembers.find(m => m.id === this.selectedAssignee)
+        const assigneeData = this.eligibleUsers.find(m => m.userid === this.selectedAssignee)
         const updateData = this.prepareUpdateData(assigneeData)
         
         await this.updateTask(updateData)
         
-        this.successMessage = `${this.isSubtask ? 'Subtask' : 'Task'} successfully assigned to ${assigneeData.name}`
+        // Trigger assignment notification
+        await this.triggerAssignmentNotification(assigneeData)
+        
+        this.successMessage = `${assigneeData.name} has been assigned as the new owner of the ${this.isSubtask ? 'subtask' : 'task'}`
         
         // Auto-close after 2 seconds
         setTimeout(() => {
@@ -178,7 +246,7 @@ export default {
     },
 
     validateAssignment() {
-      const assigneeData = this.teamMembers.find(m => m.id === this.selectedAssignee)
+      const assigneeData = this.eligibleUsers.find(m => m.userid === this.selectedAssignee)
       
       if (!assigneeData) {
         this.errorMessage = 'Please select a valid team member'
@@ -196,19 +264,21 @@ export default {
         return false
       }
 
-      // Invalid assignment attempt (e.g. manager to manager)
-      if (this.userRole === assigneeData.role) {
-        this.errorMessage = `Cannot assign to another ${this.userRole}`
-        return false
-      }
-
       return true
     },
 
     prepareUpdateData(assigneeData) {
-      const updateData = {
-        owner: assigneeData.id,
-        ownerName: assigneeData.name
+      const updateData = {}
+
+      // Set the assignee as the new owner
+      updateData.owner_id = assigneeData.userid
+      
+      // For staff assignments, need to handle collaborators
+      if (assigneeData.role === 'staff') {
+        // We need to get current collaborators and add the new assignee
+        // This will be handled by getting current task data first
+        updateData.needsCollaboratorUpdate = true
+        updateData.newCollaboratorId = assigneeData.userid
       }
 
       // Determine status based on assignment rules
@@ -218,29 +288,78 @@ export default {
         updateData.status = this.selectedStatus
       }
 
-      // Handle collaborator additions
-      if (this.userRole === 'manager' && assigneeData.role === 'staff') {
-        updateData.addCollaborator = assigneeData.id
-        
-        if (this.isSubtask && this.parentTaskId) {
-          updateData.addParentTaskCollaborator = assigneeData.id
-        }
-      }
-
       return updateData
     },
 
     async updateTask(updateData) {
-      // Update to match the backend endpoint format
+      let finalUpdateData = { task_id: this.taskId }
+      
+      // Handle collaborators for staff assignments
+      if (updateData.needsCollaboratorUpdate) {
+        // First get current task data to get existing collaborators
+        const currentTaskResponse = await fetch(`http://localhost:5002/tasks/${this.taskId}`)
+        if (!currentTaskResponse.ok) {
+          throw new Error('Failed to fetch current task data')
+        }
+        
+        const currentTaskData = await currentTaskResponse.json()
+        const currentTask = currentTaskData.task || currentTaskData
+        
+        // Get existing collaborators and add the new one
+        const existingCollaborators = currentTask.collaborators || []
+        const newCollaborators = [...existingCollaborators]
+        
+        // Add the new assignee as collaborator if not already present
+        if (!newCollaborators.includes(updateData.newCollaboratorId)) {
+          newCollaborators.push(updateData.newCollaboratorId)
+        }
+        
+        finalUpdateData.collaborators = newCollaborators
+        
+        // If it's a subtask, also update parent task collaborators
+        if (this.isSubtask && this.parentTaskId) {
+          try {
+            const parentTaskResponse = await fetch(`http://localhost:5002/tasks/${this.parentTaskId}`)
+            if (parentTaskResponse.ok) {
+              const parentTaskData = await parentTaskResponse.json()
+              const parentTask = parentTaskData.task || parentTaskData
+              const parentCollaborators = parentTask.collaborators || []
+              
+              if (!parentCollaborators.includes(updateData.newCollaboratorId)) {
+                const updatedParentCollaborators = [...parentCollaborators, updateData.newCollaboratorId]
+                
+                // Update parent task collaborators
+                await fetch(`http://localhost:5002/tasks/update`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    task_id: this.parentTaskId,
+                    collaborators: updatedParentCollaborators
+                  })
+                })
+              }
+            }
+          } catch (error) {
+            console.error('Failed to update parent task collaborators:', error)
+            // Don't fail the main assignment
+          }
+        }
+      }
+      
+      // Add other update fields
+      Object.keys(updateData).forEach(key => {
+        if (key !== 'needsCollaboratorUpdate' && key !== 'newCollaboratorId') {
+          finalUpdateData[key] = updateData[key]
+        }
+      })
+
+      // Update the task
       const response = await fetch(`http://localhost:5002/tasks/update`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          task_id: this.taskId,
-          ...updateData
-        })
+        body: JSON.stringify(finalUpdateData)
       })
 
       if (!response.ok) {
@@ -260,6 +379,25 @@ export default {
     clearMessages() {
       this.successMessage = ''
       this.errorMessage = ''
+    },
+
+    async triggerAssignmentNotification(assigneeData) {
+      try {
+        // Get current user info
+        const currentUserName = localStorage.getItem('spm_username') || 'System';
+        
+        // Trigger assignment notification
+        await enhancedNotificationService.triggerTaskAssignmentNotification(
+          this.taskId,
+          assigneeData.userid,
+          currentUserName
+        );
+        
+        console.log('Task assignment notification sent successfully');
+      } catch (error) {
+        console.error('Failed to send task assignment notification:', error);
+        // Don't throw error to avoid breaking the main assignment flow
+      }
     }
   },
 
@@ -267,6 +405,8 @@ export default {
     isVisible(newVal) {
       if (newVal) {
         this.clearMessages()
+        // Fetch eligible users when popup opens
+        this.fetchEligibleUsers()
       }
     },
     selectedAssignee() {

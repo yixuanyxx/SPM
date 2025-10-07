@@ -139,3 +139,61 @@ class SupabaseTaskRepo:
     
     def update_attachments(self, task_id: int, attachments: List[Dict[str, str]]) -> Dict[str, Any]:
         return self.update_task(task_id, {"attachments": attachments})
+
+    def find_parent_tasks_by_team(self, team_id: int) -> List[Dict[str, Any]]:
+        """
+        Find all parent tasks for users in a specific team.
+        """
+        # Get all users in the team first
+        user_res = self.client.table("user").select("userid").eq("team_id", team_id).execute()
+        user_ids = [user["userid"] for user in (user_res.data or [])]
+        
+        if not user_ids:
+            return []
+        
+        # Get parent tasks where any team member is owner or collaborator
+        all_tasks = []
+        
+        for user_id in user_ids:
+            # Get parent tasks where user is owner
+            owner_res = self.client.table(TABLE).select("*").eq("owner_id", user_id).in_("type", ["parent", None]).execute()
+            owner_tasks = owner_res.data or []
+            
+            # Get parent tasks where user is collaborator  
+            collab_res = self.client.table(TABLE).select("*").filter("collaborators", "cs", [user_id]).in_("type", ["parent", None]).execute()
+            collab_tasks = collab_res.data or []
+            
+            all_tasks.extend(owner_tasks + collab_tasks)
+        
+        # Deduplicate by task ID
+        combined = {t["id"]: t for t in all_tasks}
+        return list(combined.values())
+
+    def find_parent_tasks_by_department(self, dept_id: int) -> List[Dict[str, Any]]:
+        """
+        Find all parent tasks for users in a specific department.
+        """
+        # Get all users in the department first
+        user_res = self.client.table("user").select("userid").eq("dept_id", dept_id).execute()
+        user_ids = [user["userid"] for user in (user_res.data or [])]
+        
+        if not user_ids:
+            return []
+        
+        # Get parent tasks where any department member is owner or collaborator
+        all_tasks = []
+        
+        for user_id in user_ids:
+            # Get parent tasks where user is owner
+            owner_res = self.client.table(TABLE).select("*").eq("owner_id", user_id).in_("type", ["parent", None]).execute()
+            owner_tasks = owner_res.data or []
+            
+            # Get parent tasks where user is collaborator  
+            collab_res = self.client.table(TABLE).select("*").filter("collaborators", "cs", [user_id]).in_("type", ["parent", None]).execute()
+            collab_tasks = collab_res.data or []
+            
+            all_tasks.extend(owner_tasks + collab_tasks)
+        
+        # Deduplicate by task ID
+        combined = {t["id"]: t for t in all_tasks}
+        return list(combined.values())

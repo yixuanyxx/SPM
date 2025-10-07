@@ -31,7 +31,7 @@ class UserService:
             return {"status": 404, "message": f"User with userid {userid} not found"}
         
         # Validate update data
-        allowed_fields = {"role", "name", "email", "team_id", "dept_id"}
+        allowed_fields = {"role", "name", "email", "team_id", "dept_id", "notification_preferences"}
         filtered_data = {k: v for k, v in update_data.items() if k in allowed_fields}
         
         if not filtered_data:
@@ -134,7 +134,7 @@ class UserService:
             return {"status": 400, "message": f"Missing required fields: {missing_fields}"}
         
         # Validate allowed fields
-        allowed_fields = {"id", "userid", "role", "name", "email", "team_id", "dept_id"}
+        allowed_fields = {"id", "userid", "role", "name", "email", "team_id", "dept_id", "notification_preferences"}
         filtered_data = {k: v for k, v in user_data.items() if k in allowed_fields}
         
         try:
@@ -176,4 +176,21 @@ class UserService:
             }
         except Exception as e:
             return {"status": 500, "message": f"Failed to search users: {str(e)}"}
+
+    def update_notification_preferences(self, userid: int, preferences: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Update user notification preferences.
+        """
+        # Validate preferences structure
+        valid_keys = {"in_app", "email"}
+        if not all(key in valid_keys for key in preferences.keys()):
+            return {"status": 400, "message": f"Invalid preference keys. Valid keys are: {valid_keys}"}
+        
+        # Ensure boolean values
+        for key, value in preferences.items():
+            if not isinstance(value, bool):
+                return {"status": 400, "message": f"Preference '{key}' must be a boolean value"}
+        
+        # Update using the existing update method
+        return self.update_user_by_userid(userid, {"notification_preferences": preferences})
 

@@ -12,7 +12,18 @@
 
       <div class="main-content">
         <div class="tasks-container" style="max-width: 720px;">
-          <div class="task-card">
+          <!-- Loading State -->
+          <div v-if="loading && !userid" class="task-card">
+            <div class="task-main" style="cursor: default; text-align: center; padding: 2rem;">
+              <div style="color: #6b7280;">
+                <i class="bi bi-hourglass-split" style="font-size: 2rem; margin-bottom: 1rem; display: block;"></i>
+                Loading your account settings...
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Content -->
+          <div v-else class="task-card">
             <div class="task-main" style="cursor: default; border-bottom: 1px solid #f3f4f6;">
               <div class="task-content" style="width: 100%">
                 <div style="display:grid; gap:1rem;">
@@ -90,6 +101,43 @@
                     </div>
                   </div>
 
+                  <!-- Notification Preferences -->
+                  <div style="display:grid; grid-template-columns: 1fr auto; align-items:start; gap:0.5rem;">
+                    <div>
+                      <label style="display:block; font-size: 0.85rem; color:#6b7280; margin-bottom: 0.5rem;">Notification Preferences</label>
+                      <div style="display:flex; flex-direction:column; gap:0.75rem;">
+                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                          <input 
+                            type="checkbox" 
+                            v-model="notificationPreferences.in_app" 
+                            :disabled="isEditingPreferences"
+                            style="margin:0;"
+                          />
+                          <span style="font-size: 0.9rem;">In-app notifications</span>
+                        </label>
+                        <label style="display:flex; align-items:center; gap:0.5rem; cursor:pointer;">
+                          <input 
+                            type="checkbox" 
+                            v-model="notificationPreferences.email" 
+                            :disabled="isEditingPreferences"
+                            style="margin:0;"
+                          />
+                          <span style="font-size: 0.9rem;">Email notifications</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div style="display:flex; gap:0.5rem; margin-top: 1.35rem">
+                      <button 
+                        type="button" 
+                        @click="saveNotificationPreferences" 
+                        :disabled="loading || isEditingPreferences"
+                        class="secondary-button"
+                      >
+                        {{ isEditingPreferences ? 'Saving...' : 'Save Preferences' }}
+                      </button>
+                    </div>
+                  </div>
+
                   <!-- Actions -->
                   <div style="display:flex; gap:0.5rem;">
                     <button type="button" class="secondary-button" @click="onFetch" :disabled="loading">Reload</button>
@@ -111,6 +159,7 @@ import SideNavbar from '../../components/SideNavbar.vue'
 import './account.css'
 import { supabase } from "../../services/supabase";
 import { resetPasswordForEmail } from "../../services/auth.js";
+import { userPreferencesService } from "../../services/notifications.js";
 
 const API = 'http://127.0.0.1:5003';
 const TEAM_API = 'http://127.0.0.1:5004';
@@ -129,6 +178,8 @@ const isEditingName = ref(false);
 const message = ref("");
 const error = ref(false);
 const loading = ref(false);
+const notificationPreferences = ref({ in_app: true, email: true });
+const isEditingPreferences = ref(false);
 
 // Helper function to get team name by ID
 async function getTeamNameById(teamId) {
@@ -159,25 +210,38 @@ async function getDepartmentNameById(deptId) {
 }
 
 onMounted(async () => {
+  loading.value = true;
+  
   // Check if user is authenticated
   try {
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       console.warn('User not authenticated, redirecting to login');
-      // You might want to redirect to login page here
       message.value = 'Please log in to access account settings';
       error.value = true;
+      loading.value = false;
       return;
     }
     console.log('User authenticated:', user.id);
   } catch (e) {
     console.error('Authentication check failed:', e);
+    loading.value = false;
+    return;
   }
 
-  const stored = localStorage.getItem('spm_userid');
+  // Get user ID from localStorage with multiple fallbacks
+  const stored = localStorage.getItem('spm_userid') || 
+                 localStorage.getItem('UID') || 
+                 localStorage.getItem('userId') || 
+                 localStorage.getItem('user_id');
+  
   if (stored) {
     userid.value = Number(stored);
     await onFetch();
+  } else {
+    message.value = 'User ID not found. Please log in again.';
+    error.value = true;
+    loading.value = false;
   }
 });
 
@@ -191,9 +255,19 @@ async function onFetch() {
       return;
     }
     loading.value = true;
+    
+    console.log('Fetching user data for userid:', userid.value);
     const res = await fetch(`${API}/users/${userid.value}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 404) {
+        throw new Error('User not found. Please log in again.');
+      }
+      throw new Error(`Failed to fetch user data (HTTP ${res.status})`);
+    }
+    
     const data = await res.json();
+    console.log('User data received:', data);
+    
     const u = data?.data || {};
     name.value = u.name || "";
     email.value = u.email || "";
@@ -202,18 +276,27 @@ async function onFetch() {
     dept_id.value = u.dept_id ?? null;
     nameDraft.value = name.value;
     
-    // Fetch team and department names
+    // Set notification preferences
+    notificationPreferences.value = u.notification_preferences || { in_app: true, email: true };
+    
+    // Fetch team and department names in parallel
+    const promises = [];
     if (team_id.value) {
-      teamName.value = await getTeamNameById(team_id.value);
+      promises.push(getTeamNameById(team_id.value).then(name => teamName.value = name));
     }
     if (dept_id.value) {
-      departmentName.value = await getDepartmentNameById(dept_id.value);
+      promises.push(getDepartmentNameById(dept_id.value).then(name => departmentName.value = name));
     }
     
-    // No success message on initial load
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
+    
+    console.log('Account settings loaded successfully');
     error.value = false;
   } catch (e) {
-    message.value = e.message || 'Failed to fetch user.';
+    console.error('Failed to fetch user data:', e);
+    message.value = e.message || 'Failed to fetch user data. Please try again.';
     error.value = true;
   } finally {
     loading.value = false;
@@ -289,6 +372,33 @@ async function sendPasswordResetEmail() {
     error.value = true;
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveNotificationPreferences() {
+  try {
+    message.value = '';
+    error.value = false;
+    if (!userid.value) throw new Error('userid is required');
+    isEditingPreferences.value = true;
+    
+    await userPreferencesService.updateNotificationPreferences(userid.value, notificationPreferences.value);
+    
+    message.value = 'Notification preferences updated successfully!';
+    error.value = false;
+    
+    // Clear success message after a few seconds
+    setTimeout(() => {
+      if (message.value && message.value.includes('preferences updated')) {
+        message.value = '';
+      }
+    }, 3000);
+    
+  } catch (e) {
+    message.value = e.message || 'Failed to update notification preferences.';
+    error.value = true;
+  } finally {
+    isEditingPreferences.value = false;
   }
 }
 </script>

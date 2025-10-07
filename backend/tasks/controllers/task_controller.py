@@ -23,6 +23,7 @@ def manager_create_task():
     - collaborators: List of user IDs or comma-separated string
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
+    - priority: Priority level (integer)
     - attachment: PDF file to be uploaded
 
     RETURNS:
@@ -78,6 +79,7 @@ def staff_create_task():
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask") - defaults to "parent"
+    - priority: Priority level (integer)
     - attachment: PDF file to be uploaded
 
     Note: owner_id is automatically added to the collaborators list
@@ -244,6 +246,7 @@ def update_task():
     - parent_task: Parent task ID
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask")
+    - priority: Priority level (integer)
 
     RETURNS:
     {
@@ -261,6 +264,22 @@ def update_task():
     try:
         data = request.form if request.form else (request.get_json(silent=True) or {})
         payload = parse_task_update_payload(data)
+
+        # Handle file upload for new attachments
+        file = request.files.get("attachment")
+        if file:
+            try:
+                new_attachments = service.repo.upload_attachment(file)
+                # If there are existing attachments, merge them
+                existing_attachments = payload.get("attachments", [])
+                if isinstance(existing_attachments, list):
+                    # Merge existing and new attachments
+                    payload["attachments"] = existing_attachments + new_attachments
+                else:
+                    payload["attachments"] = new_attachments
+            except Exception as e:
+                raise Exception(f"Upload failed: {str(e)}")
+
         result = service.update_task_by_id(payload)
         status = result.pop("__status", 200)
         result["Code"] = status
@@ -434,5 +453,59 @@ def get_subtasks_by_parent(parent_task_id: int):
         
         return jsonify(result), status
         
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/team/<int:team_id>", methods=["GET"])
+def get_tasks_by_team(team_id: int):
+    """
+    Get all tasks for users in a specific team.
+    
+    Parameters:
+    - team_id: ID of the team
+    
+    RETURNS:
+    {
+        "data": [ ... list of tasks for all team members ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: Tasks found and returned
+        404: No tasks found for this team
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_tasks_by_team(team_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/department/<int:dept_id>", methods=["GET"])
+def get_tasks_by_department(dept_id: int):
+    """
+    Get all tasks for users in a specific department.
+    
+    Parameters:
+    - dept_id: ID of the department
+    
+    RETURNS:
+    {
+        "data": [ ... list of tasks for all department members ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+        200: Tasks found and returned
+        404: No tasks found for this department
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_tasks_by_department(dept_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500

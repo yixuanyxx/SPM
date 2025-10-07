@@ -38,7 +38,7 @@
             <i class="bi bi-chevron-right breadcrumb-separator"></i>
             <span v-if="project" class="breadcrumb-item">
               <div class="project-dot" :style="{ backgroundColor: project.color || '#6366f1' }"></div>
-              {{ project.name }}
+              {{ project.proj_name  }}
               <i class="bi bi-chevron-right breadcrumb-separator"></i>
             </span>
             <span v-if="parentTask" class="breadcrumb-item" @click="navigateToTask(parentTask.id)">
@@ -139,6 +139,19 @@
 
                 <div class="property-item">
                   <label class="property-label">
+                    <i class="bi bi-flag-fill"></i>
+                    Priority
+                  </label>
+                  <div class="property-value">
+                    <div class="task-priority-badge" :class="getPriorityClass(task.priority)">
+                      <i class="bi bi-flag-fill"></i>
+                      <span>Priority {{ task.priority }}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="property-item">
+                  <label class="property-label">
                     <i class="bi bi-person"></i>
                     Owner
                   </label>
@@ -161,7 +174,7 @@
                   <div class="property-value">
                     <div class="project-chip">
                       <div class="project-dot" :style="{ backgroundColor: project.color || '#6366f1' }"></div>
-                      <span>{{ project.name }}</span>
+                      <span>{{ project.proj_name }}</span>
                     </div>
                   </div>
                 </div>
@@ -183,11 +196,11 @@
                   </label>
                   <div class="property-value">
                     <div class="collaborators-list">
-                      <div v-for="collaborator in task.collaborators" :key="collaborator.id" class="user-chip">
+                      <div v-for="collaboratorId in task.collaborators" :key="collaboratorId" class="user-chip">
                         <div class="user-avatar">
                           <i class="bi bi-person-circle"></i>
                         </div>
-                        <span>{{ collaborator.name }}</span>
+                        <span>{{ getUserName(collaboratorId) }}</span>
                       </div>
                     </div>
                   </div>
@@ -196,28 +209,105 @@
             </div>
           </div>
 
-          <!-- PDF Attachments Section -->
-          <div v-if="task.pdf_attachments && task.pdf_attachments.length > 0" class="content-block">
+          <!-- Attachments Section -->
+          <div v-if="hasAttachments" class="content-block">
             <h3 class="block-title">
               <i class="bi bi-paperclip"></i>
               Attachments
             </h3>
             <div class="block-content">
               <div class="attachments-grid">
+                <!-- PDF Attachments -->
                 <div 
-                  v-for="attachment in task.pdf_attachments" 
-                  :key="attachment.id || attachment.name"
+                  v-for="attachment in parsedAttachments" 
+                  :key="`pdf-${attachment.name}`"
                   class="attachment-card"
                   @click="openAttachment(attachment)"
                 >
-                  <div class="attachment-icon">
+                  <div class="attachment-icon pdf">
                     <i class="bi bi-file-earmark-pdf"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• PDF</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Image Attachments -->
+                <div 
+                  v-for="attachment in task.image_attachments || []" 
+                  :key="`img-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon image">
+                    <i class="bi bi-file-earmark-image"></i>
                   </div>
                   <div class="attachment-info">
                     <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
                     <p class="attachment-meta">
                       <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
                       <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• Image</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Document Attachments -->
+                <div 
+                  v-for="attachment in task.document_attachments || []" 
+                  :key="`doc-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon document">
+                    <i class="bi bi-file-earmark-text"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span class="attachment-type">• Document</span>
+                    </p>
+                  </div>
+                  <div class="attachment-actions">
+                    <button class="btn-icon" @click.stop="downloadAttachment(attachment)">
+                      <i class="bi bi-download"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Other Attachments -->
+                <div 
+                  v-for="attachment in task.other_attachments || []" 
+                  :key="`other-${attachment.id || attachment.name}`"
+                  class="attachment-card"
+                  @click="openAttachment(attachment)"
+                >
+                  <div class="attachment-icon other">
+                    <i class="bi bi-file-earmark"></i>
+                  </div>
+                  <div class="attachment-info">
+                    <h4 class="attachment-name">{{ attachment.name || attachment.filename }}</h4>
+                    <p class="attachment-meta">
+                      <span v-if="attachment.size">{{ formatFileSize(attachment.size) }}</span>
+                      <span v-if="attachment.uploaded_at">• {{ formatDate(attachment.uploaded_at) }}</span>
+                      <span v-if="attachment.type" class="attachment-type">• {{ attachment.type.toUpperCase() }}</span>
                     </p>
                   </div>
                   <div class="attachment-actions">
@@ -303,21 +393,6 @@
       </div>
     </div>
 
-    <!-- Edit Modal
-    <div v-if="showEditModal" class="modal-overlay" @click="showEditModal = false">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>Edit Task</h3>
-          <button @click="showEditModal = false" class="modal-close">
-            <i class="bi bi-x"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Edit task functionality will be implemented here...</p>
-        </div>
-      </div>
-    </div> -->
-
     <!-- Edit Popup -->
     <EditPopup
       :isVisible="showEditPopup"
@@ -366,13 +441,12 @@ const project = ref(null)
 const parentTask = ref(null)
 const loading = ref(true)
 const error = ref(null)
-// const showEditModal = ref(false)
 const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
+const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
 
-// Team members data for assign popup - replace with real data fetching as needed (this is for testing)
+// Team members data for assign popup - replace with real data fetching as needed
 const teamMembers = ref([
-  // Mock team members - in real app, fetch from API
   { id: 1, name: 'John Manager', role: 'manager' },
   { id: 2, name: 'Jane Manager', role: 'manager' },
   { id: 3, name: 'Alice Staff', role: 'staff' },
@@ -383,40 +457,131 @@ const teamMembers = ref([
 // Get user info from localStorage
 const getCurrentUser = () => {
   try {
-    const userRole = localStorage.getItem('userRole') || ''
-    const userId = localStorage.getItem('userId') || ''
-    return { role: userRole, id: userId }
+    const userRole = localStorage.getItem('spm_role') || localStorage.getItem('userRole') || ''
+    const userId = localStorage.getItem('spm_userid') || localStorage.getItem('userId') || ''
+    return { role: userRole, userId: userId }
   } catch (err) {
-    console.warn('Could not retrieve user info from localStorage:', err)
-    return { role: '', id: '' }
+    return { role: '', userId: '' }
   }
 }
 
-// const currentUser = getCurrentUser() //CHANGE BACK TO THIS AFTER TESTING
-const currentUser = { role: 'manager', id: '8' } // dummy user
+const currentUser = getCurrentUser()
 
 // Computed properties for permissions
 const canEditTask = computed(() => {
-  if (!task.value) return false
-  return task.value.owner === currentUser.id || 
-         currentUser.role === 'manager' || 
-         currentUser.role === 'director'
+  if (!task.value || !currentUser.userId) return false
+  
+  const currentUserId = String(currentUser.userId).trim()
+  const taskOwnerId = String(task.value.owner_id).trim()
+  const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
+  // const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  
+  return isTaskOwner //|| hasRolePermission
 })
+
+// const canAssignTask = computed(() => {
+//   if (!task.value || !currentUser.userId) return false
+  
+//   const currentUserId = String(currentUser.userId).trim()
+//   const taskOwnerId = String(task.value.owner_id).trim()
+//   const isTaskOwner = currentUserId === taskOwnerId && currentUserId !== ''
+//   const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  
+//   return isTaskOwner || hasRolePermission
+// })
 
 const canAssignTask = computed(() => {
   if (!task.value) return false
-  return task.value.owner === currentUser.id || 
-         currentUser.role === 'manager' || 
-         currentUser.role === 'director'
+  
+  // Only show assign button if task is unassigned AND user is manager/director
+  const isUnassigned = task.value.status === 'Unassigned'
+  const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
+  
+  return isUnassigned && hasRolePermission
+})
+
+// Computed property to check if task has any attachments
+const hasAttachments = computed(() => {
+  if (!task.value) return false
+  
+  return (parsedAttachments.value && parsedAttachments.value.length > 0) ||
+         (task.value.image_attachments && task.value.image_attachments.length > 0) ||
+         (task.value.document_attachments && task.value.document_attachments.length > 0) ||
+         (task.value.other_attachments && task.value.other_attachments.length > 0)
+})
+
+// Computed property to parse attachments from JSON string
+const parsedAttachments = computed(() => {
+  if (!task.value?.attachments) return []
+  
+  try {
+    if (Array.isArray(task.value.attachments)) {
+      return task.value.attachments
+    }
+    return JSON.parse(task.value.attachments)
+  } catch (error) {
+    console.error('Error parsing attachments:', error)
+    return []
+  }
 })
 
 // Watch for route parameter changes to reload task details
 watch(() => route.params.id, async (newId, oldId) => {
   if (newId && newId !== oldId) {
-    console.log('Route changed, fetching new task:', newId)
     await fetchTaskDetails()
   }
 }, { immediate: false })
+
+// Function to fetch user details by userid
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+// Function to get user names for display
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `Invalid user`
+}
+
+// Function to fetch all users mentioned in task
+const fetchTaskUsers = async () => {
+  const userIds = new Set()
+  
+  // Collect all unique user IDs from task
+  if (task.value.owner_id) userIds.add(task.value.owner_id)
+  if (task.value.collaborators) {
+    task.value.collaborators.forEach(id => userIds.add(id))
+  }
+  
+  // Fetch user details for all unique IDs
+  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
+  const results = await Promise.all(fetchPromises)
+  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+}
 
 onMounted(async () => {
   await fetchTaskDetails()
@@ -428,7 +593,6 @@ const fetchTaskDetails = async () => {
     error.value = null
     
     const taskId = route.params.id
-    console.log('Fetching task details for ID:', taskId)
     
     // Reset current task data
     task.value = null
@@ -443,18 +607,56 @@ const fetchTaskDetails = async () => {
     
     const taskData = await taskResponse.json()
     task.value = taskData.task || taskData
-    console.log('Fetched task data:', task.value)
+
+    // Fetch project details if project_id exists
+    if (task.value.project_id) {
+      try {
+        const projectResponse = await fetch(`http://localhost:5001/projects/${task.value.project_id}`)
+        if (projectResponse.ok) {
+          const projectData = await projectResponse.json()
+          project.value = projectData.data || projectData
+        } else {
+          project.value = null
+        }
+      } catch (err) {
+        console.error('Error fetching project:', err)
+        project.value = null
+      }
+    } else {
+      project.value = null
+    }
+
+    // Fetch owner details using owner_id
+    if (task.value.owner_id) {
+      try {
+        const ownerResponse = await fetch(`http://localhost:5003/users/${task.value.owner_id}`)
+        if (ownerResponse.ok) {
+          const responseData = await ownerResponse.json()
+          const ownerData = responseData.data
+          
+          if (ownerData && (ownerData.name || ownerData.username || ownerData.email)) {
+            task.value.owner = ownerData.name || ownerData.username || ownerData.email
+          } else {
+            task.value.owner = null
+          }
+        } else {
+          task.value.owner = null
+        }
+      } catch (err) {
+        task.value.owner = null
+      }
+    } else {
+      task.value.owner = null
+    }
 
     // Fetch subtask details if subtasks array contains IDs
     if (task.value.subtasks && task.value.subtasks.length > 0) {
       try {
         const subtaskPromises = task.value.subtasks.map(async (subtaskId) => {
-          // Check if it's already an object (backwards compatibility)
           if (typeof subtaskId === 'object') {
             return subtaskId
           }
           
-          // Fetch the subtask by ID
           const subtaskResponse = await fetch(`http://localhost:5002/tasks/${subtaskId}`)
           if (subtaskResponse.ok) {
             const subtaskData = await subtaskResponse.json()
@@ -464,26 +666,11 @@ const fetchTaskDetails = async () => {
         })
         
         const subtaskResults = await Promise.all(subtaskPromises)
-        // Filter out null results and update task.value.subtasks with actual subtask objects
         task.value.subtasks = subtaskResults.filter(subtask => subtask !== null)
-        console.log('Fetched subtasks:', task.value.subtasks)
       } catch (err) {
-        console.warn('Could not fetch some subtask details:', err)
+        // Silently handle subtask fetch errors
       }
     }
-    
-    // Fetch project details if project_id exists
-    // if (task.value.project_id) {
-    //   try {
-    //     const projectResponse = await fetch(`http://localhost:5002/projects/${task.value.project_id}`)
-    //     if (projectResponse.ok) {
-    //       const projectData = await projectResponse.json()
-    //       project.value = projectData.project || projectData
-    //     }
-    //   } catch (err) {
-    //     console.warn('Could not fetch project details:', err)
-    //   }
-    // }
     
     // Fetch parent task details if parent_task exists
     if (task.value.parent_task) {
@@ -492,16 +679,17 @@ const fetchTaskDetails = async () => {
         if (parentResponse.ok) {
           const parentData = await parentResponse.json()
           parentTask.value = parentData.task || parentData
-          console.log('Fetched parent task:', parentTask.value)
         }
       } catch (err) {
-        console.warn('Could not fetch parent task details:', err)
+        // Silently handle parent task fetch errors
       }
     }
     
+    // Fetch user details for all users mentioned in task
+    await fetchTaskUsers()
+    
   } catch (err) {
     error.value = err.message
-    console.error('Error fetching task details:', err)
   } finally {
     loading.value = false
   }
@@ -513,18 +701,19 @@ const goBack = () => {
 
 const navigateToTask = async (taskId) => {
   if (taskId) {
-    console.log('Navigating to task:', taskId)
-    // Use router.push with force navigation to ensure the component reloads
     await router.push({ name: 'task-detail', params: { id: taskId.toString() } })
-  } else {
-    console.error('No task ID provided for navigation')
   }
 }
 
 const formatDate = (dateString) => {
   if (!dateString) return 'No date'
+  
+  // Parse the UTC date and convert to Singapore timezone
   const date = new Date(dateString)
-  return date.toLocaleDateString('en-US', { 
+  
+  // Convert to Singapore timezone (UTC+8)
+  return date.toLocaleDateString('en-SG', { 
+    timeZone: 'Asia/Singapore',
     year: 'numeric',
     month: 'short', 
     day: 'numeric'
@@ -533,9 +722,13 @@ const formatDate = (dateString) => {
 
 const getRelativeDate = (dateString) => {
   if (!dateString) return ''
+  
   const date = new Date(dateString)
-  const now = new Date()
-  const diffTime = date - now
+  
+  const nowSG = new Date(new Date().toLocaleString("en-US", {timeZone: "Asia/Singapore"}))
+  const dateSG = new Date(date.toLocaleString("en-US", {timeZone: "Asia/Singapore"}))
+  
+  const diffTime = dateSG.setHours(0,0,0,0) - nowSG.setHours(0,0,0,0)
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
   
   if (diffDays < 0) {
@@ -587,6 +780,13 @@ const getStatusLabel = (status) => {
   return labels[status]
 }
 
+const getPriorityClass = (priority) => {
+  const level = parseInt(priority)
+  if (level >= 8) return 'priority-high'
+  if (level >= 5) return 'priority-medium'
+  return 'priority-low'
+}
+
 const getTaskTypeClass = () => {
   return task.value?.parent_task ? 'subtask' : 'task'
 }
@@ -607,21 +807,33 @@ const getCompletedSubtasks = (task) => {
 }
 
 const openAttachment = (attachment) => {
-  // Handle opening/previewing PDF attachment
   if (attachment.url) {
     window.open(attachment.url, '_blank')
   }
 }
 
 const downloadAttachment = (attachment) => {
-  // Handle downloading PDF attachment
-  if (attachment.download_url || attachment.url) {
+  console.log('Attempting to download attachment:', attachment)
+  
+  if (attachment.url) {
+    console.log('Downloading from URL:', attachment.url)
     const link = document.createElement('a')
-    link.href = attachment.download_url || attachment.url
+    link.href = attachment.url
     link.download = attachment.name || attachment.filename
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  } else if (attachment.download_url) {
+    console.log('Downloading from download_url:', attachment.download_url)
+    const link = document.createElement('a')
+    link.href = attachment.download_url
+    link.download = attachment.name || attachment.filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } else {
+    console.error('No URL available for attachment:', attachment)
+    alert(`Cannot download "${attachment.name}": No URL available. This usually means the file wasn't uploaded properly.`)
   }
 }
 
@@ -635,8 +847,6 @@ const closeAssignPopup = () => {
 }
 
 const handleAssignmentSuccess = async (assignmentData) => {
-  console.log('Assignment successful:', assignmentData)
-  // Refresh task details to show updated assignment
   await fetchTaskDetails()
   closeAssignPopup()
 }
@@ -650,10 +860,16 @@ const closeEditPopup = () => {
   showEditPopup.value = false
 }
 
-const updateSuccess = async (assignmentData) => {
-  console.log('Update successful:', assignmentData)
-  // Refresh task details to show updated assignment
+const updateSuccess = async (updateData) => {
+  console.log('TaskDetails received update data:', updateData);
+  
+  // Close popup
+  closeEditPopup();
+  
+  // Small delay then refresh
+  await new Promise(resolve => setTimeout(resolve, 300))
   await fetchTaskDetails()
-  closeEditPopup()
+  
+  console.log('Task refreshed')
 }
 </script>
