@@ -30,6 +30,10 @@ class TaskService:
         # Get only parent tasks for the user
         parent_tasks = self.repo.find_parent_tasks_by_user(user_id)
         
+        # Check if no tasks found
+        if not parent_tasks:
+            return {"__status": 404, "Message": f"No tasks found for user ID {user_id}"}
+        
         # For each parent task, get its subtasks
         for parent_task in parent_tasks:
             parent_task_id = parent_task["id"]
@@ -57,6 +61,7 @@ class TaskService:
             parent_task["subtasks"] = formatted_subtasks
         
         return {
+            "__status": 200,
             "status": "success",
             "data": parent_tasks
         }
