@@ -84,7 +84,7 @@
                   v-for="task in getTasksForDateAndHour(currentDate, hour - 1)" 
                   :key="task.id"
                   class="task-event"
-                  :class="getTaskStatusClass(task.status)"
+                  :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
                   @click="selectTask(task)"
                 >
                   <div class="task-title">{{ task.task_name }}</div>
@@ -94,6 +94,13 @@
                     </div>
                     <div class="task-time">{{ formatTime(task.due_date) }}</div>
                   </div>
+                  <button 
+                    v-if="isTaskOverdue(task)" 
+                    class="reschedule-btn" 
+                    @click.stop="openRescheduleModal(task)"
+                  >
+                    Reschedule
+                  </button>
                 </div>
               </div>
             </div>
@@ -118,14 +125,21 @@
                 v-for="task in getTasksForDate(day.date)" 
                 :key="task.id"
                 class="task-item"
-                :class="getTaskStatusClass(task.status)"
-                @click="selectTask(task)"
+                :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                @click="onTaskClick(task, $event)"
               >
                 <div class="task-title">{{ task.task_name }}</div>
                 <div class="task-status-badge" :class="getTaskStatusClass(task.status)">
                   {{ task.status }}
                 </div>
                 <div class="task-time">{{ formatTime(task.due_date) }}</div>
+                <button 
+                  v-if="isTaskOverdue(task)" 
+                  class="reschedule-btn" 
+                  @click.stop="openRescheduleModal(task)"
+                >
+                Reschedule
+                </button>
               </div>
             </div>
           </div>
@@ -151,7 +165,7 @@
                   v-for="task in getTasksForDate(day.date)" 
                   :key="task.id"
                   class="task-box"
-                  :class="getTaskStatusClass(task.status)"
+                  :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
                   :title="`${task.task_name} - ${task.status}`"
                 >
                   <div class="task-box-name">{{ task.task_name }}</div>
@@ -165,7 +179,7 @@
       </div>
 
       <!-- Task Details Modal -->
-      <div v-if="selectedTask" class="task-modal-overlay" @click="closeTaskModal">
+      <div v-if="selectedTask" class="task-modal-overlay" @click="selectedTaskForDetails = null">
         <div class="task-modal" @click.stop>
           <div class="modal-header">
             <h3>{{ selectedTask.task_name }}</h3>
@@ -217,6 +231,32 @@
           </div>
         </div>
       </div>
+      <!-- Reschedule Modal -->
+      <div v-if="showRescheduleModal" class="modal-overlay">
+        <div class="modal-content">
+          <h3>Reschedule Task</h3>
+          <p><strong>{{ selectedTaskForReschedule?.task_name }}</strong></p>
+
+          <label for="newDueDate">New Due Date:</label>
+          <input id="newDueDate" type="datetime-local" v-model="newDueDate" class="date-picker" :min="todayString" />
+
+          <div class="modal-actions">
+            <button class="confirm-btn" @click="confirmReschedule">Save</button>
+            <button class="cancel-btn" @click="closeRescheduleModal">Cancel</button>
+          </div>
+        </div>
+      </div>
+      <!-- Success Popup -->
+      <div v-if="successMessage" class="success-popup">
+        {{ successMessage }}
+      </div>
+
+      <!-- Error Popup -->
+      <div v-if="errorMessage" class="error-popup">
+        <span>{{ errorMessage }}</span>
+        <button class="close-btn" @click="errorMessage = ''">&times;</button>
+      </div>
+
     </div>
   </div>
 </template>
@@ -232,6 +272,8 @@ const currentDate = ref(new Date())
 const selectedTask = ref(null)
 const tasks = ref([])
 const loading = ref(false)
+const selectedTaskForDetails = ref(null)
+const selectedTaskForReschedule = ref(null)
 
 // Calendar views configuration
 const views = [
@@ -388,7 +430,10 @@ const getTasksForDate = (date) => {
     }
   })
   
-  return filteredTasks
+  return filteredTasks.sort((a, b) => {
+    const timeA = new Date(a.due_date).getTime()
+    const timeB = new Date(b.due_date).getTime()
+    return timeA - timeB})
 }
 
 const getTasksForDateAndHour = (date, hour) => {
@@ -414,6 +459,22 @@ const getTaskStatusClass = (status) => {
     case 'completed': return 'status-completed'
     default: return 'status-default'
   }
+}
+
+const isTaskOverdue = (task) => {
+  if (!task.due_date) return false
+  
+  const now = new Date()
+  const due = new Date(task.due_date)
+  return due < now && task.status?.toLowerCase() !== 'completed'
+}
+
+const onTaskClick = (task, event) => {
+  // If the click came from the Reschedule button, do nothing
+  if (event.target.closest('.reschedule-btn')) return;
+
+  // Otherwise, open task details modal
+  selectTask(task)
 }
 
 const selectTask = (task) => {
@@ -527,6 +588,80 @@ const fetchTasks = async () => {
     tasks.value = []
   } finally {
     loading.value = false
+  }
+}
+
+// Modal state
+const showRescheduleModal = ref(false)
+const newDueDate = ref('')
+const todayString = ref(new Date().toISOString().split('T')[0])
+const successMessage = ref('')
+const errorMessage = ref('')
+
+const openRescheduleModal = (task) => {
+  selectedTaskForReschedule.value = task
+  newDueDate.value = task.due_date ? task.due_date.split('T')[0] : todayString.value
+  showRescheduleModal.value = true
+}
+
+const closeRescheduleModal = () => {
+  showRescheduleModal.value = false
+  selectedTaskForReschedule.value = null
+  newDueDate.value = ''
+}
+
+const showSuccess = (msg) => {
+  successMessage.value = msg
+  setTimeout(() => {
+    successMessage.value = ''
+  }, 3000) // auto-hide after 3s
+}
+
+const showError = (msg) => {
+  errorMessage.value = msg
+  setTimeout(() => {
+    errorMessage.value = ''
+  }, 5000) // auto-hide after 5s
+}
+
+
+const confirmReschedule = async () => {
+  if (!newDueDate.value) {
+    showError('Please select a new due date.')
+    return
+  }
+  if (newDueDate.value < todayString.value) {
+    showError('Cannot reschedule to a date before today.');
+    return;
+  }
+
+  try {
+    const localDate = new Date(newDueDate.value)
+      // Convert to ISO string in UTC
+    const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
+    const payload = {
+      task_id: selectedTaskForReschedule.value.id,
+      due_date: utcDateString
+    }
+
+    const res = await fetch('http://127.0.0.1:5002/tasks/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+
+    if (data.Code === 200) {
+      selectedTaskForReschedule.value.due_date = newDueDate.value
+      showSuccess('Task rescheduled successfully!')
+    } else {
+      showError(`Failed to reschedule: ${data.Message}`)
+    }
+  } catch (err) {
+    console.error(err)
+    showError('Error rescheduling task.')
+  } finally {
+    closeRescheduleModal()
   }
 }
 

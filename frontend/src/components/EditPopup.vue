@@ -797,6 +797,27 @@ export default {
           );
         }
 
+        // Collaborator changes notification
+        const originalCollaborators = this.originalTask.collaborators || [];
+        const newCollaborators = this.editedTask.collaborators || [];
+        
+        // Find newly added collaborators
+        const addedCollaborators = newCollaborators.filter(
+          collabId => !originalCollaborators.includes(collabId)
+        );
+        
+        // Send notifications to newly added collaborators
+        if (addedCollaborators.length > 0) {
+          const addPromises = addedCollaborators.map(collaboratorId =>
+            enhancedNotificationService.triggerTaskAssignmentNotification(
+              this.taskId,
+              collaboratorId,
+              currentUserName
+            )
+          );
+          promises.push(...addPromises);
+        }
+
         // Execute all notification triggers
         if (promises.length > 0) {
           await Promise.all(promises);
