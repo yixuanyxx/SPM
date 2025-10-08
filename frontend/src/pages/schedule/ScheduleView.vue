@@ -551,11 +551,11 @@ const fetchTasks = async () => {
     const data = await response.json()
     console.log('API Response:', data)
     
-    if (data && data.tasks && data.tasks.data) {
+    if (data.data) {
       const allTasks = []
       
       // Process parent tasks and their subtasks
-      data.tasks.data.forEach(parentTask => {
+      data.data.forEach(parentTask => {
         // Add parent task
         allTasks.push(parentTask)
         
