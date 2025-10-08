@@ -336,8 +336,8 @@
           </div>
         </div>
 
-        <label>Subtask IDs (comma-separated)</label>
-        <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" />
+        <!-- <label>Subtask IDs (comma-separated)</label>
+        <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" /> -->
 
         <label>Attach PDF</label>
         <input type="file" @change="handleFileUpload" accept="application/pdf" />
@@ -647,6 +647,69 @@ watch(userId, (newUserId) => {
   }
 }, { immediate: true })
 
+const isFormValid = computed(() => {
+  return newTask.value.task_name.trim() !== '' &&
+         newTask.value.description.trim() !== '' &&
+         newTask.value.due_date.trim() !== ''   
+})
+
+// Function to update project's tasks and collaborators arrays
+const updateProjectTasks = async (projectId, taskId, taskCollaborators = []) => {
+  try {
+    // Get current project details to get existing tasks and collaborators
+    const projectResponse = await fetch(`http://127.0.0.1:5001/projects/${projectId}`)
+    if (!projectResponse.ok) {
+      console.error('Failed to fetch project details')
+      return
+    }
+    
+    const projectData = await projectResponse.json()
+    const project = projectData.data || projectData
+    
+    // Get existing tasks array and add new task ID
+    const existingTasks = Array.isArray(project.tasks) ? project.tasks : []
+    const updatedTasks = existingTasks.includes(taskId) ? existingTasks : [...existingTasks, taskId]
+    
+    // Get existing collaborators and merge with task collaborators
+    const existingCollaborators = Array.isArray(project.collaborators) 
+      ? project.collaborators.map(c => parseInt(c))
+      : []
+    
+    // Merge task collaborators with project collaborators (remove duplicates)
+    const mergedCollaborators = [...new Set([...existingCollaborators, ...taskCollaborators])]
+    
+    // Prepare update payload
+    const updatePayload = {
+      project_id: projectId,
+      tasks: updatedTasks
+    }
+    
+    // Only add collaborators to payload if there are changes
+    if (mergedCollaborators.length > existingCollaborators.length) {
+      updatePayload.collaborators = mergedCollaborators
+    }
+    
+    // Update project with new tasks and collaborators
+    const updateResponse = await fetch('http://127.0.0.1:5001/projects/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updatePayload)
+    })
+    
+    if (updateResponse.ok) {
+      console.log(`Task ${taskId} added to project ${projectId}`)
+      if (updatePayload.collaborators) {
+        console.log(`Collaborators synced with project ${projectId}`)
+      }
+    } else {
+      console.error('Failed to update project')
+    }
+  } catch (error) {
+    console.error('Error in updateProjectTasks:', error)
+    throw error
+  }
+}
+
 // send POST to backend
 const submitNewTask = async () => {
   if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
@@ -730,8 +793,17 @@ const submitNewTask = async () => {
       const createdTask = data.data
       tasks.value.push(createdTask)
       
-      // Trigger notifications for collaborators
-      await triggerCollaboratorNotifications(createdTask.id, selectedCollaborators.value)
+      // If task is attached to a project, update the project's tasks and collaborators arrays
+      if (newTask.value.project_id) {
+        try {
+          // Get collaborator IDs from selected collaborators
+          const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
+          await updateProjectTasks(newTask.value.project_id, createdTask.id, collaboratorIds)
+        } catch (error) {
+          console.error('Error updating project tasks:', error)
+          // Don't break the flow - task was created successfully
+        }
+      }
       
       // reset form
       newTask.value = {
