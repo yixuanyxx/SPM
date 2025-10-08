@@ -133,6 +133,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import SideNavbar from '../../components/SideNavbar.vue'
+import { enhancedNotificationService } from '../../services/notifications.js'
 import '../projectview/projectview.css'
 import { useRouter } from 'vue-router'
 
@@ -232,8 +233,18 @@ const submitNewProject = async () => {
 
     if (response.ok && data.status === 201) {
       // Add the new project to the list
-      if (data.data) {
-        projects.value.push(data.data)
+      const createdProject = data.data
+      if (createdProject) {
+        projects.value.push(createdProject)
+      }
+      
+      // Trigger notifications for collaborators
+      if (payload.collaborators && payload.collaborators.length > 0) {
+        await triggerProjectCollaboratorNotifications(
+          createdProject.id,
+          payload.collaborators,
+          createdProject.proj_name
+        )
       }
       
       // Reset form
@@ -255,6 +266,33 @@ const submitNewProject = async () => {
   } catch (err) {
     console.error('Error creating project:', err)
     alert('Error creating project. Please try again.')
+  }
+}
+
+// Trigger notifications for collaborators when a project is created
+const triggerProjectCollaboratorNotifications = async (projectId, collaboratorIds, projectName) => {
+  if (!collaboratorIds || collaboratorIds.length === 0) {
+    console.log('No collaborators to notify for project')
+    return
+  }
+  
+  try {
+    const currentUserName = localStorage.getItem('spm_username') || 'System'
+    console.log(`Sending project notifications to ${collaboratorIds.length} collaborators for project ${projectId}`)
+    
+    const result = await enhancedNotificationService.triggerProjectCollaboratorAdditionNotification(
+      projectId,
+      collaboratorIds,
+      projectName,
+      currentUserName
+    )
+    
+    console.log(`✅ Project notifications sent successfully to ${collaboratorIds.length} collaborators`)
+    console.log('Notification result:', result)
+    
+  } catch (error) {
+    console.error('❌ Failed to send project collaborator notifications:', error)
+    // Don't throw error to avoid breaking the main project creation flow
   }
 }
 

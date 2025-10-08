@@ -689,13 +689,6 @@ const submitNewTask = async () => {
         subtasks: ''
       }
       selectedCollaborators.value = []
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-      selectedCollaborators.value = []
-=======
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
       newTaskFile.value = null
       // Clear the file input element
       const fileInput = document.querySelector('input[type="file"]')
@@ -719,42 +712,39 @@ const submitNewTask = async () => {
   }
 }
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
-=======
-=======
->>>>>>> Stashed changes
+}
+
 // Trigger notifications for collaborators when a task is created
 const triggerCollaboratorNotifications = async (taskId, collaborators) => {
   if (!collaborators || collaborators.length === 0) {
+    console.log('No collaborators to notify')
     return
   }
   
   try {
     const currentUserName = localStorage.getItem('spm_username') || 'System'
+    console.log(`Sending notifications to ${collaborators.length} collaborators for task ${taskId}`)
     
     // Send notifications to all collaborators
-    const notificationPromises = collaborators.map(collaborator => 
-      enhancedNotificationService.triggerTaskAssignmentNotification(
+    const notificationPromises = collaborators.map(collaborator => {
+      console.log(`Triggering notification for collaborator: ${collaborator.userid} (${collaborator.email})`)
+      return enhancedNotificationService.triggerTaskAssignmentNotification(
         taskId,
         collaborator.userid,
         currentUserName
       )
-    )
+    })
     
-    await Promise.all(notificationPromises)
-    console.log(`Notifications sent to ${collaborators.length} collaborators for task ${taskId}`)
+    const results = await Promise.all(notificationPromises)
+    console.log(`✅ Notifications sent successfully to ${collaborators.length} collaborators`)
+    console.log('Notification results:', results)
     
   } catch (error) {
-    console.error('Failed to send collaborator notifications:', error)
+    console.error('❌ Failed to send collaborator notifications:', error)
     // Don't throw error to avoid breaking the main task creation flow
   }
-<<<<<<< Updated upstream
->>>>>>> Stashed changes
-=======
->>>>>>> Stashed changes
 }
 
 const filteredTasks = computed(() => {

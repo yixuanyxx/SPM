@@ -359,5 +359,30 @@ export const enhancedNotificationService = {
       console.error('Failed to trigger task update notification:', error);
       throw error;
     }
+  },
+
+  // Trigger project collaborator addition notification
+  async triggerProjectCollaboratorAdditionNotification(projectId, collaboratorIds, projectName, adderName = 'System') {
+    try {
+      const response = await fetch('http://127.0.0.1:5006/notifications/triggers/project-collaborator-addition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project_id: projectId,
+          collaborator_ids: collaboratorIds,
+          project_name: projectName,
+          adder_name: adderName
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to trigger project collaborator addition notification:', error);
+      throw error;
+    }
   }
 };

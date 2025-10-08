@@ -1,6 +1,8 @@
 from typing import Dict, Any, Optional, List
 import requests
 import os
+import ssl
+import certifi
 import sendgrid
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail, Email, To, Content
@@ -10,6 +12,10 @@ from repo.supa_notification_repo import SupabaseNotificationRepo
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Fix SSL certificate verification issues on macOS
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class NotificationService:
     def __init__(self, repo: Optional[SupabaseNotificationRepo] = None):

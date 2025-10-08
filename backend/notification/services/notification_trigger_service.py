@@ -29,9 +29,17 @@ class NotificationTriggerService:
     
     def send_notification_based_on_preferences(self, user_id: int, notification_content: str, 
                                              notification_type: str = "general", 
-                                             related_task_id: Optional[int] = None) -> Dict[str, Any]:
+                                             related_task_id: Optional[int] = None,
+                                             plain_text_content: str = None) -> Dict[str, Any]:
         """
         Send notification based on user's preferences (in-app, email, or both).
+        
+        Args:
+            user_id: ID of the user to notify
+            notification_content: HTML content for email notification
+            notification_type: Type of notification
+            related_task_id: ID of related task if applicable
+            plain_text_content: Plain text content for in-app notification (if None, will strip HTML from notification_content)
         """
         # Get user details and preferences
         user_details = self.get_user_details(user_id)
@@ -46,9 +54,11 @@ class NotificationTriggerService:
         
         # Send in-app notification if enabled
         if preferences.get("in_app", True):
+            # Use plain text content for in-app notification
+            in_app_text = plain_text_content if plain_text_content else self._strip_html(notification_content)
             in_app_result = self.notification_service.create_notification({
                 "userid": user_id,
-                "notification": notification_content,
+                "notification": in_app_text,
                 "notification_type": notification_type,
                 "related_task_id": related_task_id
             })
@@ -67,6 +77,19 @@ class NotificationTriggerService:
         
         return {"status": 200, "message": "Notifications sent based on user preferences", "results": results}
     
+    def _strip_html(self, html_content: str) -> str:
+        """
+        Strip HTML tags and convert to plain text for in-app notifications.
+        """
+        import re
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', html_content)
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        # Decode HTML entities
+        text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>')
+        return text.strip()
+    
     def _create_email_content(self, notification_type: str, notification_content: str, user_name: str) -> tuple:
         """
         Create proper email subject and HTML content based on notification type.
@@ -76,6 +99,7 @@ class NotificationTriggerService:
             "task_assigned": "New Task Assignment - SPM",
             "task_ownership_transferred": "Task Ownership Transfer - SPM",
             "task_updated": "Task Update Notification - SPM",
+            "project_collaborator_added": "Project Collaborator Addition - SPM",
             "general": "SPM Notification",
             "system": "SPM System Notification"
         }
@@ -160,17 +184,6 @@ class NotificationTriggerService:
                     <div class="notification-box">
                         {notification_content}
                     </div>
-                    
-                    <p>Please log in to your SPM account to view more details and take any necessary actions.</p>
-                    
-                    <p style="text-align: center;">
-                        <a href="#" class="button">View in SPM</a>
-                    </p>
-                </div>
-                
-                <div class="footer">
-                    <p>This is an automated notification from SPM (Scrum Project Management)</p>
-                    <p>If you have any questions, please contact your project administrator.</p>
                 </div>
             </div>
         </body>
@@ -218,12 +231,20 @@ class NotificationTriggerService:
         # Get task details from Supabase for better notification content
         task_details = self._get_task_details_from_supabase(task_id)
         
+        # Get task owner name for "Assigned by" field
+        owner_name = assigner_name
+        if task_details and task_details.get("owner_id"):
+            owner_details = self.get_user_details(task_details.get("owner_id"))
+            if owner_details:
+                owner_name = owner_details.get("name", assigner_name)
+        
         if task_details:
             task_name = task_details.get("task_name", f"Task {task_id}")
             description = task_details.get("description", "No description available")
             due_date = task_details.get("due_date", "No due date set")
             status = task_details.get("status", "Unknown")
             
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Assignment Notification</strong></p>
             <p>You have been assigned as a collaborator to:</p>
@@ -233,23 +254,31 @@ class NotificationTriggerService:
                 <li><strong>Description:</strong> {description}</li>
                 <li><strong>Status:</strong> {status}</li>
                 <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Assigned by:</strong> {assigner_name}</li>
+                <li><strong>Assigned by:</strong> {owner_name}</li>
                 <li><strong>Role:</strong> Collaborator</li>
             </ul>
             <p>You can now view and collaborate on this task in your SPM dashboard.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You have been assigned a new task '{task_name}' by {owner_name}. Due date: {due_date}"
         else:
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Assignment Notification</strong></p>
-            <p>You have been assigned to task (ID: {task_id}) as a collaborator by {assigner_name}.</p>
+            <p>You have been assigned to task (ID: {task_id}) as a collaborator by {owner_name}.</p>
             <p>You can now view and collaborate on this task in your SPM dashboard.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You have been assigned to task (ID: {task_id}) by {owner_name}"
         
         return self.send_notification_based_on_preferences(
             assigned_user_id, 
             notification_content, 
             "task_assigned", 
-            None  # Set to None to avoid foreign key constraint
+            None,  # Set to None to avoid foreign key constraint
+            plain_text
         )
     
     def notify_task_ownership_transfer(self, task_id: int, new_owner_id: int, previous_owner_name: str = "System") -> Dict[str, Any]:
@@ -265,6 +294,7 @@ class NotificationTriggerService:
             due_date = task_details.get("due_date", "No due date set")
             status = task_details.get("status", "Unknown")
             
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Ownership Transfer Notification</strong></p>
             <p>You have been assigned as the new owner of:</p>
@@ -279,18 +309,26 @@ class NotificationTriggerService:
             </ul>
             <p>As the new owner, you are responsible for managing this task and can edit its details.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You are now the owner of task '{task_name}'. Previous owner: {previous_owner_name}"
         else:
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Ownership Transfer Notification</strong></p>
             <p>You have been assigned as the new owner of task (ID: {task_id}) by {previous_owner_name}.</p>
             <p>As the new owner, you are responsible for managing this task and can edit its details.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You are now the owner of task (ID: {task_id}). Previous owner: {previous_owner_name}"
         
         return self.send_notification_based_on_preferences(
             new_owner_id, 
             notification_content, 
             "task_ownership_transferred", 
-            None  # Set to None to avoid foreign key constraint
+            None,  # Set to None to avoid foreign key constraint
+            plain_text
         )
     
     def notify_subtask_assignment(self, subtask_id: int, assigned_user_id: int, parent_task_id: int, assigner_name: str = "System") -> Dict[str, Any]:
@@ -301,6 +339,13 @@ class NotificationTriggerService:
         subtask_details = self._get_task_details_from_supabase(subtask_id)
         parent_task_details = self._get_task_details_from_supabase(parent_task_id)
         
+        # Get subtask owner name for "Assigned by" field
+        owner_name = assigner_name
+        if subtask_details and subtask_details.get("owner_id"):
+            owner_details = self.get_user_details(subtask_details.get("owner_id"))
+            if owner_details:
+                owner_name = owner_details.get("name", assigner_name)
+        
         if subtask_details and parent_task_details:
             subtask_name = subtask_details.get("task_name", f"Subtask {subtask_id}")
             parent_task_name = parent_task_details.get("task_name", f"Task {parent_task_id}")
@@ -308,6 +353,7 @@ class NotificationTriggerService:
             due_date = subtask_details.get("due_date", "No due date set")
             status = subtask_details.get("status", "Unknown")
             
+            # HTML content for email
             notification_content = f"""
             <p><strong>Subtask Assignment Notification</strong></p>
             <p>You have been assigned as a collaborator to a subtask:</p>
@@ -319,23 +365,31 @@ class NotificationTriggerService:
                 <li><strong>Description:</strong> {description}</li>
                 <li><strong>Status:</strong> {status}</li>
                 <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Assigned by:</strong> {assigner_name}</li>
+                <li><strong>Assigned by:</strong> {owner_name}</li>
                 <li><strong>Role:</strong> Collaborator</li>
             </ul>
             <p>You can now view and collaborate on this subtask in your SPM dashboard.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You have been assigned a new subtask '{subtask_name}' under task '{parent_task_name}' by {owner_name}"
         else:
+            # HTML content for email
             notification_content = f"""
             <p><strong>Subtask Assignment Notification</strong></p>
-            <p>You have been assigned to subtask (ID: {subtask_id}) under task {parent_task_id} as a collaborator by {assigner_name}.</p>
+            <p>You have been assigned to subtask (ID: {subtask_id}) under task {parent_task_id} as a collaborator by {owner_name}.</p>
             <p>You can now view and collaborate on this subtask in your SPM dashboard.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You have been assigned to subtask (ID: {subtask_id}) under task {parent_task_id} by {owner_name}"
         
         return self.send_notification_based_on_preferences(
             assigned_user_id, 
             notification_content, 
             "task_assigned", 
-            None  # Set to None to avoid foreign key constraint
+            None,  # Set to None to avoid foreign key constraint
+            plain_text
         )
     
     def notify_task_status_change(self, task_id: int, user_ids: List[int], old_status: str, new_status: str, updater_name: str = "System") -> List[Dict[str, Any]]:
@@ -348,6 +402,7 @@ class NotificationTriggerService:
         description = task_details.get("description", "No description available") if task_details else "No description available"
         due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
         
+        # HTML content for email
         notification_content = f"""
         <p><strong>Task Status Update</strong></p>
         <p>The status of your assigned task has been updated:</p>
@@ -363,13 +418,17 @@ class NotificationTriggerService:
         <p>Please review the task and take any necessary actions based on the status change.</p>
         """
         
+        # Plain text content for in-app notification
+        plain_text = f"Task '{task_name}' status changed from {old_status} to {new_status} by {updater_name}"
+        
         results = []
         for user_id in user_ids:
             result = self.send_notification_based_on_preferences(
                 user_id, 
                 notification_content, 
                 "task_updated", 
-                None  # Set to None to avoid foreign key constraint
+                None,  # Set to None to avoid foreign key constraint
+                plain_text
             )
             results.append({"user_id": user_id, "result": result})
         
@@ -385,6 +444,7 @@ class NotificationTriggerService:
         description = task_details.get("description", "No description available") if task_details else "No description available"
         status = task_details.get("status", "Unknown") if task_details else "Unknown"
         
+        # HTML content for email
         notification_content = f"""
         <p><strong>Task Due Date Update</strong></p>
         <p>The due date of your assigned task has been updated:</p>
@@ -400,13 +460,17 @@ class NotificationTriggerService:
         <p>Please adjust your schedule accordingly to meet the new deadline.</p>
         """
         
+        # Plain text content for in-app notification
+        plain_text = f"Task '{task_name}' due date changed from {old_due_date} to {new_due_date} by {updater_name}"
+        
         results = []
         for user_id in user_ids:
             result = self.send_notification_based_on_preferences(
                 user_id, 
                 notification_content, 
                 "task_updated", 
-                None  # Set to None to avoid foreign key constraint
+                None,  # Set to None to avoid foreign key constraint
+                plain_text
             )
             results.append({"user_id": user_id, "result": result})
         
@@ -424,6 +488,7 @@ class NotificationTriggerService:
         status = task_details.get("status", "Unknown") if task_details else "Unknown"
         
         if old_description and new_description:
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Description Update</strong></p>
             <p>The description of your assigned task has been updated:</p>
@@ -438,7 +503,11 @@ class NotificationTriggerService:
             </ul>
             <p>Please review the updated task description for any changes that may affect your work.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"Task '{task_name}' description was updated by {updater_name}"
         else:
+            # HTML content for email
             notification_content = f"""
             <p><strong>Task Description Update</strong></p>
             <p>The description of your assigned task has been updated:</p>
@@ -452,6 +521,9 @@ class NotificationTriggerService:
             </ul>
             <p>Please review the updated task description for any changes that may affect your work.</p>
             """
+            
+            # Plain text content for in-app notification
+            plain_text = f"Task '{task_name}' description was updated by {updater_name}"
         
         results = []
         for user_id in user_ids:
@@ -459,7 +531,8 @@ class NotificationTriggerService:
                 user_id, 
                 notification_content, 
                 "task_updated", 
-                None  # Set to None to avoid foreign key constraint
+                None,  # Set to None to avoid foreign key constraint
+                plain_text
             )
             results.append({"user_id": user_id, "result": result})
         
@@ -484,6 +557,40 @@ class NotificationTriggerService:
                 result = self.notify_task_assignment(task_id, user_id, assigner_name)
             
             results.append({"task_id": task_id, "user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_project_collaborator_addition(self, project_id: int, collaborator_ids: List[int], project_name: str, adder_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send notifications when collaborators are added to a project.
+        """
+        results = []
+        
+        for collaborator_id in collaborator_ids:
+            # HTML content for email
+            notification_content = f"""
+            <p><strong>Project Collaborator Addition</strong></p>
+            <p>You have been added as a collaborator to the project:</p>
+            <ul>
+                <li><strong>Project:</strong> {project_name}</li>
+                <li><strong>Project ID:</strong> {project_id}</li>
+                <li><strong>Added By:</strong> {adder_name}</li>
+                <li><strong>Your Role:</strong> Collaborator</li>
+            </ul>
+            <p>You can now view and contribute to this project.</p>
+            """
+            
+            # Plain text content for in-app notification
+            plain_text = f"You have been added as a collaborator to project '{project_name}' by {adder_name}"
+            
+            result = self.send_notification_based_on_preferences(
+                collaborator_id,
+                notification_content,
+                "project_collaborator_added",
+                None,
+                plain_text
+            )
+            results.append({"user_id": collaborator_id, "result": result})
         
         return results
 

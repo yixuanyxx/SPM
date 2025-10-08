@@ -1,14 +1,19 @@
 import os
 from typing import Optional, Dict, Any, List
 from supabase import create_client, Client
+from dotenv import load_dotenv
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
-SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+
 
 TABLE = "dept"
 
 class SupabaseDeptRepo:
     def __init__(self):
+        load_dotenv()
+
+        SUPABASE_URL = os.environ["SUPABASE_URL"]
+        SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
+        
         self.client: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
     def insert_dept(self, data: Dict[str, Any]) -> Dict[str, Any]:
