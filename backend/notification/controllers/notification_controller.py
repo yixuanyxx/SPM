@@ -274,6 +274,41 @@ def trigger_task_assignment_notification():
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
 
+@notification_bp.route("/notifications/triggers/task-ownership-transfer", methods=["POST"])
+def trigger_task_ownership_transfer_notification():
+    """
+    Trigger notification for task ownership transfer.
+    
+    Required fields in JSON body:
+    - task_id: ID of the task
+    - new_owner_id: ID of the new owner
+    - previous_owner_name: Name of the previous owner (optional, defaults to "System")
+    
+    Returns:
+    {
+        "message": "Notifications sent based on user preferences",
+        "results": [ ... notification results ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        task_id = data.get("task_id")
+        new_owner_id = data.get("new_owner_id")
+        previous_owner_name = data.get("previous_owner_name", "System")
+        
+        if not task_id or not new_owner_id:
+            return jsonify({"error": "task_id and new_owner_id are required", "status": 400}), 400
+        
+        result = trigger_service.notify_task_ownership_transfer(task_id, new_owner_id, previous_owner_name)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
 @notification_bp.route("/notifications/triggers/task-status-change", methods=["POST"])
 def trigger_task_status_change_notification():
     """

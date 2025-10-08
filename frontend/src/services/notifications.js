@@ -292,6 +292,30 @@ export const enhancedNotificationService = {
     }
   },
 
+  // Trigger task ownership transfer notification
+  async triggerTaskOwnershipTransferNotification(taskId, newOwnerId, previousOwnerName = 'System') {
+    try {
+      const response = await fetch('http://127.0.0.1:5006/notifications/triggers/task-ownership-transfer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task_id: taskId,
+          new_owner_id: newOwnerId,
+          previous_owner_name: previousOwnerName
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to trigger task ownership transfer notification:', error);
+      throw error;
+    }
+  },
+
   // Trigger task update notification
   async triggerTaskUpdateNotification(taskId, userIds, updateType, oldValue, newValue, updaterName = 'System') {
     try {

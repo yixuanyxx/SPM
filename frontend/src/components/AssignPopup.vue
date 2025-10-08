@@ -223,10 +223,17 @@ export default {
         
         await this.updateTask(updateData)
         
-        // Trigger assignment notification
-        await this.triggerAssignmentNotification(assigneeData)
+        // Trigger ownership transfer notification
+        await this.triggerOwnershipTransferNotification(assigneeData)
         
         this.successMessage = `${assigneeData.name} has been assigned as the new owner of the ${this.isSubtask ? 'subtask' : 'task'}`
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
+        this.successMessage = `${assigneeData.name} has been assigned as the new owner of the ${this.isSubtask ? 'subtask' : 'task'}`
+=======
+>>>>>>> Stashed changes
+=======
+>>>>>>> Stashed changes
         
         // Auto-close after 2 seconds
         setTimeout(() => {
@@ -270,6 +277,8 @@ export default {
     prepareUpdateData(assigneeData) {
       const updateData = {}
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
       // Set the assignee as the new owner
       updateData.owner_id = assigneeData.userid
       
@@ -279,6 +288,24 @@ export default {
         // This will be handled by getting current task data first
         updateData.needsCollaboratorUpdate = true
         updateData.newCollaboratorId = assigneeData.userid
+=======
+      // Transfer ownership (not adding as collaborator)
+      updateData.owner = assigneeData.id
+      updateData.ownerName = assigneeData.name
+      
+      // If it's a subtask, also transfer parent task ownership
+      if (this.isSubtask && this.parentTaskId) {
+        updateData.parentTaskOwner = assigneeData.id
+>>>>>>> Stashed changes
+=======
+      // Transfer ownership (not adding as collaborator)
+      updateData.owner = assigneeData.id
+      updateData.ownerName = assigneeData.name
+      
+      // If it's a subtask, also transfer parent task ownership
+      if (this.isSubtask && this.parentTaskId) {
+        updateData.parentTaskOwner = assigneeData.id
+>>>>>>> Stashed changes
       }
 
       // Determine status based on assignment rules
@@ -381,21 +408,21 @@ export default {
       this.errorMessage = ''
     },
 
-    async triggerAssignmentNotification(assigneeData) {
+    async triggerOwnershipTransferNotification(assigneeData) {
       try {
         // Get current user info
         const currentUserName = localStorage.getItem('spm_username') || 'System';
         
-        // Trigger assignment notification
-        await enhancedNotificationService.triggerTaskAssignmentNotification(
+        // Trigger ownership transfer notification
+        await enhancedNotificationService.triggerTaskOwnershipTransferNotification(
           this.taskId,
           assigneeData.userid,
           currentUserName
         );
         
-        console.log('Task assignment notification sent successfully');
+        console.log('Task ownership transfer notification sent successfully');
       } catch (error) {
-        console.error('Failed to send task assignment notification:', error);
+        console.error('Failed to send task ownership transfer notification:', error);
         // Don't throw error to avoid breaking the main assignment flow
       }
     }
