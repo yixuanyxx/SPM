@@ -487,7 +487,7 @@ onMounted(() => {
       })
       .then(data => {
         // API returns { "tasks": [ {...}, {...} ] }
-        tasks.value = data.tasks.data
+        tasks.value = data.data
         console.log('Fetched tasks:', tasks.value)
         
         // Fetch user details for all users mentioned in tasks

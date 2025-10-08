@@ -297,6 +297,7 @@ export default {
         due_date: "",
         priority: "5",
         owner_id: null,
+        project_id: null,
         collaborators: [],
         attachments: [],
       },
@@ -393,6 +394,7 @@ export default {
           due_date: dueDate,
           priority: task.priority || "5",
           owner_id: task.owner_id || this.currentOwner,
+          project_id: task.project_id || null,
           collaborators: Array.isArray(task.collaborators) 
             ? task.collaborators.map(c => parseInt(c))
             : [],
@@ -565,6 +567,11 @@ export default {
           await this.syncParentTaskCollaborators(collaboratorIds);
         }
         
+        // If this task is attached to a project, sync collaborators with project
+        if (this.editedTask.project_id) {
+          await this.syncProjectCollaborators(collaboratorIds);
+        }
+        
         // Trigger notifications for task updates
         await this.triggerTaskUpdateNotifications();
         
@@ -639,6 +646,46 @@ export default {
         }
       } catch (error) {
         console.error('Error syncing parent task collaborators:', error);
+        // Don't throw error to avoid breaking the main update flow
+      }
+    },
+
+    async syncProjectCollaborators(taskCollaboratorIds) {
+      try {
+        // Only sync if task is attached to a project
+        if (!this.editedTask.project_id) return;
+
+        // Get current project details
+        const projectResponse = await fetch(`http://127.0.0.1:5001/projects/${this.editedTask.project_id}`);
+        if (!projectResponse.ok) return;
+        
+        const projectData = await projectResponse.json();
+        const project = projectData.data || projectData;
+        
+        // Merge project collaborators with task collaborators
+        const projectCollaborators = Array.isArray(project.collaborators) 
+          ? project.collaborators.map(c => parseInt(c))
+          : [];
+        
+        const mergedCollaborators = [...new Set([...projectCollaborators, ...taskCollaboratorIds])];
+        
+        // Update project if there are new collaborators
+        if (mergedCollaborators.length > projectCollaborators.length) {
+          const updateData = {
+            project_id: this.editedTask.project_id,
+            collaborators: mergedCollaborators
+          };
+
+          await fetch("http://127.0.0.1:5001/projects/update", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateData),
+          });
+          
+          console.log('Project collaborators synced successfully');
+        }
+      } catch (error) {
+        console.error('Error syncing project collaborators:', error);
         // Don't throw error to avoid breaking the main update flow
       }
     },
