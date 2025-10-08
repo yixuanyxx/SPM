@@ -1,0 +1,19 @@
+# Test requirements for the tasks module
+# These are additional dependencies needed for testing
+
+# Testing framework
+unittest-xml-reporting>=3.2.0  # For XML test reports
+
+# Mocking and test utilities
+# unittest.mock is built into Python 3.3+, but we list it for clarity
+# No additional mocking libraries needed since we use unittest.mock
+
+# Coverage reporting (optional)
+coverage>=7.0.0
+
+# Test data generation (optional)
+faker>=18.0.0
+
+# Note: The main dependencies (Flask, supabase-py, etc.) should be installed
+# from the main requirements.txt file in the tasks directory
+

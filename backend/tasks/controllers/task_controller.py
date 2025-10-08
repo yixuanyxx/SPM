@@ -305,10 +305,10 @@ def get_task_by_id(task_id: int):
 @task_bp.route("/tasks/user-task/<int:user_id>", methods=["GET"])
 def get_tasks_by_user(user_id: int):
     try:
-        tasks = service.get_by_user(user_id)
-        if not tasks:
-            return jsonify({"Message": f"No tasks found for user ID {user_id}", "Code": 404}), 404
-        return jsonify({"tasks": tasks, "Code": 200}), 200
+        result = service.get_by_user(user_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
