@@ -116,6 +116,96 @@
               </div>
             </div>
           </div>
+
+          <!-- Create Task Section -->
+          <div class="create-task-section">
+            <button class="create-task-btn" @click="showCreateModal = true">
+              <i class="bi bi-plus-lg"></i>
+              Add Task
+            </button>
+          </div>
+
+          <!-- Create Task Modal -->
+          <div v-if="showCreateModal" class="modal-overlay">
+            <div class="modal-content">
+              <h2>Create New Task for {{ project.proj_name }}</h2>
+
+              <label>Task Name* </label>
+              <input v-model="newTask.task_name" placeholder="Enter task name" required/>
+
+              <label>Description* </label>
+              <textarea v-model="newTask.description" placeholder="Enter description" required></textarea>
+
+              <label>Due Date* </label>
+              <input type="datetime-local" v-model="newTask.due_date" required/>
+
+              <div class="form-group mt-4">
+                <label for="priority">Priority Level: {{ newTask.priority }}</label>
+                <div class="priority-slider-container">
+                  <input
+                    id="priority"
+                    type="range"
+                    min="1"
+                    max="10"
+                    v-model="newTask.priority"
+                    class="priority-slider"
+                  />
+                </div>
+              </div>
+
+              <label>Status</label>
+              <select v-model="newTask.status">
+                <option value="Ongoing">Ongoing</option>
+                <option value="Under Review">Under Review</option>
+                <option value="Completed">Completed</option>
+              </select>
+
+              <label>Collaborators (emails)</label>
+              <div class="autocomplete">
+                <input 
+                  type="text"
+                  v-model="collaboratorQuery"
+                  placeholder="Type email..."
+                />
+
+                <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+                  <li 
+                    v-for="user in collaboratorSuggestions" 
+                    :key="user.id"
+                    @click="addCollaborator(user)"
+                  >
+                    {{ user.email }}
+                  </li>
+                </ul>
+
+                <div class="selected-collaborators">
+                  <span 
+                    v-for="user in selectedCollaborators" 
+                    :key="user.id" 
+                    class="selected-email"
+                  >
+                    {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+                  </span>
+                </div>
+              </div>
+
+              <label>Attach PDF</label>
+              <input type="file" @change="handleFileUpload" accept="application/pdf" />
+
+              <div class="modal-actions">
+                <button @click="submitNewTask">Create</button>
+                <button @click="showCreateModal = false">Cancel</button>
+              </div>
+
+              <!-- Error Popup -->
+              <div v-if="showErrorPopup" class="error-popup">
+                <p>{{ errorMessage }}</p>
+                <button @click="showErrorPopup = false" class="btn-close">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -123,8 +213,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { getCurrentUserData } from '../../services/session.js'
 import SideNavbar from '../../components/SideNavbar.vue'
 import '../projectdetails/projectdetails.css'
 
@@ -134,6 +225,28 @@ const router = useRouter()
 const project = ref(null)
 const loading = ref(true)
 const error = ref(null)
+const showCreateModal = ref(false)
+const collaboratorQuery = ref('')
+const selectedCollaborators = ref([])
+const collaboratorSuggestions = ref([])
+const newTaskFile = ref(null)
+const showErrorPopup = ref(false)
+const errorMessage = ref('')
+const userId = ref(getCurrentUserData().userid)
+const userRole = ref(getCurrentUserData().role?.toLowerCase())
+
+// Add the new task form data
+const newTask = ref({
+  owner_id: userId.value,
+  task_name: '',
+  description: '',
+  type: 'parent',
+  due_date: '',
+  priority: '5',
+  status: 'Ongoing',
+  project_id: '', // Will be set automatically
+  collaborators: [],
+})
 
 onMounted(async () => {
   await fetchProjectDetails()
@@ -204,5 +317,120 @@ const calculateProgress = (tasks) => {
 const getCompletedTasksCount = (tasks) => {
   if (!tasks) return 0
   return tasks.filter(task => task.status === 'Completed').length
+}
+
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (file && file.type === "application/pdf") {
+    newTaskFile.value = file
+    errorMessage.value = ''
+  } else {
+    errorMessage.value = "Only PDF files are allowed"
+    showErrorPopup.value = true
+    event.target.value = null
+    newTaskFile.value = null
+  }
+}
+
+const addCollaborator = (user) => {
+  if (!selectedCollaborators.value.find(u => u.id === user.id)) {
+    selectedCollaborators.value.push(user)
+  }
+  collaboratorQuery.value = ''
+  collaboratorSuggestions.value = []
+}
+
+const removeCollaborator = (user) => {
+  selectedCollaborators.value = selectedCollaborators.value.filter(u => u.id !== user.id)
+}
+
+// Watch for collaborator query changes
+watch(collaboratorQuery, async (query) => {
+  if (!query) {
+    collaboratorSuggestions.value = []
+    return
+  }
+
+  try {
+    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`)
+    if (!res.ok) throw new Error('Failed to fetch user emails')
+    const data = await res.json()
+    collaboratorSuggestions.value = data.data || []
+  } catch (err) {
+    console.error(err)
+    collaboratorSuggestions.value = []
+  }
+})
+
+const submitNewTask = async () => {
+  if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
+    errorMessage.value = 'Please fill out all required fields'
+    showErrorPopup.value = true
+    return
+  }
+
+  try {
+    const endpoint = (userRole.value === 'manager' || userRole.value === 'director')
+      ? 'http://localhost:5002/tasks/manager-task/create'
+      : 'http://localhost:5002/tasks/staff-task/create'
+
+    const formData = new FormData()
+    
+    // Add task data
+    Object.keys(newTask.value).forEach(key => {
+      if (key === 'project_id') {
+        formData.append(key, project.value.id) // Use current project ID
+      } else {
+        formData.append(key, newTask.value[key])
+      }
+    })
+
+    // Add collaborators
+    const collaboratorIds = selectedCollaborators.value.map(user => user.userid)
+    if (userRole.value === 'staff' && !collaboratorIds.includes(userId.value)) {
+      collaboratorIds.push(userId.value)
+    }
+    if (collaboratorIds.length > 0) {
+      formData.append('collaborators', collaboratorIds.join(','))
+    }
+
+    // Add file if present
+    if (newTaskFile.value) {
+      formData.append('attachment', newTaskFile.value)
+    }
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      body: formData
+    })
+
+    const data = await response.json()
+
+    if (response.ok && data.Code === 201) {
+      // Refresh project details to show new task
+      await fetchProjectDetails()
+      showCreateModal.value = false
+      
+      // Reset form
+      newTask.value = {
+        owner_id: userId.value,
+        task_name: '',
+        description: '',
+        type: 'parent',
+        due_date: '',
+        priority: '5',
+        status: 'Ongoing',
+        project_id: '',
+        collaborators: [],
+      }
+      selectedCollaborators.value = []
+      newTaskFile.value = null
+    } else {
+      throw new Error(data.Message || 'Failed to create task')
+    }
+  } catch (error) {
+    errorMessage.value = error.message
+    showErrorPopup.value = true
+  }
 }
 </script>

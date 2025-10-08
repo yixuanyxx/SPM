@@ -17,116 +17,157 @@
           </button>
         </div>
 
-        <!-- Main Content -->
-        <div class="main-content">
-          <!-- if no projects found -->
-          <div v-if="projects.length === 0" class="empty-state">
-            <div class="empty-icon">
-              <i class="bi bi-folder"></i>
+        <div class="content-wrapper">
+
+          <!-- Main Content -->
+          <div class="main-content">
+            <!-- if no projects found -->
+            <div v-if="projects.length === 0" class="empty-state">
+              <div class="empty-icon">
+                <i class="bi bi-folder"></i>
+              </div>
+              <div class="empty-title">No projects found</div>
+              <p class="empty-subtitle">Create your first project to get started!</p>
             </div>
-            <div class="empty-title">No projects found</div>
-            <p class="empty-subtitle">Create your first project to get started!</p>
+
+            <div v-else class="projects-grid">
+              <!-- Dynamic Project Cards -->
+              <div v-for="project in projects" 
+                   :key="project.id" 
+                   class="project-card"
+                   :class="{ 'drag-over': isDraggingOver === project.id }"
+                   @click="handleCardClick(project)"
+                   @dragover.prevent="handleDragOver($event, project)"
+                   @dragleave="handleDragLeave(project)"
+                   @drop="handleDrop($event, project)">
+                <div class="project-header">
+                  <h3 class="project-title">{{ project.proj_name }}</h3>
+                  <span class="project-id">Project ID: {{ project.id }}</span>
+
+                </div>
+    
+                <div class="project-meta">
+                  <div class="meta-item">
+                    <div class="meta-icon">
+                      <i class="bi bi-person"></i>
+                    </div>
+                    <span>Project Owner: <span class="owner-name">{{project.owner_id || 'Unknown'}}</span></span>
+                  </div>
+                  <div class="meta-item">
+                    <div class="meta-icon">
+                      <i class="bi bi-people"></i>
+                    </div>
+                    <span>Collaborators:</span>
+                    <div class="collaborators">
+                      <div v-for="(collab, index) in filterCollaborators(project)" 
+                          :key="index" 
+                          class="avatar">
+                        {{ getInitials(collab.name || collab.toString()) }}
+                      </div>
+                      <div v-if="filterCollaborators(project).length > 3" 
+                          class="avatar more-collaborators">
+                        +{{ filterCollaborators(project).length - 3 }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+    
+                <div class="progress-section">
+                  <div class="progress-bar">
+                    <div class="progress-fill" 
+                        :style="{ width: calculateProgress(project.tasks) + '%' }">
+                    </div>
+                  </div>
+                  <div class="progress-text">
+                    {{ getCompletedTasksCount(project.tasks) }} of {{ (project.tasks || []).length }} tasks completed
+                  </div>
+                </div>
+
+                
+
+                <div class="my-tasks">
+                  <div class="tasks-header">
+                    <span class="tasks-title">My Tasks</span>
+                  </div>
+                  <div v-if="getMyTasks(project.tasks).length === 0" class="no-tasks">
+                    No tasks assigned
+                  </div>
+                  <div v-else class="task-list">
+                    <div v-for="task in getMyTasks(project.tasks)" 
+                        :key="task.id" 
+                        class="task-item">
+                      <div class="task-content">
+                        <span class="task-name">{{ task.task_name }}</span>
+                      </div>
+                      <span :class="['status-badge', `status-${task.status.toLowerCase()}`]">
+                        {{ task.status }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+
+            <!-- Create Project Modal -->
+            <div v-if="showCreateModal" class="modal-overlay">
+              <div class="modal-content">
+                <h2>Create New Project</h2>
+
+                <label>Project Name* </label>
+                <input v-model="newProject.proj_name" placeholder="Enter project name" :class="{ 'input-error': newProject.proj_name.trim() === '' }" required/>
+
+                <label>Collaborators (comma-separated user IDs)</label>
+                <input type="text" v-model="newProject.collaborators" placeholder="e.g., 101,102,103" />
+
+                <label>Tasks (comma-separated task IDs)</label>
+                <input type="text" v-model="newProject.tasks" placeholder="e.g., 201,202" />
+
+                <div class="modal-actions">
+                  <button @click="submitNewProject" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
+                    Create
+                  </button>
+                  <button @click="showCreateModal = false">Cancel</button>
+                </div>
+              </div>
+            </div>
           </div>
-
-          <div v-else class="projects-grid">
-            <!-- Dynamic Project Cards -->
-            <div v-for="project in projects" 
-                 :key="project.id" 
-                 class="project-card" 
-                 @click="handleCardClick(project)">
-              <div class="project-header">
-                <h3 class="project-title">{{ project.proj_name }}</h3>
-                <span class="project-id">Project ID: {{ project.id }}</span>
-
+        
+          <div class="unassigned-tasks-sidebar">
+            <div class="sidebar-header">
+              <h2>Unassigned Tasks</h2>
+              <p class="sidebar-subtitle">Tasks without project assignment</p>
+            </div>
+            
+            <div class="tasks-container">
+              <div v-if="unassignedTasks.length === 0" class="no-tasks-message">
+                No unassigned tasks found
               </div>
-  
-              <div class="project-meta">
-                <div class="meta-item">
-                  <div class="meta-icon">
-                    <i class="bi bi-person"></i>
-                  </div>
-                  <span>Project Owner: <span class="owner-name">{{project.owner_id || 'Unknown'}}</span></span>
-                </div>
-                <div class="meta-item">
-                  <div class="meta-icon">
-                    <i class="bi bi-people"></i>
-                  </div>
-                  <span>Collaborators:</span>
-                  <div class="collaborators">
-                    <div v-for="(collab, index) in filterCollaborators(project)" 
-                        :key="index" 
-                        class="avatar">
-                      {{ getInitials(collab.name || collab.toString()) }}
-                    </div>
-                    <div v-if="filterCollaborators(project).length > 3" 
-                        class="avatar more-collaborators">
-                      +{{ filterCollaborators(project).length - 3 }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-  
-              <div class="progress-section">
-                <div class="progress-bar">
-                  <div class="progress-fill" 
-                       :style="{ width: calculateProgress(project.tasks) + '%' }">
-                  </div>
-                </div>
-                <div class="progress-text">
-                  {{ getCompletedTasksCount(project.tasks) }} of {{ (project.tasks || []).length }} tasks completed
-                </div>
-              </div>
-
-              
-
-              <div class="my-tasks">
-                <div class="tasks-header">
-                  <span class="tasks-title">My Tasks</span>
-                </div>
-                <div v-if="getMyTasks(project.tasks).length === 0" class="no-tasks">
-                  No tasks assigned
-                </div>
-                <div v-else class="task-list">
-                  <div v-for="task in getMyTasks(project.tasks)" 
-                      :key="task.id" 
-                      class="task-item">
-                    <div class="task-content">
-                      <span class="task-name">{{ task.task_name }}</span>
-                    </div>
+              <div v-else class="tasks-list">
+                <div v-for="task in unassignedTasks" 
+                     :key="task.id" 
+                     class="unassigned-task-item"
+                     draggable="true"
+                     @dragstart="handleDragStart($event, task)"
+                     @click="navigateToTask(task.id)">
+                  <div class="task-content">
+                    <span class="task-name">{{ task.task_name }}</span>
                     <span :class="['status-badge', `status-${task.status.toLowerCase()}`]">
                       {{ task.status }}
                     </span>
                   </div>
                 </div>
               </div>
-
             </div>
           </div>
+
+
+
         </div>
       </div>
 
-      <!-- Create Project Modal -->
-      <div v-if="showCreateModal" class="modal-overlay">
-        <div class="modal-content">
-          <h2>Create New Project</h2>
 
-          <label>Project Name* </label>
-          <input v-model="newProject.proj_name" placeholder="Enter project name" :class="{ 'input-error': newProject.proj_name.trim() === '' }" required/>
-
-          <label>Collaborators (comma-separated user IDs)</label>
-          <input type="text" v-model="newProject.collaborators" placeholder="e.g., 101,102,103" />
-
-          <label>Tasks (comma-separated task IDs)</label>
-          <input type="text" v-model="newProject.tasks" placeholder="e.g., 201,202" />
-
-          <div class="modal-actions">
-            <button @click="submitNewProject" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
-              Create
-            </button>
-            <button @click="showCreateModal = false">Cancel</button>
-          </div>
-        </div>
-      </div>
     </div>
 </template>
   
@@ -142,6 +183,7 @@ const router = useRouter()
 const projects = ref([])
 const showCreateModal = ref(false)
 const userId = localStorage.getItem("spm_userid")
+const unassignedTasks = ref([])
 
 // New project form data
 const newProject = ref({
@@ -301,4 +343,128 @@ const filterCollaborators = (project) => {
     .slice(0, 3) // Keep only first 3 collaborators for display
 }
 
+const fetchUnassignedTasks = async () => {
+  try {
+    const response = await fetch(`http://localhost:5002/tasks/user-task/${userId}`)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    const data = await response.json()
+    console.log('Raw API response:', JSON.stringify(data, null, 2)) 
+
+    
+    // Check data structure and get the tasks array
+    let tasks = []
+    if (data.tasks.data) {
+      tasks = Array.isArray(data.tasks.data) ? data.tasks.data : [data.tasks.data]
+    } 
+    // else if (data.data) {
+    //   tasks = Array.isArray(data.data) ? data.data : [data.data]
+    // } else if (Array.isArray(data)) {
+    //   tasks = data
+    // } else {
+    //   tasks = [data] // If it's a single task object
+    // }
+    
+    console.log('Processed tasks array:', tasks) // Debug processed array
+
+    // Filter unassigned tasks
+    unassignedTasks.value = tasks.filter(task => {
+      console.log('Checking task:', {
+        id: task.id,
+        name: task.task_name,
+        project_id: task.project_id
+      }) // Debug each task's relevant fields
+      
+      // Check all possible cases for an unassigned task
+      const isUnassigned = task.project_id === null || 
+                          task.project_id === undefined || 
+                          task.project_id === 0 || 
+                          task.project_id === "" || 
+                          !task.hasOwnProperty('project_id')
+                          
+      console.log(`Task ${task.id} is unassigned: ${isUnassigned}`) // Debug result
+      return isUnassigned
+    })
+
+    console.log('Final unassigned tasks:', unassignedTasks.value) // Debug final result
+  } catch (error) {
+    console.error('Error in fetchUnassignedTasks:', error)
+    unassignedTasks.value = []
+  }
+}
+
+// Make sure to call both fetches on mount
+onMounted(async () => {
+  console.log('Component mounted, userId:', userId) // Debug userId
+  await Promise.all([
+    fetchProjects(),
+    fetchUnassignedTasks()
+  ])
+})
+
+const navigateToTask = (taskId) => {
+  router.push(`/tasks/${taskId}`)
+}
+
+const handleDragStart = (event, task) => {
+  event.dataTransfer.setData('taskId', task.id.toString())
+}
+
+const handleDrop = async (event, project) => {
+  const taskId = event.dataTransfer.getData('taskId')
+  isDraggingOver.value = null // Reset drag state
+  
+  try {
+    // Update task with new project_id
+    const response = await fetch(`http://localhost:5002/tasks/update`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        task_id: parseInt(taskId),
+        project_id: project.id,
+        collaborators: [parseInt(userId)] // Ensure current user is a collaborator
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update task')
+    }
+
+    // Fetch updated task details
+    const taskResponse = await fetch(`http://localhost:5002/tasks/${taskId}`)
+    const taskData = await taskResponse.json()
+    const updatedTask = taskData.data || taskData
+
+    // Update the project's tasks array
+    if (!project.tasks) {
+      project.tasks = []
+    }
+    project.tasks.push(updatedTask)
+
+    // Refresh lists
+    await Promise.all([
+      fetchProjects(),
+      fetchUnassignedTasks()
+    ])
+  } catch (error) {
+    console.error('Error updating task:', error)
+    alert('Failed to assign task to project')
+  }
+}
+
+const isDraggingOver = ref(null)
+
+const handleDragOver = (event, project) => {
+  event.preventDefault()
+  isDraggingOver.value = project.id
+}
+
+const handleDragLeave = (project) => {
+  if (isDraggingOver.value === project.id) {
+    isDraggingOver.value = null
+  }
+}
 </script>

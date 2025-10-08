@@ -1,4 +1,3 @@
-
 .app-layout {
   display: flex;
   min-height: 100vh;
@@ -310,6 +309,85 @@
   display: block;
 }
 
+/* Layout wrapper */
+.content-wrapper {
+  display: flex;
+  gap: 2rem;
+  height: 100%;
+}
+
+/* Unassigned Tasks Sidebar */
+.unassigned-tasks-sidebar {
+  flex: 1;
+  min-width: 300px;
+  max-width: 400px;
+  background: white;
+  border-left: 1px solid #e2e8f0;
+  padding: 1.5rem;
+  height: calc(100vh - 2rem);
+  position: sticky;
+  top: 1rem;
+  overflow-y: auto;
+}
+
+.sidebar-header {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.sidebar-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 0.5rem 0;
+}
+
+.sidebar-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.tasks-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.no-tasks-message {
+  color: #64748b;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.unassigned-task-item {
+  padding: 1rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.unassigned-task-item:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.unassigned-task-item .task-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.unassigned-task-item .task-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #334155;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .app-container {
@@ -405,4 +483,31 @@
 .status-completed {
   background: #d1fae5;
   color: #065f46;
+}
+
+.unassigned-task-item {
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.unassigned-task-item:active {
+  cursor: grabbing;
+}
+
+.project-card.drag-over {
+  border: 2px dashed #3b82f6;
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Add drag feedback styles */
+.project-card {
+  transition: all 0.2s ease;
+}
+
+.project-card[draggable] {
+  cursor: grab;
+}
+
+.project-card[draggable]:active {
+  cursor: grabbing;
 }
