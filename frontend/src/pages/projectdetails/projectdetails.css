@@ -91,26 +91,35 @@
 
 .projectdetails-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
+  padding: 1rem 0;
+}
+
+.title-section {
+  flex: initial;
+}
+
+.title-row {
+  display: flex;
+  align-items: center;
   gap: 1rem;
 }
 
 .page-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #0f172a;
   margin: 0;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #1e293b;
 }
 
 .project-id {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  background: #f1f5f9;
+  border-radius: 1rem;
   font-size: 0.875rem;
   color: #64748b;
-  background: #f1f5f9;
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
 }
 
 /* Main Content */
@@ -173,11 +182,13 @@
 }
 
 .collaborator-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background: #f1f5f9;
   padding: 0.25rem 0.75rem;
   border-radius: 1rem;
   font-size: 0.875rem;
-  color: #ffffff;
 }
 
 .collaborator-chip:nth-child(1) { 
@@ -304,20 +315,25 @@
 }
 
 .create-task-btn {
+  margin-left: auto;
+}
+
+/* Edit Project Button */
+.edit-project-btn {
   background-color: #3b82f6;
   color: white;
   border: none;
   border-radius: 6px;
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   font-size: 0.875rem;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   cursor: pointer;
-  margin-left: auto;
+  transition: background-color 0.2s ease;
 }
 
-.create-task-btn:hover {
+.edit-project-btn:hover {
   background-color: #2563eb;
 }
 
@@ -343,6 +359,146 @@
   max-width: 600px;
   max-height: 90vh;
   overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+/* Form Styling */
+.form-group {
+  margin-bottom: 1.5rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+/* Autocomplete Suggestions */
+.autocomplete {
+  position: relative;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.suggestion-item {
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.suggestion-item:hover {
+  background: #f1f5f9;
+}
+
+/* Selected Collaborators */
+.selected-collaborators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.collaborator-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+}
+
+.remove-collab-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+}
+
+.remove-collab-btn:hover {
+  color: #ef4444;
+}
+
+/* Modal Actions */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.submit-btn, .cancel-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+
+.submit-btn {
+  background: #3b82f6;
+  color: white;
+  border: none;
+}
+
+.submit-btn:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: white;
+  border: 1px solid #e2e8f0;
+}
+
+/* Common button styles */
+.btn-primary {
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #2563eb;
+}
+
+/* Specific button modifications */
+.create-project-btn {
+  margin-left: auto;
+}
+
+.edit-project-btn {
+  padding: 0.5rem 1rem;
+}
+
+.create-task-btn {
+  margin-left: auto;
 }
 
 /* Responsive Design */

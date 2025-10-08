@@ -393,8 +393,8 @@ const fetchUnassignedTasks = async () => {
     
     // Check data structure and get the tasks array
     let tasks = []
-    if (data.tasks.data) {
-      tasks = Array.isArray(data.tasks.data) ? data.tasks.data : [data.tasks.data]
+    if (data.data) {
+      tasks = Array.isArray(data.data) ? data.data : [data.data]
     } 
     // else if (data.data) {
     //   tasks = Array.isArray(data.data) ? data.data : [data.data]

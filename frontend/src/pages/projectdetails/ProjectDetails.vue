@@ -44,8 +44,21 @@
         <div class="header-section">
           <div class="header-content">
             <div class="projectdetails-header">
-              <h1 class="page-title">{{ project.proj_name }}</h1>
-              <div class="project-id">Project ID: #{{ project.id }}</div>
+              <div class="title-section">
+                <div class="title-row">
+                  <h1 class="page-title">{{ project.proj_name }}</h1>
+                  <div class="project-id">Project ID: #{{ project.id }}</div>
+                </div>
+              </div>
+              <div class="header-actions">
+                <button 
+                  class="btn-primary edit-project-btn" 
+                  @click="showEditModal = true"
+                >
+                  <i class="bi bi-pencil"></i>
+                  Edit Project
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -206,6 +219,80 @@
               </div>
             </div>
           </div>
+
+
+
+          <!-- Add the edit modal -->
+          <div v-if="showEditModal" class="modal-overlay">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h2>Edit Project</h2>
+                <button class="close-btn" @click="showEditModal = false">
+                  <i class="bi bi-x"></i>
+                </button>
+              </div>
+
+              <div class="form-group">
+                <label>Project Name*</label>
+                <input v-model="editedProject.proj_name" required />
+              </div>
+
+              <div class="form-group">
+                <label>Collaborators</label>
+                <div class="autocomplete">
+                  <input 
+                    type="text"
+                    v-model="collaboratorQuery"
+                    placeholder="Search users by email..."
+                    @input="searchUsers"
+                  />
+                  
+                  <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+                    <li 
+                      v-for="user in collaboratorSuggestions" 
+                      :key="user.id"
+                      @click="addCollaborator(user)"
+                      class="suggestion-item"
+                    >
+                      {{ user.email }}
+                    </li>
+                  </ul>
+                </div>
+
+                <div class="selected-collaborators">
+                  <div 
+                    v-for="collab in editedProject.collaborators" 
+                    :key="collab.id"
+                    class="collaborator-chip"
+                  >
+                    {{ collab.email }}
+                    <button 
+                      class="remove-collab-btn"
+                      @click="removeCollaborator(collab)"
+                    >
+                      <i class="bi bi-x"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="modal-actions">
+                <button 
+                  class="submit-btn" 
+                  @click="updateProject"
+                  :disabled="!isFormValid"
+                >
+                  Update Project
+                </button>
+                <button 
+                  class="cancel-btn" 
+                  @click="showEditModal = false"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -226,6 +313,7 @@ const project = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const showCreateModal = ref(false)
+const showEditModal = ref(false)
 const collaboratorQuery = ref('')
 const selectedCollaborators = ref([])
 const collaboratorSuggestions = ref([])
@@ -245,6 +333,12 @@ const newTask = ref({
   priority: '5',
   status: 'Ongoing',
   project_id: '', // Will be set automatically
+  collaborators: [],
+})
+
+// Add the edited project data
+const editedProject = ref({
+  proj_name: '',
   collaborators: [],
 })
 
@@ -283,6 +377,12 @@ const fetchProjectDetails = async () => {
         ...(projectData.data || projectData),
         tasks: []
       }
+    }
+    
+    // Set edited project data
+    editedProject.value = {
+      proj_name: project.value.proj_name,
+      collaborators: project.value.collaborators || [],
     }
     
     console.log('Project with tasks:', project.value)
@@ -433,4 +533,75 @@ const submitNewTask = async () => {
     showErrorPopup.value = true
   }
 }
+
+const isFormValid = computed(() => {
+  return editedProject.value.proj_name.trim() !== ''
+})
+
+const initializeEditForm = () => {
+  editedProject.value = {
+    proj_name: project.value.proj_name,
+    collaborators: [...(project.value.collaborators || [])]
+  }
+}
+
+const searchUsers = async () => {
+  if (!collaboratorQuery.value) {
+    collaboratorSuggestions.value = []
+    return
+  }
+
+  try {
+    const response = await fetch(
+      `http://localhost:5003/users/search?email=${encodeURIComponent(collaboratorQuery.value)}`
+    )
+    if (!response.ok) throw new Error('Failed to fetch users')
+    
+    const data = await response.json()
+    collaboratorSuggestions.value = data.data || []
+  } catch (error) {
+    console.error('Error searching users:', error)
+    collaboratorSuggestions.value = []
+  }
+}
+
+const updateProject = async () => {
+  try {
+    const response = await fetch(`http://localhost:5001/projects/update`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        project_id: project.value.id,
+        proj_name: editedProject.value.proj_name,
+        collaborators: editedProject.value.collaborators.map(c => 
+          typeof c === 'object' ? c.id || c.userid : c
+        )
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('Failed to update project')
+    }
+
+    // Refresh project details
+    await fetchProjectDetails()
+    showEditModal.value = false
+
+    // Show success message
+    // You can add a success notification here if needed
+  } catch (error) {
+    console.error('Error updating project:', error)
+    errorMessage.value = error.message
+    showErrorPopup.value = true
+  }
+}
+
+// Initialize edit form when edit modal is shown
+watch(() => showEditModal.value, (newValue) => {
+  if (newValue) {
+    initializeEditForm()
+  }
+})
 </script>
