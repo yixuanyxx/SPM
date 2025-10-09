@@ -83,6 +83,26 @@
             </div>
           </div>
 
+          <!-- Project Selection -->
+          <div class="form-group">
+            <label for="project">Project</label>
+            <select
+              id="project"
+              v-model="editedTask.project_id"
+              :disabled="isLoading"
+              class="form-select"
+            >
+              <option :value="null">No Project</option>
+              <option
+                v-for="proj in projects"
+                :key="proj.id || proj.project_id"
+                :value="proj.id || proj.project_id"
+              >
+                {{ proj.proj_name }}
+              </option>
+            </select>
+          </div>
+
           <!-- Collaborators Section -->
           <div class="form-group">
             <label>Collaborators</label>
@@ -305,6 +325,7 @@ export default {
       selectedCollaborators: [],
       currentAttachments: [],
       newAttachmentFile: null,
+      projects: [],
       collaboratorQuery: '',
       collaboratorSuggestions: [],
       isLoading: false,
@@ -348,6 +369,7 @@ export default {
         if (newVal) {
           this.clearMessages();
           this.fetchTaskDetails();
+          this.fetchUserProjects();
         }
       },
       immediate: true
@@ -418,6 +440,24 @@ export default {
         this.errorMessage = "Failed to load task details. Please try again.";
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    async fetchUserProjects() {
+      try {
+        const currentUserId = localStorage.getItem('spm_userid');
+        if (!currentUserId) return;
+
+        const resp = await fetch(`http://127.0.0.1:5001/projects/user/${currentUserId}`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        // projects may be in data.data or data.projects or raw array
+        const list = data.data || data.projects || data || [];
+        this.projects = Array.isArray(list) ? list : [];
+      } catch (err) {
+        console.error('Failed to fetch user projects:', err);
+        this.projects = [];
       }
     },
 
@@ -518,6 +558,10 @@ export default {
         formData.append('status', this.editedTask.status);
         formData.append('due_date', this.editedTask.due_date);
         formData.append('priority', this.editedTask.priority);
+        // Include project association
+        if (this.editedTask.project_id) {
+          formData.append('project_id', this.editedTask.project_id);
+        }
         
         // Add collaborators
         if (collaboratorIds.length > 0) {

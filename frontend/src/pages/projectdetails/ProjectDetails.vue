@@ -53,6 +53,13 @@
               <div class="header-actions">
                 <button 
                   class="btn-primary edit-project-btn" 
+                  @click="navigateToWorkload"
+                >
+                  <i class="bi bi-bar-chart"></i>
+                  View Workload
+                </button>
+                <button 
+                  class="btn-primary edit-project-btn" 
                   @click="showEditModal = true"
                 >
                   <i class="bi bi-pencil"></i>
@@ -401,6 +408,10 @@ const goBack = () => {
 
 const navigateToTask = (taskId) => {
   router.push(`/tasks/${taskId}`)
+}
+
+const navigateToWorkload = () => {
+  router.push(`/tasks/projects?projectId=${project.value.id}`)
 }
 
 const filterCollaborators = (project) => {

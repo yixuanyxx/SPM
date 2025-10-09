@@ -65,6 +65,11 @@
                 <span>My Tasks</span>
               </router-link>
 
+              <router-link to="/tasks/projects" class="dropdown-item" @click="handleNavItemClick">
+                <i class="bi bi-folder2-open"></i>
+                <span>Project Tasks</span>
+              </router-link>
+
               <!-- Role-based. If staff do not show. -->
               <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'">
                 <router-link :to="teamTasksRoute" class="dropdown-item" @click="handleNavItemClick">

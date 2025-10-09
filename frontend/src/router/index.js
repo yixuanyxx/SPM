@@ -10,6 +10,7 @@ import { sessionState } from "../services/session";
 const TaskView = () => import('../pages/taskview/TaskView.vue')
 const TeamTaskView = () => import('../pages/taskview/TeamTaskView.vue')
 const DepartmentTaskView = () => import('../pages/taskview/DepartmentTaskView.vue')
+const ProjectTaskView = () => import('../pages/taskview/ProjectTaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
 const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 const ProjectDetail = () => import('../pages/projectdetails/ProjectDetails.vue')
@@ -40,6 +41,11 @@ const routes = [
     name: 'team-task-view', 
     component: TeamTaskView
     // ,meta: { requiresAuth: true }
+  },
+
+  { path: '/tasks/projects', // Project-based task overview
+    name: 'project-task-view',
+    component: ProjectTaskView
   },
 
   { path: '/tasks/department',  // Department tasks (director only)
