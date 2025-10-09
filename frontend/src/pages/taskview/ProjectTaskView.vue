@@ -532,9 +532,17 @@ const users = ref({})
 const isLoadingProjects = ref(false)
 const isLoadingTasks = ref(false)
 
+// Cache for workload calculations to avoid expensive recalculations
+const workloadCache = ref(new Map())
+
 // Get current user data
 const userData = getCurrentUserData()
 const userId = parseInt(userData.userid) || localStorage.getItem('spm_userid')
+
+// Clear workload cache when tasks change
+watch(tasks, () => {
+  workloadCache.value.clear()
+}, { deep: true })
 
 // Computed properties
 const filteredMembers = computed(() => {
@@ -667,7 +675,7 @@ const getUserName = (userid) => {
   return user?.name || `User ${userid}`
 }
 
-// Fetch user's projects
+// Fetch user's projects - OPTIMIZED
 const fetchUserProjects = async () => {
   if (!userId) return
   
@@ -681,15 +689,16 @@ const fetchUserProjects = async () => {
     const data = await response.json()
     const projects = data.data || []
     
-    // Fetch owner details for each project
-    for (const project of projects) {
+    // Fetch owner details for each project in parallel
+    const ownerPromises = projects.map(async (project) => {
       if (project.owner_id) {
         const owner = await fetchUserDetails(project.owner_id)
         project.owner_name = owner?.name || 'Unknown'
       }
-    }
+      return project
+    })
     
-    userProjects.value = projects
+    userProjects.value = await Promise.all(ownerPromises)
     console.log('Fetched user projects:', userProjects.value)
   } catch (error) {
     console.error('Error fetching user projects:', error)
@@ -699,7 +708,7 @@ const fetchUserProjects = async () => {
   }
 }
 
-// Fetch project members
+// Fetch project members - OPTIMIZED
 const fetchProjectMembers = async (projectId) => {
   if (!projectId) return
   
@@ -722,7 +731,7 @@ const fetchProjectMembers = async (projectId) => {
       })
     }
     
-    // Fetch user details for all members
+    // Fetch user details for all members in parallel
     const memberPromises = Array.from(memberIds).map(id => fetchUserDetails(id))
     const memberDetails = await Promise.all(memberPromises)
     
@@ -734,41 +743,44 @@ const fetchProjectMembers = async (projectId) => {
   }
 }
 
-// Fetch ALL tasks where project members are involved (like TeamTaskView does)
+// Fetch ALL tasks where project members are involved (like TeamTaskView does) - OPTIMIZED
 const fetchProjectMemberTasks = async (projectId) => {
   if (!projectId || projectMembers.value.length === 0) return
   
   isLoadingTasks.value = true
   try {
-    // Get all tasks for each project member
-    const allTasks = []
-    const taskIds = new Set() // To avoid duplicates
-    
-    for (const member of projectMembers.value) {
+    // Fetch all tasks for project members in parallel
+    const memberTaskPromises = projectMembers.value.map(async (member) => {
       try {
-        // Fetch all tasks where this member is owner or collaborator
         const response = await fetch(`http://localhost:5002/tasks/user-task/${member.userid}`)
         if (response.ok) {
           const data = await response.json()
-          const memberTasks = data.data || []
-          
-          // Add tasks that aren't already in our collection
-          memberTasks.forEach(task => {
-            if (!taskIds.has(task.id)) {
-              taskIds.add(task.id)
-              allTasks.push(task)
-            }
-          })
+          return data.data || []
         }
       } catch (error) {
         console.error(`Error fetching tasks for member ${member.userid}:`, error)
       }
-    }
+      return []
+    })
+    
+    // Wait for all task fetches to complete in parallel
+    const allMemberTasks = await Promise.all(memberTaskPromises)
+    
+    // Flatten and deduplicate tasks
+    const taskIds = new Set()
+    const allTasks = []
+    
+    allMemberTasks.flat().forEach(task => {
+      if (!taskIds.has(task.id)) {
+        taskIds.add(task.id)
+        allTasks.push(task)
+      }
+    })
     
     tasks.value = allTasks
     console.log('Fetched project member tasks:', tasks.value.length, tasks.value)
     
-    // Fetch user details for all users mentioned in tasks
+    // Fetch user details for all users mentioned in tasks (in parallel)
     await fetchTaskUsers()
   } catch (error) {
     console.error('Error fetching project member tasks:', error)
@@ -778,7 +790,7 @@ const fetchProjectMemberTasks = async (projectId) => {
   }
 }
 
-// Function to fetch all users mentioned in tasks
+// Function to fetch all users mentioned in tasks - OPTIMIZED
 const fetchTaskUsers = async () => {
   const userIds = new Set()
   
@@ -797,8 +809,23 @@ const fetchTaskUsers = async () => {
     }
   })
   
-  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
-  await Promise.all(fetchPromises)
+  // Only fetch users we don't already have cached
+  const uncachedUserIds = Array.from(userIds).filter(userid => !users.value[userid])
+  
+  if (uncachedUserIds.length > 0) {
+    // Fetch user details in parallel with limited concurrency to avoid overwhelming the server
+    const batchSize = 10
+    const batches = []
+    
+    for (let i = 0; i < uncachedUserIds.length; i += batchSize) {
+      batches.push(uncachedUserIds.slice(i, i + batchSize))
+    }
+    
+    for (const batch of batches) {
+      const fetchPromises = batch.map(userid => fetchUserDetails(userid))
+      await Promise.all(fetchPromises)
+    }
+  }
 }
 
 // Project selection and navigation
@@ -827,7 +854,7 @@ const getProjectMemberCount = (project) => {
   return count
 }
 
-// Project change handler
+// Project change handler - OPTIMIZED
 const onProjectChange = async () => {
   if (!selectedProjectId.value) {
     projectMembers.value = []
@@ -842,46 +869,89 @@ const onProjectChange = async () => {
   activeFilter.value = 'all'
   viewMode.value = 'members'
   
-  // Fetch project data
+  // Fetch project members first, then tasks (since tasks depend on members)
   await fetchProjectMembers(selectedProjectId.value)
-  await fetchProjectMemberTasks(selectedProjectId.value)
+  
+  // Once we have members, fetch their tasks
+  if (projectMembers.value.length > 0) {
+    await fetchProjectMemberTasks(selectedProjectId.value)
+  }
 }
 
-// Workload management functions
+// Workload management functions - OPTIMIZED with caching
 const getMemberTasks = (memberId) => {
-  return tasks.value.filter(task => 
+  const cacheKey = `tasks_${memberId}`
+  if (workloadCache.value.has(cacheKey)) {
+    return workloadCache.value.get(cacheKey)
+  }
+  
+  const memberTasks = tasks.value.filter(task => 
     task.owner_id === memberId || 
     (task.collaborators && task.collaborators.includes(memberId))
   )
+  
+  workloadCache.value.set(cacheKey, memberTasks)
+  return memberTasks
 }
 
 const getMemberTasksByStatus = (memberId, status) => {
-  return getMemberTasks(memberId).filter(task => task.status === status)
+  const cacheKey = `tasks_${memberId}_${status}`
+  if (workloadCache.value.has(cacheKey)) {
+    return workloadCache.value.get(cacheKey)
+  }
+  
+  const statusTasks = getMemberTasks(memberId).filter(task => task.status === status)
+  workloadCache.value.set(cacheKey, statusTasks)
+  return statusTasks
 }
 
 const getMemberHighPriorityTasks = (memberId) => {
-  return getMemberTasks(memberId).filter(task => parseInt(task.priority) >= 8).length
+  const cacheKey = `high_priority_${memberId}`
+  if (workloadCache.value.has(cacheKey)) {
+    return workloadCache.value.get(cacheKey)
+  }
+  
+  const highPriorityCount = getMemberTasks(memberId).filter(task => parseInt(task.priority) >= 8).length
+  workloadCache.value.set(cacheKey, highPriorityCount)
+  return highPriorityCount
 }
 
 const getMemberUpcomingTasks = (memberId) => {
+  const cacheKey = `upcoming_${memberId}`
+  if (workloadCache.value.has(cacheKey)) {
+    return workloadCache.value.get(cacheKey)
+  }
+  
   const now = new Date()
   const threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000))
   
-  return getMemberTasks(memberId).filter(task => {
+  const upcomingCount = getMemberTasks(memberId).filter(task => {
     if (!task.due_date || task.status === 'Completed') return false
     const dueDate = new Date(task.due_date)
     return dueDate >= now && dueDate <= threeDaysFromNow
   }).length
+  
+  workloadCache.value.set(cacheKey, upcomingCount)
+  return upcomingCount
 }
 
 const getWorkloadClass = (member) => {
+  const cacheKey = `workload_class_${member.userid}`
+  if (workloadCache.value.has(cacheKey)) {
+    return workloadCache.value.get(cacheKey)
+  }
+  
   const taskCount = getMemberTasks(member.userid).filter(task => task.status !== 'Completed').length
   const highPriorityCount = getMemberHighPriorityTasks(member.userid)
   
-  if (taskCount >= 8 || highPriorityCount >= 4) return 'overload'
-  if (taskCount >= 5 || highPriorityCount >= 2) return 'high'
-  if (taskCount >= 3) return 'moderate'
-  return 'low'
+  let workloadClass
+  if (taskCount >= 8 || highPriorityCount >= 4) workloadClass = 'overload'
+  else if (taskCount >= 5 || highPriorityCount >= 2) workloadClass = 'high'
+  else if (taskCount >= 3) workloadClass = 'moderate'
+  else workloadClass = 'low'
+  
+  workloadCache.value.set(cacheKey, workloadClass)
+  return workloadClass
 }
 
 const getWorkloadLevel = (member) => {
@@ -1148,6 +1218,34 @@ onMounted(async () => {
   justify-content: center;
   padding: 4rem 2rem;
   text-align: center;
+}
+
+.project-loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.loading-content {
+  text-align: center;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+}
+
+.loading-subtext {
+  color: #9ca3af;
+  font-size: 0.875rem;
+  margin-top: 0.5rem;
 }
 
 .loading-spinner {

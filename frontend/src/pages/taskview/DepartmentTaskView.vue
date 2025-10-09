@@ -8,10 +8,15 @@
       <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
-          <h1 class="page-title">Department's Workload</h1>
-          <p class="page-subtitle">Monitor and manage your department's task distribution</p>
+          <h1 class="page-title">{{ selectedTeamId ? `${selectedTeamName} Workload` : 'Department Teams' }}</h1>
+          <p class="page-subtitle">{{ selectedTeamId ? 'Monitor and manage team member task distribution' : 'Select a team to view member workloads and tasks' }}</p>
         </div>
-        <div class="header-actions">
+        <div class="header-actions" v-if="selectedTeamId">
+          <button class="back-btn" @click="goBackToTeams">
+            <i class="bi bi-arrow-left"></i>
+            Back to Teams
+          </button>
+          
           <button 
             class="view-toggle-btn" 
             :class="{ active: viewMode === 'members' }"
@@ -31,8 +36,89 @@
         </div>
       </div>
       
-    <!-- Stats Section -->
-    <div class="stats-section" :class="{ 'stats-section-member': viewMode === 'members' }">
+      <!-- Content when no team selected - Show team grid -->
+      <div v-if="!selectedTeamId" class="teams-grid-container">
+        <!-- Loading state -->
+        <div v-if="isLoadingTeams" class="loading-state">
+          <div class="loading-spinner">
+            <i class="bi bi-arrow-clockwise spin"></i>
+          </div>
+          <p class="loading-text">Loading department teams and statistics...</p>
+        </div>
+
+        <!-- No teams state -->
+        <div v-else-if="departmentTeams.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <i class="bi bi-diagram-3"></i>
+          </div>
+          <div class="empty-title">No Teams Found</div>
+          <p class="empty-subtitle">No teams found in this department. Contact your administrator to create teams.</p>
+        </div>
+
+        <!-- Teams grid -->
+        <div v-else class="teams-grid">
+          <h2 class="section-title">Choose a Team to View Workload</h2>
+          <div class="teams-container">
+            <div 
+              v-for="(team, index) in departmentTeams" 
+              :key="team.id"
+              class="team-card"
+              :style="{ animationDelay: `${index * 0.1}s` }"
+              @click="selectTeam(team.id, team.name)"
+            >
+              <div class="team-header">
+                <div class="team-icon">
+                  <i class="bi bi-diagram-3-fill"></i>
+                </div>
+                <div class="team-info">
+                  <h3 class="team-name">{{ team.name }}</h3>
+                  <p class="team-dept">Department Team</p>
+                </div>
+              </div>
+              
+              <div class="team-meta">
+                <div class="meta-item">
+                  <i class="bi bi-people"></i>
+                  <span>{{ getTeamMemberCount(team.id) }} members</span>
+                </div>
+                <div class="meta-item">
+                  <i class="bi bi-list-task"></i>
+                  <span>{{ getTeamTaskCount(team.id) }} tasks</span>
+                </div>
+              </div>
+
+              <div class="team-workload-preview">
+                <div class="workload-summary">
+                  <div class="workload-item overload" v-if="getTeamWorkloadCount(team.id, 'overload') > 0">
+                    <span class="count">{{ getTeamWorkloadCount(team.id, 'overload') }}</span>
+                    <span class="label">Overloaded</span>
+                  </div>
+                  <div class="workload-item high" v-if="getTeamWorkloadCount(team.id, 'high') > 0">
+                    <span class="count">{{ getTeamWorkloadCount(team.id, 'high') }}</span>
+                    <span class="label">Heavy</span>
+                  </div>
+                  <div class="workload-item moderate" v-if="getTeamWorkloadCount(team.id, 'moderate') > 0">
+                    <span class="count">{{ getTeamWorkloadCount(team.id, 'moderate') }}</span>
+                    <span class="label">Moderate</span>
+                  </div>
+                  <div class="workload-item low" v-if="getTeamWorkloadCount(team.id, 'low') > 0">
+                    <span class="count">{{ getTeamWorkloadCount(team.id, 'low') }}</span>
+                    <span class="label">Light</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="team-action">
+                <span class="action-text">Click to view team workload</span>
+                <i class="bi bi-arrow-right"></i>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+    <!-- Stats Section - only show when team is selected -->
+    <div v-if="selectedTeamId" class="stats-section" :class="{ 'stats-section-member': viewMode === 'members' }">
       <div class="stats-container">
         <!-- Member View Stats -->
         <div v-if="viewMode === 'members'" class="workload-stats">
@@ -162,8 +248,8 @@
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div class="main-content" :class="{ 'main-content-member': viewMode === 'members' }">
+    <!-- Main Content - only show when team is selected -->
+    <div v-if="selectedTeamId" class="main-content" :class="{ 'main-content-member': viewMode === 'members' }">
 
       
       <!-- Member View -->
@@ -501,12 +587,18 @@ const deptId = ref(null)
 const viewMode = ref('members')
 const selectedMember = ref('')
 const selectedTaskMember = ref('')
+const selectedTeamId = ref('')
+const selectedTeamName = ref('')
 const workloadFilter = ref('all')
 
 const tasks = ref([])
 const users = ref({})
-const departmentMembers = ref([])
+const departmentMembers = ref([]) // Currently selected team members
+const allDepartmentMembers = ref([]) // All department members for statistics
+const departmentTeams = ref([])
+const teamStats = ref({}) // Store team statistics
 const isLoadingTasks = ref(false)
+const isLoadingTeams = ref(false)
 
 // Get user data from session
 onMounted(async () => {
@@ -526,10 +618,7 @@ onMounted(async () => {
         console.log('User dept_id:', deptId.value)
         
         if (deptId.value) {
-          await Promise.all([
-            fetchDepartmentTasks(),
-            fetchDepartmentMembers()
-          ])
+          await fetchDepartmentTeams()
         } else {
           console.log('No department ID found for user')
         }
@@ -568,6 +657,255 @@ const fetchDepartmentMembers = async () => {
     console.error('Error fetching department members:', error)
     departmentMembers.value = []
   }
+}
+
+// Function to fetch department teams
+const fetchDepartmentTeams = async () => {
+  if (!deptId.value) {
+    console.log('No department ID available for teams')
+    return
+  }
+  
+  isLoadingTeams.value = true
+  console.log('Fetching department teams for dept:', deptId.value)
+  
+  try {
+    // First fetch all department members to calculate team stats
+    await fetchAllDepartmentMembers()
+    
+    // Then fetch teams
+    const response = await fetch(`http://localhost:5004/teams/department/${deptId.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      departmentTeams.value = data.data || []
+      console.log('Fetched department teams:', departmentTeams.value.length, departmentTeams.value)
+      
+      // Fetch statistics for each team
+      await fetchTeamStatistics()
+    } else {
+      console.error('Failed to fetch department teams:', response.status)
+      departmentTeams.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching department teams:', error)
+    departmentTeams.value = []
+  } finally {
+    isLoadingTeams.value = false
+  }
+}
+
+// Function to fetch statistics for all teams
+const fetchTeamStatistics = async () => {
+  if (!departmentTeams.value.length) return
+  
+  try {
+    // Fetch task counts and workload data for each team
+    const statsPromises = departmentTeams.value.map(async (team) => {
+      try {
+        // Fetch team tasks to calculate task count
+        const tasksResponse = await fetch(`http://localhost:5002/tasks/team/${team.id}`)
+        let taskCount = 0
+        let teamMembers = []
+        
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json()
+          taskCount = (tasksData.data || []).length
+        }
+        
+        // Get team members for workload calculation
+        teamMembers = allDepartmentMembers.value.filter(member => member.team_id === team.id)
+        
+        // Calculate workload distribution
+        // We need to fetch tasks for each member to calculate their workload
+        const workloadCounts = { low: 0, moderate: 0, high: 0, overload: 0 }
+        
+        for (const member of teamMembers) {
+          try {
+            const memberTasksResponse = await fetch(`http://localhost:5002/tasks/user-task/${member.userid}`)
+            if (memberTasksResponse.ok) {
+              const memberTasksData = await memberTasksResponse.json()
+              const memberTasks = memberTasksData.data || []
+              
+              // Calculate workload for this member
+              const activeTasks = memberTasks.filter(task => task.status !== 'Completed')
+              const highPriorityTasks = memberTasks.filter(task => parseInt(task.priority) >= 8)
+              
+              let workloadLevel = 'low'
+              if (activeTasks.length >= 8 || highPriorityTasks.length >= 4) {
+                workloadLevel = 'overload'
+              } else if (activeTasks.length >= 5 || highPriorityTasks.length >= 2) {
+                workloadLevel = 'high'
+              } else if (activeTasks.length >= 3) {
+                workloadLevel = 'moderate'
+              }
+              
+              workloadCounts[workloadLevel]++
+            }
+          } catch (error) {
+            console.error(`Error fetching tasks for member ${member.userid}:`, error)
+          }
+        }
+        
+        return {
+          teamId: team.id,
+          taskCount,
+          workloadCounts
+        }
+      } catch (error) {
+        console.error(`Error fetching stats for team ${team.id}:`, error)
+        return {
+          teamId: team.id,
+          taskCount: 0,
+          workloadCounts: { low: 0, moderate: 0, high: 0, overload: 0 }
+        }
+      }
+    })
+    
+    const results = await Promise.all(statsPromises)
+    
+    // Store the statistics
+    results.forEach(stat => {
+      teamStats.value[stat.teamId] = {
+        taskCount: stat.taskCount,
+        workloadCounts: stat.workloadCounts
+      }
+    })
+    
+    console.log('Fetched team statistics:', teamStats.value)
+  } catch (error) {
+    console.error('Error fetching team statistics:', error)
+  }
+}
+
+// Function to fetch all department members (for team stats calculation)
+const fetchAllDepartmentMembers = async () => {
+  if (!deptId.value) {
+    console.log('No department ID available')
+    return
+  }
+  
+  try {
+    const response = await fetch(`http://localhost:5003/users/department/${deptId.value}`)
+    if (response.ok) {
+      const data = await response.json()
+      allDepartmentMembers.value = data.data || []
+      
+      // Fetch user details for workload calculation
+      const userPromises = allDepartmentMembers.value.map(member => fetchUserDetails(member.userid))
+      await Promise.all(userPromises)
+      
+      console.log('Fetched all department members for stats:', allDepartmentMembers.value.length)
+    } else {
+      console.error('Failed to fetch all department members:', response.status)
+    }
+  } catch (error) {
+    console.error('Error fetching all department members:', error)
+  }
+}
+
+// Function to select a team and load its data
+const selectTeam = async (teamId, teamName) => {
+  selectedTeamId.value = teamId
+  selectedTeamName.value = teamName
+  await onTeamChange()
+}
+
+// Function to go back to teams
+const goBackToTeams = () => {
+  selectedTeamId.value = ''
+  selectedTeamName.value = ''
+  departmentMembers.value = []
+  tasks.value = []
+  // Reset filters
+  selectedMember.value = ''
+  selectedTaskMember.value = ''
+  workloadFilter.value = 'all'
+  activeFilter.value = 'all'
+  viewMode.value = 'members'
+}
+
+// Function to handle team change
+const onTeamChange = async () => {
+  if (!selectedTeamId.value) {
+    departmentMembers.value = []
+    tasks.value = []
+    return
+  }
+  
+  // Reset filters
+  selectedMember.value = ''
+  selectedTaskMember.value = ''
+  workloadFilter.value = 'all'
+  activeFilter.value = 'all'
+  viewMode.value = 'members'
+  
+  // Fetch team members and tasks
+  await Promise.all([
+    fetchTeamMembers(selectedTeamId.value),
+    fetchTeamTasks(selectedTeamId.value)
+  ])
+}
+
+// Function to fetch team members
+const fetchTeamMembers = async (teamId) => {
+  if (!teamId) return
+  
+  try {
+    const response = await fetch(`http://localhost:5003/users/team/${teamId}`)
+    if (response.ok) {
+      const data = await response.json()
+      departmentMembers.value = data.data || []
+      console.log('Fetched team members:', departmentMembers.value.length, departmentMembers.value)
+    } else {
+      console.error('Failed to fetch team members:', response.status)
+      departmentMembers.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching team members:', error)
+    departmentMembers.value = []
+  }
+}
+
+// Function to fetch team tasks
+const fetchTeamTasks = async (teamId) => {
+  if (!teamId) return
+  
+  isLoadingTasks.value = true
+  
+  try {
+    const response = await fetch(`http://localhost:5002/tasks/team/${teamId}`)
+    if (response.ok) {
+      const data = await response.json()
+      tasks.value = data.data || []
+      console.log('Fetched team tasks:', tasks.value.length, tasks.value)
+      
+      await fetchTaskUsers()
+    } else {
+      console.error('Failed to fetch team tasks:', response.status)
+      tasks.value = []
+    }
+  } catch (error) {
+    console.error('Error fetching team tasks:', error)
+    tasks.value = []
+  } finally {
+    isLoadingTasks.value = false
+  }
+}
+
+// Team helper functions
+const getTeamMemberCount = (teamId) => {
+  if (!teamId || !allDepartmentMembers.value.length) return 0
+  return allDepartmentMembers.value.filter(member => member.team_id === teamId).length
+}
+
+const getTeamTaskCount = (teamId) => {
+  if (!teamId || !teamStats.value[teamId]) return 0
+  return teamStats.value[teamId].taskCount || 0
+}
+
+const getTeamWorkloadCount = (teamId, workloadLevel) => {
+  if (!teamId || !teamStats.value[teamId]) return 0
+  return teamStats.value[teamId].workloadCounts?.[workloadLevel] || 0
 }
 
 // Function to fetch user details by userid
@@ -930,3 +1268,249 @@ const memberTaskStats = computed(() => {
   }
 })
 </script>
+
+<style scoped>
+/* Team Grid Styles */
+.teams-grid-container {
+  padding: 2rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.teams-container {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.team-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  animation: fadeInUp 0.5s ease forwards;
+  opacity: 0;
+  transform: translateY(20px);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.team-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: #3b82f6;
+}
+
+.team-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.team-icon {
+  font-size: 2.5rem;
+  color: #3b82f6;
+  min-width: 3rem;
+}
+
+.team-info {
+  flex: 1;
+}
+
+.team-name {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.3;
+}
+
+.team-dept {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.team-meta {
+  margin-bottom: 1rem;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  color: #4b5563;
+}
+
+.meta-item:last-child {
+  margin-bottom: 0;
+}
+
+.meta-item i {
+  color: #6b7280;
+  width: 16px;
+}
+
+.team-workload-preview {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+}
+
+.workload-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.workload-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.workload-item.low {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.workload-item.moderate {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.workload-item.high {
+  background: #fed7aa;
+  color: #c2410c;
+}
+
+.workload-item.overload {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.workload-item .count {
+  font-weight: 600;
+}
+
+.team-action {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 1rem;
+  border-top: 1px solid #f3f4f6;
+  font-size: 0.875rem;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.team-card:hover .team-action {
+  color: #3b82f6;
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 6px;
+  color: #374151;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 1rem;
+}
+
+.back-btn:hover {
+  background: #e5e7eb;
+  color: #111827;
+}
+
+.loading-state, .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  color: #6b7280;
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  color: #3b82f6;
+  margin-bottom: 1rem;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.empty-icon {
+  font-size: 3rem;
+  color: #d1d5db;
+  margin-bottom: 1rem;
+}
+
+.empty-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+}
+
+.empty-subtitle, .loading-text {
+  color: #6b7280;
+  font-size: 1rem;
+}
+
+@keyframes fadeInUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .teams-container {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  
+  .teams-grid-container {
+    padding: 1rem;
+  }
+  
+  .team-card {
+    padding: 1rem;
+  }
+}
+</style>
