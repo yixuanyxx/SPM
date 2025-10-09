@@ -8,8 +8,8 @@
       <!-- Header Section -->
       <div class="header-section">
         <div class="header-content">
-          <h1 class="page-title">Schedule</h1>
-          <p class="page-subtitle">View your tasks and deadlines</p>
+          <h1 class="page-title">{{ projectName || 'Project Team Schedule' }}</h1>
+          <p class="page-subtitle">View team members' tasks and deadlines</p>
         </div>
       </div>
 
@@ -51,10 +51,6 @@
             <i class="bi bi-calendar-check"></i>
             Today
           </button>
-          <!-- <button @click="fetchTasks" class="refresh-button" :disabled="loading">
-            <i class="bi bi-arrow-clockwise" :class="{ 'spinning': loading }"></i>
-            Refresh
-          </button> -->
         </div>
       </div>
 
@@ -63,7 +59,7 @@
         <!-- Loading State -->
         <div v-if="loading" class="loading-state">
           <div class="loading-spinner"></div>
-          <p>Loading your tasks...</p>
+          <p>Loading team tasks...</p>
         </div>
         
         <!-- Empty State -->
@@ -72,126 +68,122 @@
             <i class="bi bi-calendar-x"></i>
           </div>
           <h3>No tasks found</h3>
-          <p>You don't have any tasks scheduled yet.</p>
+          <p>No team members have tasks scheduled yet.</p>
         </div>
+        
         <!-- Calendar Views -->
         <div v-else>
           <!-- Daily View -->
           <div v-if="currentView === 'day'" class="daily-view">
-          <div class="day-header">
-            <h3>{{ formatDate(currentDate, 'EEEE, MMMM d, yyyy') }}</h3>
-            <div class="day-stats">
-              <span class="task-count">{{ getTasksForDate(currentDate).length }} tasks</span>
+            <div class="day-header">
+              <h3>{{ formatDate(currentDate, 'EEEE, MMMM d, yyyy') }}</h3>
+              <div class="day-stats">
+                <span class="task-count">{{ getTasksForDate(currentDate).length }} tasks</span>
+              </div>
             </div>
-          </div>
-          
-          <div class="day-timeline">
-            <div v-for="hour in 24" :key="hour" class="time-slot">
-              <div class="time-label">{{ formatHour(hour - 1) }}</div>
-              <div class="time-content">
-                <div 
-                  v-for="task in getTasksForDateAndHour(currentDate, hour - 1)" 
-                  :key="task.id"
-                  class="task-event"
-                  :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
-                  @click="selectTask(task)"
-                >
-                  <div v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</div>
-                  <div class="task-title">{{ task.task_name }}</div>
-                  <div class="task-meta">
-                    <div class="task-status-badge" :class="getTaskStatusClass(task.status)">
-                      {{ task.status }}
-                    </div>
-                    <div class="task-time">{{ formatTime(task.due_date) }}</div>
-                  </div>
-                  <button 
-                    v-if="isTaskOverdue(task)" 
-                    class="reschedule-btn" 
-                    @click.stop="openRescheduleModal(task)"
+            
+            <div class="day-timeline">
+              <div v-for="hour in 24" :key="hour" class="time-slot">
+                <div class="time-label">{{ formatHour(hour - 1) }}</div>
+                <div class="time-content">
+                  <div 
+                    v-for="task in getTasksForDateAndHour(currentDate, hour - 1)" 
+                    :key="task.id"
+                    class="task-event"
+                    :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                    @click="selectTask(task)"
                   >
-                    Reschedule
-                  </button>
+                    <div v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</div>
+                    <div class="task-title">{{ task.task_name }}</div>
+                    <div class="task-meta">
+                      <div class="task-status-badge" :class="getTaskStatusClass(task.status)">
+                        {{ task.status }}
+                      </div>
+                      <div class="task-time">{{ formatTime(task.due_date) }}</div>
+                    </div>
+                    <div v-if="task.collaborators && task.collaborators.length > 0" class="task-assignee">
+                      <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Weekly View -->
-        <div v-if="currentView === 'week'" class="weekly-view">
-          <div class="week-header">
-            <div class="day-header" v-for="day in weekDays" :key="day.date">
-              <div class="day-name">{{ formatDate(day.date, 'EEE') }}</div>
-              <div class="day-number" :class="{ today: isToday(day.date) }">
-                {{ formatDate(day.date, 'd') }}
-              </div>
-              <div class="day-tasks-count">{{ getTasksForDate(day.date).length }}</div>
-            </div>
-          </div>
-          
-          <div class="week-grid">
-            <div v-for="day in weekDays" :key="day.date" class="day-column">
-              <div 
-                v-for="task in getTasksForDate(day.date)" 
-                :key="task.id"
-                class="task-item"
-                :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
-                @click="onTaskClick(task, $event)"
-              >
-                <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
-                <div class="task-title">{{ task.task_name }}</div>
-                <div class="task-status-badge" :class="getTaskStatusClass(task.status)">
-                  {{ task.status }}
+          <!-- Weekly View -->
+          <div v-if="currentView === 'week'" class="weekly-view">
+            <div class="week-header">
+              <div class="day-header" v-for="day in weekDays" :key="day.date">
+                <div class="day-name">{{ formatDate(day.date, 'EEE') }}</div>
+                <div class="day-number" :class="{ today: isToday(day.date) }">
+                  {{ formatDate(day.date, 'd') }}
                 </div>
-                <div class="task-time">{{ formatTime(task.due_date) }}</div>
-                <button 
-                  v-if="isTaskOverdue(task)" 
-                  class="reschedule-btn" 
-                  @click.stop="openRescheduleModal(task)"
-                >
-                Reschedule
-                </button>
+                <div class="day-tasks-count">{{ getTasksForDate(day.date).length }}</div>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- Monthly View -->
-        <div v-if="currentView === 'month'" class="monthly-view">
-          <div class="month-grid">
-            <div 
-              v-for="day in monthDays" 
-              :key="day.date" 
-              class="month-day"
-              :class="{ 
-                'other-month': !day.isCurrentMonth,
-                'today': isToday(day.date),
-                'has-tasks': getTasksForDate(day.date).length > 0
-              }"
-              @click="selectDate(day.date)"
-            >
-              <div class="day-number">{{ formatDate(day.date, 'd') }}</div>
-              <div class="day-tasks">
+            
+            <div class="week-grid">
+              <div v-for="day in weekDays" :key="day.date" class="day-column">
                 <div 
                   v-for="task in getTasksForDate(day.date)" 
                   :key="task.id"
-                  class="task-box"
+                  class="task-item"
                   :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
-                  :title="`${task.task_name} - ${task.status}`"
+                  @click="selectTask(task)"
                 >
                   <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
-                  <div class="task-box-name">{{ task.task_name }}</div>
-                  <div class="task-box-status">{{ task.status }}</div>
+                  <div class="task-title">{{ task.task_name }}</div>
+                  <div class="task-status-badge" :class="getTaskStatusClass(task.status)">
+                    {{ task.status }}
+                  </div>
+                  <div class="task-time">{{ formatTime(task.due_date) }}</div>
+                  <div v-if="task.collaborators && task.collaborators.length > 0" class="task-assignee">
+                    <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+
+          <!-- Monthly View -->
+          <div v-if="currentView === 'month'" class="monthly-view">
+            <div class="month-grid">
+              <div 
+                v-for="day in monthDays" 
+                :key="day.date" 
+                class="month-day"
+                :class="{ 
+                  'other-month': !day.isCurrentMonth,
+                  'today': isToday(day.date),
+                  'has-tasks': getTasksForDate(day.date).length > 0
+                }"
+                @click="selectDate(day.date)"
+              >
+                <div class="day-number">{{ formatDate(day.date, 'd') }}</div>
+                <div class="day-tasks">
+                  <div 
+                    v-for="task in getTasksForDate(day.date)" 
+                    :key="task.id"
+                    class="task-box"
+                    :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                    :title="`${task.task_name} - ${task.status}${task.collaborators && task.collaborators.length > 0 ? ' - ' + getCollaboratorNames(task.collaborators) : ''}`"
+                  >
+                    <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
+                    <div class="task-box-name">{{ task.task_name }}</div>
+                    <div class="task-box-status">{{ task.status }}</div>
+                    <div v-if="task.collaborators && task.collaborators.length > 0" class="task-box-assignee">
+                      <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Task Details Modal -->
-      <div v-if="selectedTask" class="task-modal-overlay" @click="selectedTaskForDetails = null">
+      <div v-if="selectedTask" class="task-modal-overlay" @click="closeTaskModal">
         <div class="task-modal" @click.stop>
           <div class="modal-header">
             <h3>{{ selectedTask.task_name }}</h3>
@@ -243,31 +235,6 @@
           </div>
         </div>
       </div>
-      <!-- Reschedule Modal -->
-      <div v-if="showRescheduleModal" class="modal-overlay">
-        <div class="modal-content">
-          <h3>Reschedule Task</h3>
-          <p><strong>{{ selectedTaskForReschedule?.task_name }}</strong></p>
-
-          <label for="newDueDate">New Due Date:</label>
-          <input id="newDueDate" type="datetime-local" v-model="newDueDate" class="date-picker" :min="todayString" />
-
-          <div class="modal-actions">
-            <button class="confirm-btn" @click="confirmReschedule">Save</button>
-            <button class="cancel-btn" @click="closeRescheduleModal">Cancel</button>
-          </div>
-        </div>
-      </div>
-      <!-- Success Popup -->
-      <div v-if="successMessage" class="success-popup">
-        {{ successMessage }}
-      </div>
-
-      <!-- Error Popup -->
-      <div v-if="errorMessage" class="error-popup">
-        <span>{{ errorMessage }}</span>
-        <button class="close-btn" @click="errorMessage = ''">&times;</button>
-      </div>
 
       <!-- Filter Popup -->
       <div v-if="showFilterPopup" class="filter-popup-overlay" @click="closeFilterPopup">
@@ -280,16 +247,16 @@
           </div>
           
           <div class="filter-body">
-            <!-- Project Filter -->
+            <!-- Team Member Filter -->
             <div class="filter-section">
               <label class="filter-label">
-                <i class="bi bi-folder"></i>
-                Project
+                <i class="bi bi-people"></i>
+                Team Member
               </label>
-              <select v-model="selectedProjectFilter" class="filter-select">
-                <option value="">All Projects</option>
-                <option v-for="project in projects" :key="project.id" :value="project.id">
-                  {{ project.name }}
+              <select v-model="selectedMemberFilter" class="filter-select">
+                <option value="">All Team Members</option>
+                <option v-for="member in teamMembers" :key="member.id" :value="member.id">
+                  {{ member.name }}
                 </option>
               </select>
             </div>
@@ -332,14 +299,29 @@
         </div>
       </div>
 
+      <!-- Success Popup -->
+      <div v-if="successMessage" class="success-popup">
+        {{ successMessage }}
+      </div>
+
+      <!-- Error Popup -->
+      <div v-if="errorMessage" class="error-popup">
+        <span>{{ errorMessage }}</span>
+        <button class="close-btn" @click="errorMessage = ''">&times;</button>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
-import { sessionState } from '../../services/session.js'
+
+// Get route params
+const route = useRoute()
+const projectId = computed(() => route.params.id)
 
 // Reactive data
 const currentView = ref('week')
@@ -347,18 +329,19 @@ const currentDate = ref(new Date())
 const selectedTask = ref(null)
 const tasks = ref([])
 const loading = ref(false)
-const selectedTaskForDetails = ref(null)
-const selectedTaskForReschedule = ref(null)
+const projectName = ref('')
+const teamMembers = ref([])
+const successMessage = ref('')
+const errorMessage = ref('')
+const users = ref({})
 
 // Filter data
 const showFilterPopup = ref(false)
-const projects = ref([])
-const selectedProjectFilter = ref('')
+const selectedMemberFilter = ref('')
 const selectedStatusFilters = ref([])
-const appliedProjectFilter = ref('')
+const appliedMemberFilter = ref('')
 const appliedStatusFilters = ref([])
 const showCompleted = ref(true)
-const users = ref({})
 
 // Calendar views configuration
 const views = [
@@ -400,22 +383,18 @@ const monthDays = computed(() => {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
   
-  // Calculate start date - beginning of the week containing the first day of the month
   const startDate = new Date(firstDay)
   startDate.setDate(startDate.getDate() - firstDay.getDay())
   
-  // Calculate end date - end of the week containing the last day of the month
   const endDate = new Date(lastDay)
   endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
   
-  // Calculate total weeks needed to show the complete month
   const totalWeeks = Math.ceil((endDate - startDate) / (7 * 24 * 60 * 60 * 1000))
   const totalDays = totalWeeks * 7
   
   const days = []
   const current = new Date(startDate)
   
-  // Generate the exact number of days needed (either 35 for 5 weeks or 42 for 6 weeks)
   for (let i = 0; i < totalDays; i++) {
     const dayDate = new Date(current)
     days.push({
@@ -437,11 +416,10 @@ const filteredTasks = computed(() => {
     filtered = filtered.filter(task => task.status?.toLowerCase() !== 'completed')
   }
   
-  // Apply project filter
-  if (appliedProjectFilter.value) {
+  // Apply team member filter
+  if (appliedMemberFilter.value) {
     filtered = filtered.filter(task => {
-      // Convert both to strings for comparison to handle type mismatches
-      return String(task.project_id) === String(appliedProjectFilter.value)
+      return String(task.assigned_to) === String(appliedMemberFilter.value)
     })
   }
   
@@ -457,13 +435,13 @@ const filteredTasks = computed(() => {
 
 // Check if there are active filters
 const hasActiveFilters = computed(() => {
-  return appliedProjectFilter.value !== '' || appliedStatusFilters.value.length > 0
+  return appliedMemberFilter.value !== '' || appliedStatusFilters.value.length > 0
 })
 
 // Count active filters
 const activeFilterCount = computed(() => {
   let count = 0
-  if (appliedProjectFilter.value) count++
+  if (appliedMemberFilter.value) count++
   if (appliedStatusFilters.value.length > 0) count += appliedStatusFilters.value.length
   return count
 })
@@ -473,15 +451,6 @@ const formatDate = (date, format = 'yyyy-MM-dd') => {
   if (!date) return ''
   
   const d = new Date(date)
-  const options = {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Asia/Singapore'
-  }
   
   if (format === 'EEEE, MMMM d, yyyy') {
     return d.toLocaleDateString('en-US', { 
@@ -534,16 +503,14 @@ const isToday = (date) => {
 const getTasksForDate = (date) => {
   if (!date || !filteredTasks.value || !Array.isArray(filteredTasks.value) || !filteredTasks.value.length) return []
   
-  // Convert the target date to Singapore timezone and get YYYY-MM-DD
   const targetDate = new Date(date)
   const targetDateString = targetDate.toLocaleDateString('en-CA', { 
     timeZone: 'Asia/Singapore' 
-  }) // en-CA gives YYYY-MM-DD format
+  })
   
   const tasksForDate = filteredTasks.value.filter(task => {
     if (!task.due_date) return false
     try {
-      // Convert task due date to Singapore timezone and get YYYY-MM-DD
       const taskDate = new Date(task.due_date)
       const taskDateString = taskDate.toLocaleDateString('en-CA', { 
         timeZone: 'Asia/Singapore' 
@@ -555,10 +522,22 @@ const getTasksForDate = (date) => {
     }
   })
   
-  return tasksForDate.sort((a, b) => {
+  // Remove duplicates based on task ID
+  const uniqueTasks = []
+  const seenTaskIds = new Set()
+  
+  tasksForDate.forEach(task => {
+    if (!seenTaskIds.has(task.id)) {
+      seenTaskIds.add(task.id)
+      uniqueTasks.push(task)
+    }
+  })
+  
+  return uniqueTasks.sort((a, b) => {
     const timeA = new Date(a.due_date).getTime()
     const timeB = new Date(b.due_date).getTime()
-    return timeA - timeB})
+    return timeA - timeB
+  })
 }
 
 const getTasksForDateAndHour = (date, hour) => {
@@ -566,7 +545,6 @@ const getTasksForDateAndHour = (date, hour) => {
   return dayTasks.filter(task => {
     if (!task.due_date) return false
     const taskDate = new Date(task.due_date)
-    // Get the hour in Singapore timezone
     const singaporeHour = parseInt(taskDate.toLocaleTimeString('en-US', { 
       timeZone: 'Asia/Singapore',
       hour12: false,
@@ -594,12 +572,42 @@ const isTaskOverdue = (task) => {
   return due < now && task.status?.toLowerCase() !== 'completed'
 }
 
-const onTaskClick = (task, event) => {
-  // If the click came from the Reschedule button, do nothing
-  if (event.target.closest('.reschedule-btn')) return;
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
 
-  // Otherwise, open task details modal
-  selectTask(task)
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `User ${userid}`
+}
+
+const getCollaboratorNames = (collaborators) => {
+  if (!collaborators || collaborators.length === 0) return ''
+  return collaborators.map(id => getUserName(id)).join(', ')
 }
 
 const selectTask = (task) => {
@@ -651,84 +659,82 @@ const goToToday = () => {
   currentDate.value = new Date()
 }
 
-const fetchUserDetails = async (userid) => {
-  if (!userid) return null
-  if (users.value[userid]) {
-    return users.value[userid] // Return cached user
-  }
-  
-  try {
-    console.log(`Fetching user details for userid: ${userid}`)
-    const response = await fetch(`http://localhost:5003/users/${userid}`)
-    if (response.ok) {
-      const data = await response.json()
-      console.log(`User data received for ${userid}:`, data)
-      const user = data.data
-      if (user) {
-        users.value[userid] = user
-        console.log(`Cached user ${userid}:`, user)
-        return user
-      }
-    } else {
-      console.error(`Failed to fetch user ${userid}: ${response.status}`)
-    }
-  } catch (error) {
-    console.error(`Error fetching user ${userid}:`, error)
-  }
-  return null
-}
-
-const getUserName = (userid) => {
-  if (!userid) return 'Unknown User'
-  const user = users.value[userid]
-  return user?.name || `User ${userid}`
-}
-
-const getCollaboratorNames = (collaborators) => {
-  if (!collaborators || collaborators.length === 0) return ''
-  return collaborators.map(id => getUserName(id)).join(', ')
-}
-
-const fetchTasks = async () => {
+const fetchProjectAndTasks = async () => {
   loading.value = true
   
   try {
-    // Get user ID from session
-    const userId = sessionState.userid
-    if (!userId) {
-      console.warn('No user ID found in session')
-      tasks.value = []
+    if (!projectId.value) {
+      console.warn('No project ID found in route')
       return
     }
     
-    // Fetch tasks directly from API endpoint
-    const response = await fetch(`http://127.0.0.1:5002/tasks/user-task/${userId}`, {
+    // Fetch project details
+    const projectResponse = await fetch(`http://127.0.0.1:5001/projects/${projectId.value}`, {
       headers: { 'Content-Type': 'application/json' }
     })
     
-    if (!response.ok) {
-      const msg = await response.text().catch(() => response.statusText)
-      throw new Error(msg || `HTTP ${response.status}`)
+    if (!projectResponse.ok) {
+      throw new Error(`HTTP ${projectResponse.status}`)
     }
     
-    const data = await response.json()
-    console.log('API Response:', data)
+    const projectData = await projectResponse.json()
+    console.log('Project Response:', projectData)
     
-    if (data.data) {
+    if (projectData.data) {
+      projectName.value = projectData.data.proj_name || 'Project Team Schedule'
+      
+      // Get collaborators (list of user IDs)
+      const collaborators = projectData.data.collaborators || []
+      
+      // Fetch user details for team members first
+      for (const userId of collaborators) {
+        await fetchUserDetails(userId)
+      }
+      
+      // Create team members list with actual names
+      teamMembers.value = collaborators.map(userId => ({
+        id: userId,
+        name: getUserName(userId)
+      }))
+      
+      console.log('Team Members:', teamMembers.value)
+      
+      // Fetch tasks for each collaborator
       const allTasks = []
       
-      // Process parent tasks and their subtasks
-      data.data.forEach(parentTask => {
-        // Add parent task
-        allTasks.push(parentTask)
-        
-        // Add subtasks if they exist
-        if (parentTask.subtasks && Array.isArray(parentTask.subtasks)) {
-          parentTask.subtasks.forEach(subtask => {
-            allTasks.push(subtask)
+      for (const userId of collaborators) {
+        try {
+          const taskResponse = await fetch(`http://127.0.0.1:5002/tasks/user-task/${userId}`, {
+            headers: { 'Content-Type': 'application/json' }
           })
+          
+          if (taskResponse.ok) {
+            const taskData = await taskResponse.json()
+            
+            if (taskData.data && Array.isArray(taskData.data)) {
+              taskData.data.forEach(parentTask => {
+                // Add all tasks for this user
+                allTasks.push({
+                  ...parentTask,
+                  assigned_to: userId
+                })
+                
+                // Add subtasks if they exist
+                if (parentTask.subtasks && Array.isArray(parentTask.subtasks)) {
+                  parentTask.subtasks.forEach(subtask => {
+                    allTasks.push({
+                      ...subtask,
+                      assigned_to: userId
+                    })
+                  })
+                }
+              })
+            }
+          }
+        } catch (error) {
+          console.error(`Error fetching tasks for user ${userId}:`, error)
         }
-      })
+      }
       
       tasks.value = allTasks
       console.log('Loaded tasks:', allTasks.length, 'total tasks')
@@ -747,99 +753,17 @@ const fetchTasks = async () => {
       }
       
       console.log('Fetched user details for', uniqueUserIds.size, 'users')
-      
-      // Debug timezone handling
-      allTasks.forEach(task => {
-        if (task.due_date) {
-          const taskDate = new Date(task.due_date)
-          const sgDateString = taskDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
-          const sgTimeString = taskDate.toLocaleTimeString('en-US', { timeZone: 'Asia/Singapore' })
-          console.log(`Task "${task.task_name}": UTC ${task.due_date} -> SG ${sgDateString} ${sgTimeString}`)
-        }
-      })
     } else {
-      console.warn('Unexpected API response format:', data)
-      tasks.value = []
+      console.warn('Unexpected project API response:', projectData)
     }
   } catch (error) {
-    console.error('Error fetching tasks:', error)
-    tasks.value = []
+    console.error('Error fetching project and tasks:', error)
+    errorMessage.value = 'Failed to load project data'
+    setTimeout(() => {
+      errorMessage.value = ''
+    }, 5000)
   } finally {
     loading.value = false
-  }
-}
-
-// Modal state
-const showRescheduleModal = ref(false)
-const newDueDate = ref('')
-const todayString = ref(new Date().toISOString().split('T')[0])
-const successMessage = ref('')
-const errorMessage = ref('')
-
-const openRescheduleModal = (task) => {
-  selectedTaskForReschedule.value = task
-  newDueDate.value = task.due_date ? task.due_date.split('T')[0] : todayString.value
-  showRescheduleModal.value = true
-}
-
-const closeRescheduleModal = () => {
-  showRescheduleModal.value = false
-  selectedTaskForReschedule.value = null
-  newDueDate.value = ''
-}
-
-const showSuccess = (msg) => {
-  successMessage.value = msg
-  setTimeout(() => {
-    successMessage.value = ''
-  }, 3000) // auto-hide after 3s
-}
-
-const showError = (msg) => {
-  errorMessage.value = msg
-  setTimeout(() => {
-    errorMessage.value = ''
-  }, 5000) // auto-hide after 5s
-}
-
-
-const confirmReschedule = async () => {
-  if (!newDueDate.value) {
-    showError('Please select a new due date.')
-    return
-  }
-  if (newDueDate.value < todayString.value) {
-    showError('Cannot reschedule to a date before today.');
-    return;
-  }
-
-  try {
-    const localDate = new Date(newDueDate.value)
-      // Convert to ISO string in UTC
-    const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
-    const payload = {
-      task_id: selectedTaskForReschedule.value.id,
-      due_date: utcDateString
-    }
-
-    const res = await fetch('http://127.0.0.1:5002/tasks/update', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    const data = await res.json()
-
-    if (data.Code === 200) {
-      selectedTaskForReschedule.value.due_date = newDueDate.value
-      showSuccess('Task rescheduled successfully!')
-    } else {
-      showError(`Failed to reschedule: ${data.Message}`)
-    }
-  } catch (err) {
-    console.error(err)
-    showError('Error rescheduling task.')
-  } finally {
-    closeRescheduleModal()
   }
 }
 
@@ -850,9 +774,6 @@ const toggleShowCompleted = () => {
 
 const toggleFilterPopup = () => {
   showFilterPopup.value = !showFilterPopup.value
-  if (showFilterPopup.value && projects.value.length === 0) {
-    fetchProjects()
-  }
 }
 
 const closeFilterPopup = () => {
@@ -860,73 +781,31 @@ const closeFilterPopup = () => {
 }
 
 const clearFilters = () => {
-  selectedProjectFilter.value = ''
+  selectedMemberFilter.value = ''
   selectedStatusFilters.value = []
-  appliedProjectFilter.value = ''
+  appliedMemberFilter.value = ''
   appliedStatusFilters.value = []
 }
 
 const applyFilters = () => {
-  appliedProjectFilter.value = selectedProjectFilter.value
+  appliedMemberFilter.value = selectedMemberFilter.value
   appliedStatusFilters.value = [...selectedStatusFilters.value]
   closeFilterPopup()
 }
 
-const fetchProjects = async () => {
-  try {
-    const userId = sessionState.userid
-    if (!userId) {
-      console.warn('No user ID found in session')
-      return
-    }
-    
-    const response = await fetch(`http://127.0.0.1:5001/projects/user/${userId}`, {
-      headers: { 'Content-Type': 'application/json' }
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const data = await response.json()
-    if (data.data && Array.isArray(data.data)) {
-      projects.value = data.data.map(project => ({
-        id: project.id,
-        name: project.proj_name
-      }))
-    }
-  } catch (error) {
-    console.error('Error fetching projects:', error)
-    projects.value = []
-  }
-}
-
 // Lifecycle
 onMounted(() => {
-  fetchTasks()
+  fetchProjectAndTasks()
 })
 
-// Watch for userid changes
-watch(() => sessionState.userid, (newUserId) => {
-  if (newUserId) {
-    fetchTasks()
+// Watch for project ID changes
+watch(() => projectId.value, (newProjectId) => {
+  if (newProjectId) {
+    fetchProjectAndTasks()
   }
 })
-
-// Simple debug function
-window.debugCalendar = {
-  getTasksForDate: (dateString) => {
-    const date = new Date(dateString)
-    return getTasksForDate(date)
-  },
-  goToDate: (dateString) => {
-    const date = new Date(dateString)
-    currentDate.value = date
-    console.log(`Navigated to: ${date.toDateString()}`)
-  }
-}
 </script>
 
 <style scoped>
-@import './scheduleview.css';
+@import './projmembersched.css';
 </style>

@@ -1,10 +1,21 @@
 from typing import Dict, Any, Optional, List
 import requests
 import os
+import ssl
+import certifi
+import sendgrid
 from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+from sendgrid.helpers.mail import Mail, Email, To, Content
+from dotenv import load_dotenv
 from models.notification import Notification
 from repo.supa_notification_repo import SupabaseNotificationRepo
+
+# Load environment variables from .env file
+load_dotenv()
+
+# Fix SSL certificate verification issues on macOS
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class NotificationService:
     def __init__(self, repo: Optional[SupabaseNotificationRepo] = None):
@@ -120,28 +131,36 @@ class NotificationService:
 
     def send_email_notification(self, user_email: str, subject: str, message: str) -> Dict[str, Any]:
         """
-        Send email notification using Twilio SendGrid API.
+        Send email notification using SendGrid API with proper integration.
         """
         try:
             # Get SendGrid API key from environment
-            sendgrid_api_key = os.getenv('SENDGRID_API_KEY')
+            sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
             if not sendgrid_api_key:
                 return {"status": 500, "message": "SendGrid API key not configured"}
             
             # Create SendGrid client
-            sg = SendGridAPIClient(api_key=sendgrid_api_key)
+            sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
             
-            # Create email message
-            from_email = os.getenv('SENDGRID_FROM_EMAIL', 'noreply@spm.com')
-            mail = Mail(
-                from_email=from_email,
-                to_emails=user_email,
-                subject=subject,
-                html_content=f"<p>{message}</p>"
-            )
+            # Get sender email from environment
+            from_email = os.environ.get("SENDGRID_FROM_EMAIL")
+            if not from_email:
+                return {"status": 500, "message": "SendGrid from email not configured"}
+            
+            # Create email components using proper SendGrid format
+            from_email_obj = Email(from_email)
+            to_email_obj = To(user_email)
+            subject_obj = subject
+            content_obj = Content("text/html", message)
+            
+            # Create mail object
+            mail = Mail(from_email_obj, to_email_obj, subject_obj, content_obj)
+            
+            # Get mail as JSON
+            mail_json = mail.get()
             
             # Send email
-            response = sg.send(mail)
+            response = sg.client.mail.send.post(request_body=mail_json)
             
             if response.status_code in [200, 201, 202]:
                 return {"status": 200, "message": "Email notification sent successfully"}

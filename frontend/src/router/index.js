@@ -10,10 +10,12 @@ import { sessionState } from "../services/session";
 const TaskView = () => import('../pages/taskview/TaskView.vue')
 const TeamTaskView = () => import('../pages/taskview/TeamTaskView.vue')
 const DepartmentTaskView = () => import('../pages/taskview/DepartmentTaskView.vue')
+const ProjectTaskView = () => import('../pages/taskview/ProjectTaskView.vue')
 const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
 const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 const ProjectDetail = () => import('../pages/projectdetails/ProjectDetails.vue')
 const ScheduleView = () => import('../pages/schedule/ScheduleView.vue')
+const ProjectMemberSchedule = () => import('../pages/schedule/ProjectMemberSchedule.vue')
 
 const routes = [
   { path: "/login", name: "Login", component: Login },
@@ -41,6 +43,11 @@ const routes = [
     // ,meta: { requiresAuth: true }
   },
 
+  { path: '/tasks/projects', // Project-based task overview
+    name: 'project-task-view',
+    component: ProjectTaskView
+  },
+
   { path: '/tasks/department',  // Department tasks (director only)
     name: 'department-task-view', 
     component: DepartmentTaskView
@@ -62,6 +69,10 @@ const routes = [
     name: 'schedule-view',
     component: ScheduleView
     // ,meta: { requiresAuth: true }
+  },
+  { path: '/schedule/project/:id',
+    name: 'project-member-schedule',
+    component: ProjectMemberSchedule
   }
 ];
 

@@ -83,6 +83,26 @@
             </div>
           </div>
 
+          <!-- Project Selection -->
+          <div class="form-group">
+            <label for="project">Project</label>
+            <select
+              id="project"
+              v-model="editedTask.project_id"
+              :disabled="isLoading"
+              class="form-select"
+            >
+              <option :value="null">No Project</option>
+              <option
+                v-for="proj in projects"
+                :key="proj.id || proj.project_id"
+                :value="proj.id || proj.project_id"
+              >
+                {{ proj.proj_name }}
+              </option>
+            </select>
+          </div>
+
           <!-- Collaborators Section -->
           <div class="form-group">
             <label>Collaborators</label>
@@ -297,6 +317,7 @@ export default {
         due_date: "",
         priority: "5",
         owner_id: null,
+        project_id: null,
         collaborators: [],
         attachments: [],
       },
@@ -304,6 +325,7 @@ export default {
       selectedCollaborators: [],
       currentAttachments: [],
       newAttachmentFile: null,
+      projects: [],
       collaboratorQuery: '',
       collaboratorSuggestions: [],
       isLoading: false,
@@ -347,6 +369,7 @@ export default {
         if (newVal) {
           this.clearMessages();
           this.fetchTaskDetails();
+          this.fetchUserProjects();
         }
       },
       immediate: true
@@ -393,6 +416,7 @@ export default {
           due_date: dueDate,
           priority: task.priority || "5",
           owner_id: task.owner_id || this.currentOwner,
+          project_id: task.project_id || null,
           collaborators: Array.isArray(task.collaborators) 
             ? task.collaborators.map(c => parseInt(c))
             : [],
@@ -416,6 +440,24 @@ export default {
         this.errorMessage = "Failed to load task details. Please try again.";
       } finally {
         this.isLoading = false;
+      }
+    },
+
+    async fetchUserProjects() {
+      try {
+        const currentUserId = localStorage.getItem('spm_userid');
+        if (!currentUserId) return;
+
+        const resp = await fetch(`http://127.0.0.1:5001/projects/user/${currentUserId}`);
+        if (!resp.ok) return;
+
+        const data = await resp.json();
+        // projects may be in data.data or data.projects or raw array
+        const list = data.data || data.projects || data || [];
+        this.projects = Array.isArray(list) ? list : [];
+      } catch (err) {
+        console.error('Failed to fetch user projects:', err);
+        this.projects = [];
       }
     },
 
@@ -516,6 +558,10 @@ export default {
         formData.append('status', this.editedTask.status);
         formData.append('due_date', this.editedTask.due_date);
         formData.append('priority', this.editedTask.priority);
+        // Include project association
+        if (this.editedTask.project_id) {
+          formData.append('project_id', this.editedTask.project_id);
+        }
         
         // Add collaborators
         if (collaboratorIds.length > 0) {
@@ -563,6 +609,11 @@ export default {
         // If this is a subtask, sync collaborators with parent task
         if (this.isSubtask && this.parentTaskId) {
           await this.syncParentTaskCollaborators(collaboratorIds);
+        }
+        
+        // If this task is attached to a project, sync collaborators with project
+        if (this.editedTask.project_id) {
+          await this.syncProjectCollaborators(collaboratorIds);
         }
         
         // Trigger notifications for task updates
@@ -639,6 +690,46 @@ export default {
         }
       } catch (error) {
         console.error('Error syncing parent task collaborators:', error);
+        // Don't throw error to avoid breaking the main update flow
+      }
+    },
+
+    async syncProjectCollaborators(taskCollaboratorIds) {
+      try {
+        // Only sync if task is attached to a project
+        if (!this.editedTask.project_id) return;
+
+        // Get current project details
+        const projectResponse = await fetch(`http://127.0.0.1:5001/projects/${this.editedTask.project_id}`);
+        if (!projectResponse.ok) return;
+        
+        const projectData = await projectResponse.json();
+        const project = projectData.data || projectData;
+        
+        // Merge project collaborators with task collaborators
+        const projectCollaborators = Array.isArray(project.collaborators) 
+          ? project.collaborators.map(c => parseInt(c))
+          : [];
+        
+        const mergedCollaborators = [...new Set([...projectCollaborators, ...taskCollaboratorIds])];
+        
+        // Update project if there are new collaborators
+        if (mergedCollaborators.length > projectCollaborators.length) {
+          const updateData = {
+            project_id: this.editedTask.project_id,
+            collaborators: mergedCollaborators
+          };
+
+          await fetch("http://127.0.0.1:5001/projects/update", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(updateData),
+          });
+          
+          console.log('Project collaborators synced successfully');
+        }
+      } catch (error) {
+        console.error('Error syncing project collaborators:', error);
         // Don't throw error to avoid breaking the main update flow
       }
     },
@@ -748,6 +839,27 @@ export default {
               currentUserName
             )
           );
+        }
+
+        // Collaborator changes notification
+        const originalCollaborators = this.originalTask.collaborators || [];
+        const newCollaborators = this.editedTask.collaborators || [];
+        
+        // Find newly added collaborators
+        const addedCollaborators = newCollaborators.filter(
+          collabId => !originalCollaborators.includes(collabId)
+        );
+        
+        // Send notifications to newly added collaborators
+        if (addedCollaborators.length > 0) {
+          const addPromises = addedCollaborators.map(collaboratorId =>
+            enhancedNotificationService.triggerTaskAssignmentNotification(
+              this.taskId,
+              collaboratorId,
+              currentUserName
+            )
+          );
+          promises.push(...addPromises);
         }
 
         // Execute all notification triggers
