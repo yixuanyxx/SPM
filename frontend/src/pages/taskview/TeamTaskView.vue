@@ -12,22 +12,24 @@
           <p class="page-subtitle">Monitor and manage your team's task distribution</p>
         </div>
         <div class="header-actions">
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'members' }"
-            @click="viewMode = 'members'"
-          >
-            <i class="bi bi-people-fill"></i>
-            Member View
-          </button>
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'tasks' }"
-            @click="viewMode = 'tasks'"
-          >
-            <i class="bi bi-list-task"></i>
-            Task View
-          </button>
+          <div class="header-right-actions">
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'members' }"
+              @click="viewMode = 'members'"
+            >
+              <i class="bi bi-people-fill"></i>
+              Member View
+            </button>
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'tasks' }"
+              @click="viewMode = 'tasks'"
+            >
+              <i class="bi bi-list-task"></i>
+              Task View
+            </button>
+          </div>
         </div>
       </div>
       
@@ -371,6 +373,15 @@
                       <i class="bi bi-flag-fill"></i>
                       <span>{{ task.priority }}</span>
                     </div>
+                    <!-- Overdue/Due Soon indicators -->
+                    <div v-if="isTaskOverdue(task)" class="task-overdue">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      <span>Overdue</span>
+                    </div>
+                    <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
+                      <i class="bi bi-clock-fill"></i>
+                      <span>Due Soon</span>
+                    </div>
                   </div>
                 </div>
                 <div class="task-people">
@@ -394,14 +405,6 @@
                   <div class="task-date">
                     <i class="bi bi-calendar3"></i>
                     <span>{{ formatDate(task.due_date) }}</span>
-                  </div>
-                  <div v-if="isTaskOverdue(task)" class="task-overdue">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                    <span>Overdue</span>
-                  </div>
-                  <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
-                    <i class="bi bi-clock"></i>
-                    <span>Due Soon</span>
                   </div>
                 </div>
               </div>

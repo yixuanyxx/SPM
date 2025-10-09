@@ -11,28 +11,32 @@
           <h1 class="page-title">{{ selectedTeamId ? `${selectedTeamName} Workload` : 'Department Teams' }}</h1>
           <p class="page-subtitle">{{ selectedTeamId ? 'Monitor and manage team member task distribution' : 'Select a team to view member workloads and tasks' }}</p>
         </div>
-        <div class="header-actions" v-if="selectedTeamId">
-          <button class="back-btn" @click="goBackToTeams">
-            <i class="bi bi-arrow-left"></i>
-            Back to Teams
-          </button>
+        <div class="header-actions">
+          <div class="header-left-actions" v-if="selectedTeamId">
+            <button class="back-btn" @click="goBackToTeams">
+              <i class="bi bi-arrow-left"></i>
+              Back to Teams
+            </button>
+          </div>
           
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'members' }"
-            @click="viewMode = 'members'"
-          >
-            <i class="bi bi-people-fill"></i>
-            Member View
-          </button>
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'tasks' }"
-            @click="viewMode = 'tasks'"
-          >
-            <i class="bi bi-list-task"></i>
-            Task View
-          </button>
+          <div class="header-right-actions" v-if="selectedTeamId">
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'members' }"
+              @click="viewMode = 'members'"
+            >
+              <i class="bi bi-people-fill"></i>
+              Member View
+            </button>
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'tasks' }"
+              @click="viewMode = 'tasks'"
+            >
+              <i class="bi bi-list-task"></i>
+              Task View
+            </button>
+          </div>
         </div>
       </div>
       
@@ -457,6 +461,15 @@
                       <i class="bi bi-flag-fill"></i>
                       <span>{{ task.priority }}</span>
                     </div>
+                    <!-- Overdue/Due Soon indicators -->
+                    <div v-if="isTaskOverdue(task)" class="task-overdue">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      <span>Overdue</span>
+                    </div>
+                    <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
+                      <i class="bi bi-clock-fill"></i>
+                      <span>Due Soon</span>
+                    </div>
                   </div>
                 </div>
                 <div class="task-people">
@@ -480,14 +493,6 @@
                   <div class="task-date">
                     <i class="bi bi-calendar3"></i>
                     <span>{{ formatDate(task.due_date) }}</span>
-                  </div>
-                  <div v-if="isTaskOverdue(task)" class="task-overdue">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                    <span>Overdue</span>
-                  </div>
-                  <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
-                    <i class="bi bi-clock"></i>
-                    <span>Due Soon</span>
                   </div>
                 </div>
               </div>
@@ -659,7 +664,7 @@ const fetchDepartmentMembers = async () => {
   }
 }
 
-// Function to fetch department teams
+// Function to fetch department teams (optimized for speed)
 const fetchDepartmentTeams = async () => {
   if (!deptId.value) {
     console.log('No department ID available for teams')
@@ -670,22 +675,30 @@ const fetchDepartmentTeams = async () => {
   console.log('Fetching department teams for dept:', deptId.value)
   
   try {
-    // First fetch all department members to calculate team stats
-    await fetchAllDepartmentMembers()
+    // Fetch department members and teams in parallel (faster)
+    console.log('Loading department data in parallel...')
+    const [membersResult, teamsResult] = await Promise.all([
+      fetchAllDepartmentMembers(),
+      fetch(`http://localhost:5004/teams/department/${deptId.value}`).then(response => {
+        if (response.ok) {
+          return response.json()
+        }
+        throw new Error(`Failed to fetch teams: ${response.status}`)
+      })
+    ])
     
-    // Then fetch teams
-    const response = await fetch(`http://localhost:5004/teams/department/${deptId.value}`)
-    if (response.ok) {
-      const data = await response.json()
-      departmentTeams.value = data.data || []
-      console.log('Fetched department teams:', departmentTeams.value.length, departmentTeams.value)
-      
-      // Fetch statistics for each team
+    // Process teams data
+    departmentTeams.value = teamsResult.data || []
+    console.log('Fetched department teams:', departmentTeams.value.length, 'teams')
+    
+    // Only fetch statistics if we have teams
+    if (departmentTeams.value.length > 0) {
+      console.log('Fetching workload statistics...')
       await fetchTeamStatistics()
     } else {
-      console.error('Failed to fetch department teams:', response.status)
-      departmentTeams.value = []
+      console.log('No teams found, skipping statistics')
     }
+    
   } catch (error) {
     console.error('Error fetching department teams:', error)
     departmentTeams.value = []
@@ -694,84 +707,119 @@ const fetchDepartmentTeams = async () => {
   }
 }
 
-// Function to fetch statistics for all teams
+// Function to fetch statistics for all teams (optimized for speed and accuracy)
 const fetchTeamStatistics = async () => {
   if (!departmentTeams.value.length) return
   
   try {
-    // Fetch task counts and workload data for each team
-    const statsPromises = departmentTeams.value.map(async (team) => {
+    console.log(`Optimizing load for ${departmentTeams.value.length} teams...`)
+    
+    // Step 1: Parallel fetch of all team tasks
+    const teamTaskPromises = departmentTeams.value.map(async (team) => {
       try {
-        // Fetch team tasks to calculate task count
-        const tasksResponse = await fetch(`http://localhost:5002/tasks/team/${team.id}`)
-        let taskCount = 0
-        let teamMembers = []
-        
-        if (tasksResponse.ok) {
-          const tasksData = await tasksResponse.json()
-          taskCount = (tasksData.data || []).length
+        const response = await fetch(`http://localhost:5002/tasks/team/${team.id}`)
+        if (response.ok) {
+          const data = await response.json()
+          return { teamId: team.id, tasks: data.data || [] }
         }
-        
-        // Get team members for workload calculation
-        teamMembers = allDepartmentMembers.value.filter(member => member.team_id === team.id)
-        
-        // Calculate workload distribution
-        // We need to fetch tasks for each member to calculate their workload
-        const workloadCounts = { low: 0, moderate: 0, high: 0, overload: 0 }
-        
-        for (const member of teamMembers) {
-          try {
-            const memberTasksResponse = await fetch(`http://localhost:5002/tasks/user-task/${member.userid}`)
-            if (memberTasksResponse.ok) {
-              const memberTasksData = await memberTasksResponse.json()
-              const memberTasks = memberTasksData.data || []
-              
-              // Calculate workload for this member
-              const activeTasks = memberTasks.filter(task => task.status !== 'Completed')
-              const highPriorityTasks = memberTasks.filter(task => parseInt(task.priority) >= 8)
-              
-              let workloadLevel = 'low'
-              if (activeTasks.length >= 8 || highPriorityTasks.length >= 4) {
-                workloadLevel = 'overload'
-              } else if (activeTasks.length >= 5 || highPriorityTasks.length >= 2) {
-                workloadLevel = 'high'
-              } else if (activeTasks.length >= 3) {
-                workloadLevel = 'moderate'
-              }
-              
-              workloadCounts[workloadLevel]++
-            }
-          } catch (error) {
-            console.error(`Error fetching tasks for member ${member.userid}:`, error)
-          }
-        }
-        
-        return {
-          teamId: team.id,
-          taskCount,
-          workloadCounts
-        }
+        return { teamId: team.id, tasks: [] }
       } catch (error) {
-        console.error(`Error fetching stats for team ${team.id}:`, error)
-        return {
-          teamId: team.id,
-          taskCount: 0,
-          workloadCounts: { low: 0, moderate: 0, high: 0, overload: 0 }
+        console.error(`Error fetching tasks for team ${team.id}:`, error)
+        return { teamId: team.id, tasks: [] }
+      }
+    })
+    
+    const teamTasksResults = await Promise.all(teamTaskPromises)
+    console.log('Team tasks fetched in parallel')
+    
+    // Step 2: Build member task requests in parallel (optimized for empty teams)
+    const allMemberTaskPromises = []
+    const teamMemberMapping = {}
+    let teamsWithMembers = 0
+    
+    // Pre-calculate team member mappings and build all member task requests
+    departmentTeams.value.forEach(team => {
+      const teamMembers = allDepartmentMembers.value.filter(member => member.team_id === team.id)
+      teamMemberMapping[team.id] = teamMembers
+      
+      if (teamMembers.length > 0) {
+        teamsWithMembers++
+        // Add parallel requests for all members of this team
+        teamMembers.forEach(member => {
+          allMemberTaskPromises.push(
+            fetch(`http://localhost:5002/tasks/user-task/${member.userid}`)
+              .then(response => response.ok ? response.json() : null)
+              .then(data => ({
+                teamId: team.id,
+              memberId: member.userid,
+              tasks: data?.data || []
+            }))
+            .catch(error => {
+              console.error(`Error fetching tasks for member ${member.userid}:`, error)
+              return { teamId: team.id, memberId: member.userid, tasks: [] }
+            })
+        )
+      })
+      }
+    })
+    
+    console.log(`Optimized: ${teamsWithMembers} teams with members, ${allMemberTaskPromises.length} total member requests`)
+    
+    // Step 3: Execute all member task requests in parallel
+    const memberTasksResults = await Promise.all(allMemberTaskPromises)
+    console.log(`Member tasks fetched in parallel for ${allMemberTaskPromises.length} members`)
+    
+    // Step 4: Process all results efficiently
+    const finalStats = {}
+    
+    departmentTeams.value.forEach(team => {
+      // Get team task count
+      const teamTaskResult = teamTasksResults.find(result => result.teamId === team.id)
+      const taskCount = teamTaskResult ? teamTaskResult.tasks.length : 0
+      
+      // Calculate workload distribution
+      const workloadCounts = { low: 0, moderate: 0, high: 0, overload: 0 }
+      const teamMembers = teamMemberMapping[team.id] || []
+      
+      // Process each team member's workload
+      teamMembers.forEach(member => {
+        const memberTaskResult = memberTasksResults.find(
+          result => result.teamId === team.id && result.memberId === member.userid
+        )
+        
+        if (memberTaskResult && memberTaskResult.tasks.length > 0) {
+          const memberTasks = memberTaskResult.tasks
+          
+          // Calculate workload for this member (same logic, more efficient)
+          const activeTasks = memberTasks.filter(task => task.status !== 'Completed')
+          const highPriorityTasks = memberTasks.filter(task => parseInt(task.priority) >= 8)
+          
+          let workloadLevel = 'low'
+          if (activeTasks.length >= 8 || highPriorityTasks.length >= 4) {
+            workloadLevel = 'overload'
+          } else if (activeTasks.length >= 5 || highPriorityTasks.length >= 2) {
+            workloadLevel = 'high'
+          } else if (activeTasks.length >= 3) {
+            workloadLevel = 'moderate'
+          }
+          
+          workloadCounts[workloadLevel]++
+        } else {
+          // Member has no tasks, so they have low workload
+          workloadCounts['low']++
         }
+      })
+      
+      finalStats[team.id] = {
+        taskCount,
+        workloadCounts
       }
     })
     
-    const results = await Promise.all(statsPromises)
+    // Step 5: Store results
+    teamStats.value = finalStats
+    console.log('Optimized team statistics completed:', teamStats.value)
     
-    // Store the statistics
-    results.forEach(stat => {
-      teamStats.value[stat.teamId] = {
-        taskCount: stat.taskCount,
-        workloadCounts: stat.workloadCounts
-      }
-    })
-    
-    console.log('Fetched team statistics:', teamStats.value)
   } catch (error) {
     console.error('Error fetching team statistics:', error)
   }

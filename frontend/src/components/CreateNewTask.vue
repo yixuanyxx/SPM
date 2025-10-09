@@ -138,9 +138,9 @@
 
           <!-- Subtasks Component -->
           <SubtaskForm v-model="newTask.subtasks" />
-
+        
           <!-- Attachments -->
-          <div class="form-group">
+          <div class="form-group mt-4">
             <label>Attach PDF</label>
             <input
               type="file"

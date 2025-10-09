@@ -11,28 +11,32 @@
           <h1 class="page-title">Project Workload</h1>
           <p class="page-subtitle">Monitor and manage project members' task distribution</p>
         </div>
-        <div class="header-actions" v-if="selectedProjectId">
-          <button class="back-btn" @click="goBackToProjects">
-            <i class="bi bi-arrow-left"></i>
-            Back to Projects
-          </button>
+        <div class="header-actions">
+          <div class="header-left-actions" v-if="selectedProjectId">
+            <button class="back-btn" @click="goBackToProjects">
+              <i class="bi bi-arrow-left"></i>
+              Back to Projects
+            </button>
+          </div>
           
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'members' }"
-            @click="viewMode = 'members'"
-          >
-            <i class="bi bi-people-fill"></i>
-            Member View
-          </button>
-          <button 
-            class="view-toggle-btn" 
-            :class="{ active: viewMode === 'tasks' }"
-            @click="viewMode = 'tasks'"
-          >
-            <i class="bi bi-list-task"></i>
-            Task View
-          </button>
+          <div class="header-right-actions" v-if="selectedProjectId">
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'members' }"
+              @click="viewMode = 'members'"
+            >
+              <i class="bi bi-people-fill"></i>
+              Member View
+            </button>
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'tasks' }"
+              @click="viewMode = 'tasks'"
+            >
+              <i class="bi bi-list-task"></i>
+              Task View
+            </button>
+          </div>
         </div>
       </div>
       
@@ -71,7 +75,7 @@
                   <i class="bi bi-folder-fill"></i>
                 </div>
                 <div class="project-info">
-                  <h3 class="project-name">{{ project.proj_name || project.name }}</h3>
+                  <h3 class="project-name mt-3">{{ project.proj_name || project.name }}</h3>
                   <!-- <p class="project-id">Project ID: {{ project.id }}</p> -->
                 </div>
               </div>
@@ -393,6 +397,15 @@
                             <i class="bi bi-flag-fill"></i>
                             <span>{{ task.priority }}</span>
                           </div>
+                          <!-- Overdue/Due Soon indicators -->
+                          <div v-if="isTaskOverdue(task)" class="task-overdue">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                            <span>Overdue</span>
+                          </div>
+                          <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
+                            <i class="bi bi-clock-fill"></i>
+                            <span>Due Soon</span>
+                          </div>
                         </div>
                       </div>
                       <div class="task-people">
@@ -416,14 +429,6 @@
                         <div class="task-date">
                           <i class="bi bi-calendar3"></i>
                           <span>{{ formatDate(task.due_date) }}</span>
-                        </div>
-                        <div v-if="isTaskOverdue(task)" class="task-overdue">
-                          <i class="bi bi-exclamation-triangle-fill"></i>
-                          <span>Overdue</span>
-                        </div>
-                        <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
-                          <i class="bi bi-clock"></i>
-                          <span>Due Soon</span>
                         </div>
                       </div>
                     </div>

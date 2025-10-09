@@ -11,10 +11,14 @@
           <h1 class="page-title">My Personal Tasks</h1>
           <p class="page-subtitle">View and Create Your Personal Tasks</p>
         </div>
-        <button v-if="canCreateTask" @click="openCreateTask" class="create-task-btn">
-            <i class="bi bi-plus-lg"></i>
-            Create New Task
-        </button>
+        <div class="header-actions">
+          <div class="header-right-actions">
+            <button v-if="canCreateTask" @click="openCreateTask" class="create-task-btn">
+              <i class="bi bi-plus-lg"></i>
+              Create New Task
+            </button>
+          </div>
+        </div>
         
         <CreateNewTaskForm 
           :isVisible="isCreateTaskVisible"
@@ -115,20 +119,29 @@
       <div class="tasks-container">
 
         <!-- Loading state -->
-        <div v-if="isLoadingTasks" class="loading-state">
+        <div v-if="isLoadingTasks || !hasInitialized" class="loading-state">
           <div class="loading-spinner">
             <i class="bi bi-arrow-clockwise spin"></i>
           </div>
           <p class="loading-text">Loading your tasks...</p>
         </div>
 
-        <!-- if no tasks found -->
-        <div v-else-if="!isLoadingTasks && filteredTasks.length === 0" class="empty-state">
+        <!-- if no tasks found - only show when fully loaded and tasks array is truly empty -->
+        <div v-else-if="hasInitialized && !isLoadingTasks && tasks.length === 0" class="empty-state">
           <div class="empty-icon">
             <i class="bi bi-clipboard"></i>
           </div>
           <div class="empty-title">No tasks found :(</div>
           <p class="empty-subtitle">{{ getEmptyMessage() }}</p>
+        </div>
+
+        <!-- if tasks exist but filtered results are empty -->
+        <div v-else-if="hasInitialized && !isLoadingTasks && tasks.length > 0 && filteredTasks.length === 0" class="empty-state">
+          <div class="empty-icon">
+            <i class="bi bi-funnel"></i>
+          </div>
+          <div class="empty-title">No tasks match your filter</div>
+          <p class="empty-subtitle">Try adjusting your filter settings to see more tasks.</p>
         </div>
 
         <div 
@@ -155,6 +168,15 @@
                     <div class="task-priority" :class="getPriorityClass(task.priority)">
                       <i class="bi bi-flag-fill"></i>
                       <span>{{ task.priority }}</span>
+                    </div>
+                    <!-- Overdue/Due Soon indicators -->
+                    <div v-if="isTaskOverdue(task)" class="task-overdue">
+                      <i class="bi bi-exclamation-triangle-fill"></i>
+                      <span>Overdue</span>
+                    </div>
+                    <div v-else-if="isTaskDueSoon(task)" class="task-due-soon">
+                      <i class="bi bi-clock-fill"></i>
+                      <span>Due Soon</span>
                     </div>
                     <!-- New Create Subtask Button -->
                     <button 
@@ -339,13 +361,13 @@ onMounted(() => {
         }
         return response.json()
       })
-      .then(data => {
+      .then(async data => {
         // API returns { "tasks": [ {...}, {...} ] }
         tasks.value = data.tasks.data
         console.log('Fetched tasks:', tasks.value)
         
-        // Fetch user details for all users mentioned in tasks
-        fetchTaskUsers()
+        // Fetch user details for all users mentioned in tasks - wait for completion
+        await fetchTaskUsers()
       })
       .catch(error => {
         console.error('Error fetching tasks:', error)
@@ -389,7 +411,8 @@ const tasks = ref([]) // where the fetched data will be stored
 const userProjects = ref([])
 const showSuccessMessage = ref(false)
 const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
-const isLoadingTasks = ref(false) // Loading state for tasks
+const isLoadingTasks = ref(true) // Loading state for tasks - start as true
+const hasInitialized = ref(false) // Track if component has been initialized
 
 // Function to fetch user details by userid
 const fetchUserDetails = async (userid) => {
@@ -449,10 +472,44 @@ const fetchTaskUsers = async () => {
   
   console.log(`Found user IDs to fetch:`, Array.from(userIds))
   
-  // Fetch user details for all unique IDs
-  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
-  const results = await Promise.all(fetchPromises)
-  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+  // Only fetch users we don't already have cached
+  const uncachedUserIds = Array.from(userIds).filter(userid => !users.value[userid])
+  
+  if (uncachedUserIds.length > 0) {
+    console.log(`Fetching ${uncachedUserIds.length} new users:`, uncachedUserIds)
+    // Fetch user details for all unique IDs that aren't cached
+    const fetchPromises = uncachedUserIds.map(userid => fetchUserDetails(userid))
+    const results = await Promise.all(fetchPromises)
+    console.log(`Fetched ${results.filter(r => r !== null).length} new users out of ${uncachedUserIds.length}`)
+  }
+}
+
+// Helper function to fetch user details for a specific task
+const fetchTaskSpecificUsers = async (taskData) => {
+  const userIds = new Set()
+  
+  // Collect user IDs from the specific task
+  if (taskData.owner_id) userIds.add(taskData.owner_id)
+  if (taskData.collaborators) {
+    taskData.collaborators.forEach(id => userIds.add(id))
+  }
+  if (taskData.subtasks) {
+    taskData.subtasks.forEach(subtask => {
+      if (subtask.owner_id) userIds.add(subtask.owner_id)
+      if (subtask.collaborators) {
+        subtask.collaborators.forEach(id => userIds.add(id))
+      }
+    })
+  }
+  
+  // Only fetch users we don't already have cached
+  const uncachedUserIds = Array.from(userIds).filter(userid => !users.value[userid])
+  
+  if (uncachedUserIds.length > 0) {
+    console.log(`Fetching users for new task:`, uncachedUserIds)
+    const fetchPromises = uncachedUserIds.map(userid => fetchUserDetails(userid))
+    await Promise.all(fetchPromises)
+  }
 }
 
 onMounted(() => {
@@ -474,19 +531,20 @@ onMounted(() => {
         }
         return response.json()
       })
-      .then(data => {
+      .then(async data => {
         // API returns { "tasks": [ {...}, {...} ] }
         tasks.value = data.data
         console.log('Fetched tasks:', tasks.value)
         
-        // Fetch user details for all users mentioned in tasks
-        fetchTaskUsers()
+        // Fetch user details for all users mentioned in tasks - wait for completion
+        await fetchTaskUsers()
       })
       .catch(error => {
         console.error('Error fetching tasks:', error)
       })
       .finally(() => {
         isLoadingTasks.value = false // End loading
+        hasInitialized.value = true // Mark as fully initialized
       })
 
     // Fetch projects owned by user
@@ -562,9 +620,13 @@ function openCreateTask() {
   isCreateTaskVisible.value = true;
 }
 
-const handleTaskCreated = (newTaskData) => {
+const handleTaskCreated = async (newTaskData) => {
   tasks.value.push(newTaskData)
   isCreateTaskVisible.value = false
+  
+  // Fetch user details specifically for the newly created task
+  await fetchTaskSpecificUsers(newTaskData)
+  
   showSuccessMessage.value = true
   setTimeout(() => {
     showSuccessMessage.value = false
@@ -607,6 +669,9 @@ const saveSubtasks = async () => {
     
     console.log('Saving subtasks:', currentSubtasks.value)
     closeSubtaskModal()
+    
+    // Fetch user details for the newly created subtasks
+    await fetchTaskUsers()
     
     // Show success message
   } catch (error) {
@@ -925,6 +990,23 @@ const getEmptyMessage = () => {
     'Unassigned': 'No unassigned tasks.'
   }
   return messages[activeFilter.value] || 'No tasks found.'
+}
+
+// Utility functions for overdue and due soon tasks
+const isTaskOverdue = (task) => {
+  if (!task.due_date || task.status === 'Completed') return false
+  const dueDate = new Date(task.due_date)
+  const now = new Date()
+  return dueDate < now
+}
+
+const isTaskDueSoon = (task) => {
+  if (!task.due_date || task.status === 'Completed') return false
+  const dueDate = new Date(task.due_date)
+  const now = new Date()
+  const timeDiff = dueDate.getTime() - now.getTime()
+  const daysDiff = timeDiff / (1000 * 3600 * 24)
+  return daysDiff > 0 && daysDiff <= 3 // Due within 3 days
 }
 
 const totalTasks = computed(() => tasks.value.length)

@@ -1,3 +1,53 @@
+/*
+ * =====================================================
+ * TASKVIEW COMPREHENSIVE STYLING STANDARDIZATION
+ * =====================================================
+ * 
+ * This CSS file provides unified styling for all TaskView pages:
+ * - TaskView.vue (Personal Tasks)
+ * - DepartmentTaskView.vue (Department Teams & Tasks)
+ * - TeamTaskView.vue (Team Workload)
+ * - ProjectTaskView.vue (Project Workload)
+ * 
+ * STANDARDIZED COMPONENTS:
+ * ------------------------
+ * 1. HEADER LAYOUT:
+ *    - Consistent header structure with left/right action groups
+ *    - Back buttons positioned on left side for navigation
+ *    - Action buttons (Member View, Task View, Create Task) on right side
+ *    - Responsive design that stacks vertically on mobile
+ * 
+ * 2. BUTTON STANDARDIZATION:
+ *    - All buttons use consistent padding: 0.75rem 1.5rem
+ *    - Minimum touch target of 44px height (50px on mobile)
+ *    - Unified color scheme: #3b82f6 primary, #6b7280 secondary
+ *    - Standardized hover states and transitions
+ * 
+ * 3. LOADING STATES:
+ *    - Consistent blue spinner color: #3b82f6
+ *    - Unified loading layout and typography
+ *    - Standardized loading messages
+ * 
+ * 4. OVERDUE/DUE SOON INDICATORS:
+ *    - Overdue: #dc2626 (red) with warning triangle icon
+ *    - Due Soon: #d97706 (orange) with clock icon
+ *    - Consistent placement in task-badges section
+ *    - Responsive font sizing and spacing
+ * 
+ * 5. RESPONSIVE DESIGN:
+ *    - 1024px+ : Desktop layout with full sidebar
+ *    - 768px-1023px : Tablet layout with smaller sidebar
+ *    - 480px-767px : Mobile layout with collapsible sidebar
+ *    - <480px : Small mobile with full-width buttons
+ * 
+ * ARCHITECTURE:
+ * -------------
+ * - Uses CSS namespacing under .app-layout to prevent conflicts
+ * - Mobile-first responsive design with progressive enhancement
+ * - Consistent color palette and design tokens
+ * - Accessible touch targets and color contrast
+ */
+
 /* Layout: make the page fill the viewport with sidebar */
 .app-layout {
   display: flex;
@@ -43,6 +93,63 @@
   align-items: center;            /* vertically center items */
   padding: 1rem 2rem;
   border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;               /* allow wrapping on small screens */
+  gap: 1rem;                     /* add gap between items when wrapping */
+}
+
+.header-content {
+  flex: 1;
+  min-width: 250px;             /* prevent squishing */
+}
+
+.header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.header-left-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.header-right-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: auto;             /* push to right side */
+}
+
+/* Back Button Styling */
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;              /* minimum touch target */
+  border: 2px solid #6b7280;
+  border-radius: 8px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.back-btn:hover {
+  border-color: #374151;
+  color: #374151;
+  background: #f9fafb;
+}
+
+.back-btn i {
+  font-size: 1rem;
 }
 
 .page-title {
@@ -416,29 +523,30 @@
   background: #3b82f6;
   color: white;
   border: none;
-  padding: 0.625rem 1.25rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;              /* minimum touch target */
   border-radius: 12px;
   cursor: pointer;
   font-weight: 600;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
   letter-spacing: 0.025em;
   white-space: nowrap;
 }
 
 .create-task-btn:hover {
-  background: #3b82f6;
+  background: #2563eb;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
 }
 
 .create-task-btn:active {
   transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 2px 4px rgba(59, 130, 246, 0.2);
 }
 
 .create-task-btn i {
@@ -869,7 +977,7 @@
 .loading-spinner {
   font-size: 2rem;
   margin-bottom: 1rem;
-  color: #6366f1;
+  color: #3b82f6;
 }
 
 .loading-spinner i {
@@ -1203,7 +1311,8 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1rem;
+  padding: 0.75rem 1.5rem;
+  min-height: 44px;              /* minimum touch target */
   border: 2px solid #e5e7eb;
   border-radius: 8px;
   background: white;
@@ -1481,9 +1590,9 @@
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
-  margin-bottom: 0.75rem;
+  /* margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px dashed #f3f4f6;
+  border-bottom: 1px dashed #f3f4f6; */
 }
 
 .project-title {
@@ -1864,10 +1973,66 @@
   }
 }
 
+/* ===== RESPONSIVE DESIGN ===== */
+
+/* Large tablets and small desktops */
+@media (max-width: 1024px) {
+  .app-container {
+    margin-left: 200px; /* Smaller sidebar */
+    padding: 1.5rem;
+  }
+  
+  .header-section {
+    padding: 1rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .header-right-actions {
+    margin-left: 0;
+  }
+}
+
+/* Tablets */
 @media (max-width: 768px) {
   .app-container {
+    margin-left: 0; /* Remove sidebar margin on mobile */
     padding: 1rem;
-    margin-left: 200px; 
+    padding-top: 5rem; /* Account for mobile header */
+  }
+
+  .header-section {
+    padding: 0.75rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 0.75rem;
+    align-items: stretch;
+  }
+  
+  .header-left-actions,
+  .header-right-actions {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+  
+  .back-btn,
+  .view-toggle-btn,
+  .create-task-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 48px; /* Larger touch targets on mobile */
   }
 
   .stats-container {
@@ -1906,12 +2071,6 @@
 
   .toggle-info {
     flex-wrap: wrap;
-  }
-  
-  .header-actions {
-    flex-direction: column;
-    gap: 0.5rem;
-    align-items: stretch;
   }
   
   .view-toggle-btn {
@@ -2072,7 +2231,45 @@
 @media (max-width: 480px) {
   .app-container {
     margin-left: 0;
+    padding: 0.75rem;
+    padding-top: 4.5rem; /* Account for mobile header */
+  }
+
+  .header-section {
     padding: 0.5rem;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .header-left-actions,
+  .header-right-actions {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+  
+  .back-btn,
+  .view-toggle-btn,
+  .create-task-btn {
+    width: 100%;
+    padding: 0.875rem 1rem;
+    min-height: 50px; /* Even larger touch targets */
+    font-size: 0.875rem;
+    justify-content: center;
+  }
+
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.875rem;
   }
 
   .stats-container {
@@ -2098,6 +2295,17 @@
     font-size: 0.55rem;
     line-height: 1.1;
     text-align: center;
+  }
+  
+  .task-badges {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+  
+  .task-overdue,
+  .task-due-soon {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
   }
   
   .header-actions {
