@@ -364,6 +364,22 @@ button {
   white-space: nowrap;
 }
 
+/* Task Assignee */
+.task-assignee,
+.task-box-assignee {
+  font-size: 0.75rem;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+}
+
+.task-assignee i,
+.task-box-assignee i {
+  font-size: 0.7rem;
+}
+
 /* Weekly View */
 .weekly-view {
   padding: 1.5rem;
@@ -440,7 +456,6 @@ button {
 
 .task-item {
   padding: 0.75rem;
-  /* border-radius: 6px; */
   cursor: pointer;
   transition: all 0.2s ease;
   border-left: 3px solid;
@@ -495,7 +510,6 @@ button {
 }
 
 .month-day.has-tasks {
-  /* border-left: 3px solid #3b82f6; */
   border-left: 3px solid #789dd7;
 }
 
@@ -519,46 +533,6 @@ button {
   width: 100%;
 }
 
-.task-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-bottom: 0.25rem;
-}
-
-.task-preview {
-  padding: 0.25rem 0.375rem;
-  border-radius: 4px;
-  margin-bottom: 0.25rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border-left: 3px solid;
-}
-
-.task-preview:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.task-preview-name {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: #1a1a1a;
-  margin-bottom: 0.125rem;
-  line-height: 1.2;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.task-preview-status {
-  font-size: 0.6rem;
-  font-weight: 500;
-  text-transform: capitalize;
-  opacity: 0.8;
-}
-
-/* Task Box - New visible task display */
 .task-box {
   padding: 0.5rem;
   border-radius: 6px;
@@ -596,17 +570,6 @@ button {
   padding: 0.125rem 0.375rem;
   border-radius: 4px;
   display: inline-block;
-}
-
-.more-tasks {
-  font-size: 0.7rem;
-  color: #6b7280;
-  font-weight: 500;
-  text-align: center;
-  padding: 0.25rem;
-  background: #f3f4f6;
-  border-radius: 4px;
-  margin-top: 0.25rem;
 }
 
 /* Task Status Classes */
@@ -693,8 +656,7 @@ button {
 }
 
 .status-completed .task-box-name,
-.status-completed .task-title,
-.status-completed .task-preview-name {
+.status-completed .task-title {
   text-decoration: line-through;
 }
 
@@ -805,7 +767,7 @@ button {
   font-size: 0.9rem;
   font-weight: 500;
   color: #374151;
-  min-width: 80px;
+  min-width: 100px;
 }
 
 .value {
@@ -834,22 +796,21 @@ button {
   font-weight: 500;
 }
 
+/* Overdue tasks */
 .overdue-task {
   border-left: 3px solid #dc2626 !important;
   background: #fee2e2; 
-  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15); /* subtle red glow */
-  position: relative; /* For badge positioning */
+  box-shadow: 0 2px 6px rgba(220, 38, 38, 0.15);
+  position: relative;
 }
 
-/* Red task title for overdue tasks */
 .overdue-task .task-title,
 .overdue-task .task-box-name {
   color: #dc2626 !important;
   font-weight: 600 !important;
-  padding-top: 18px; /* Add space at the top to avoid overlap with badge */
+  padding-top: 18px;
 }
 
-/* Overdue badge */
 .overdue-badge {
   position: absolute;
   top: 6px;
@@ -864,47 +825,17 @@ button {
   letter-spacing: 0.02em;
   z-index: 10;
   box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
-  white-space: nowrap; /* Prevent badge text from wrapping */
+  white-space: nowrap;
 }
 
 .monthly-view .task-box.overdue-task {
-  border: 2px solid #dc2626 !important; /* red border */
-  background-color: #fee2e2 !important; /* light red background */
+  border: 2px solid #dc2626 !important;
+  background-color: #fee2e2 !important;
   box-shadow: 0 2px 6px rgba(220, 38, 38, 0.2);
   border-radius: 6px;
 }
 
-.reschedule-btn {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 3px 8px;
-  margin-top: 3px;
-  cursor: pointer;
-  font-size: 0.7rem;
-}
-.reschedule-btn:hover { background-color: #2563eb; }
-
-.modal-actions { margin-top: 10px; }
-.confirm-btn {
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  margin-right: 5px;
-  cursor: pointer;
-}
-.cancel-btn {
-  background-color: #6c757d;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-
+/* Success/Error popups */
 .success-popup {
   position: fixed;
   top: 2rem;
@@ -950,214 +881,9 @@ button {
   margin-left: auto;
 }
 
-/* Optional: slide-in animation for success popup */
 @keyframes slideInRight {
   from { transform: translateX(100%); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
-}
-
-/* Responsive Design */
-@media (max-width: 768px) {
-  .app-container {
-    padding: 1rem;
-    margin-left: 200px;
-  }
-
-  .calendar-controls {
-    flex-direction: column;
-    gap: 1rem;
-    align-items: stretch;
-  }
-
-  .view-toggle {
-    justify-content: center;
-  }
-
-  .date-navigation {
-    justify-content: center;
-  }
-
-  .current-period {
-    font-size: 1.1rem;
-    min-width: auto;
-  }
-
-  .week-header,
-  .week-grid {
-    grid-template-columns: repeat(7, 1fr);
-  }
-
-  .day-column {
-    min-height: 200px;
-  }
-
-  .month-day {
-    min-height: 80px;
-    padding: 0.5rem;
-  }
-
-  .day-number {
-    font-size: 0.9rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .app-container {
-    margin-left: 0;
-    padding: 1rem;
-  }
-
-  .calendar-controls {
-    padding: 0.75rem;
-  }
-
-  .view-btn {
-    padding: 0.5rem 0.75rem;
-    font-size: 0.8rem;
-  }
-
-  .current-period {
-    font-size: 1rem;
-  }
-
-  .daily-view,
-  .weekly-view,
-  .monthly-view {
-    padding: 1rem;
-  }
-
-  .time-label {
-    width: 60px;
-    font-size: 0.7rem;
-  }
-
-  .task-event,
-  .task-item {
-    padding: 0.5rem;
-  }
-
-  .task-title {
-    font-size: 0.8rem;
-  }
-
-  .task-time {
-    font-size: 0.7rem;
-  }
-
-  .task-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-
-  .task-status-badge {
-    font-size: 0.6rem;
-    padding: 0.1rem 0.25rem;
-  }
-
-  .task-preview {
-    padding: 0.2rem 0.3rem;
-  }
-
-  .task-preview-name {
-    font-size: 0.65rem;
-  }
-
-  .task-preview-status {
-    font-size: 0.55rem;
-  }
-
-  .task-box {
-    padding: 0.4rem;
-    margin-bottom: 0.4rem;
-  }
-
-  .task-box-name {
-    font-size: 0.7rem;
-  }
-
-  .task-box-status {
-    font-size: 0.6rem;
-    padding: 0.1rem 0.3rem;
-  }
-
-  .month-day {
-    min-height: 60px;
-    padding: 0.25rem;
-  }
-
-  .day-number {
-    font-size: 0.8rem;
-  }
-
-  .task-modal {
-    margin: 1rem;
-    max-width: none;
-  }
-
-  .modal-header,
-  .modal-content {
-    padding: 1rem;
-  }
-}
-
-@media (max-width: 480px) {
-  .view-toggle {
-    flex-wrap: wrap;
-    gap: 0.25rem;
-  }
-
-  .view-btn {
-    flex: 1;
-    min-width: 0;
-    justify-content: center;
-  }
-
-  .week-header,
-  .week-grid {
-    font-size: 0.8rem;
-  }
-
-  .day-header {
-    padding: 0.5rem;
-  }
-
-  .day-name {
-    font-size: 0.7rem;
-  }
-
-  .day-number {
-    font-size: 0.8rem;
-  }
-
-  .day-tasks-count {
-    font-size: 0.6rem;
-  }
-
-  .month-day {
-    min-height: 50px;
-  }
-
-  .day-number {
-    font-size: 0.7rem;
-  }
-
-  .task-preview {
-    padding: 0.15rem 0.25rem;
-  }
-
-  .task-preview-name {
-    font-size: 0.6rem;
-  }
-
-  .task-preview-status {
-    font-size: 0.5rem;
-  }
-
-  .task-status-badge {
-    font-size: 0.55rem;
-    padding: 0.075rem 0.2rem;
-  }
 }
 
 /* Action buttons container */
@@ -1396,8 +1122,7 @@ button {
 .clear-btn,
 .apply-btn {
   flex: 1;
-  padding-bottom: 2rem;
-  /* padding-bottom: 40px; */
+  padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.9rem;
   font-weight: 500;
@@ -1445,3 +1170,184 @@ button {
     opacity: 1;
   }
 }
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 1rem;
+    margin-left: 200px;
+  }
+
+  .calendar-controls {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .view-toggle {
+    justify-content: center;
+  }
+
+  .date-navigation {
+    justify-content: center;
+  }
+
+  .current-period {
+    font-size: 1.1rem;
+    min-width: auto;
+  }
+
+  .week-header,
+  .week-grid {
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .day-column {
+    min-height: 200px;
+  }
+
+  .month-day {
+    min-height: 80px;
+    padding: 0.5rem;
+  }
+
+  .day-number {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-container {
+    margin-left: 0;
+    padding: 1rem;
+  }
+
+  .calendar-controls {
+    padding: 0.75rem;
+  }
+
+  .view-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .current-period {
+    font-size: 1rem;
+  }
+
+  .daily-view,
+  .weekly-view,
+  .monthly-view {
+    padding: 1rem;
+  }
+
+  .time-label {
+    width: 60px;
+    font-size: 0.7rem;
+  }
+
+  .task-event,
+  .task-item {
+    padding: 0.5rem;
+  }
+
+  .task-title {
+    font-size: 0.8rem;
+  }
+
+  .task-time {
+    font-size: 0.7rem;
+  }
+
+  .task-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+
+  .task-status-badge {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.25rem;
+  }
+
+  .task-box {
+    padding: 0.4rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .task-box-name {
+    font-size: 0.7rem;
+  }
+
+  .task-box-status {
+    font-size: 0.6rem;
+    padding: 0.1rem 0.3rem;
+  }
+
+  .month-day {
+    min-height: 60px;
+    padding: 0.25rem;
+  }
+
+  .day-number {
+    font-size: 0.8rem;
+  }
+
+  .task-modal {
+    margin: 1rem;
+    max-width: none;
+  }
+
+  .modal-header,
+  .modal-content {
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .view-toggle {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .view-btn {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .week-header,
+  .week-grid {
+    font-size: 0.8rem;
+  }
+
+  .day-header {
+    padding: 0.5rem;
+  }
+
+  .day-name {
+    font-size: 0.7rem;
+  }
+
+  .day-number {
+    font-size: 0.8rem;
+  }
+
+  .day-tasks-count {
+    font-size: 0.6rem;
+  }
+
+  .month-day {
+    min-height: 50px;
+  }
+
+  .day-number {
+    font-size: 0.7rem;
+  }
+
+  .task-status-badge {
+    font-size: 0.55rem;
+    padding: 0.075rem 0.2rem;
+  }
+}
+
