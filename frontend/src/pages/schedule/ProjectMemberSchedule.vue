@@ -101,8 +101,8 @@
                       </div>
                       <div class="task-time">{{ formatTime(task.due_date) }}</div>
                     </div>
-                    <div v-if="task.assigned_to" class="task-assignee">
-                      <i class="bi bi-person"></i> {{ getUserName(task.assigned_to) }}
+                    <div v-if="task.collaborators && task.collaborators.length > 0" class="task-assignee">
+                      <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
                     </div>
                   </div>
                 </div>
@@ -137,8 +137,8 @@
                     {{ task.status }}
                   </div>
                   <div class="task-time">{{ formatTime(task.due_date) }}</div>
-                  <div v-if="task.assigned_to" class="task-assignee">
-                    <i class="bi bi-person"></i> {{ getUserName(task.assigned_to) }}
+                  <div v-if="task.collaborators && task.collaborators.length > 0" class="task-assignee">
+                    <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
                   </div>
                 </div>
               </div>
@@ -166,13 +166,13 @@
                     :key="task.id"
                     class="task-box"
                     :class="[getTaskStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
-                    :title="`${task.task_name} - ${task.status} - ${getUserName(task.assigned_to)}`"
+                    :title="`${task.task_name} - ${task.status}${task.collaborators && task.collaborators.length > 0 ? ' - ' + getCollaboratorNames(task.collaborators) : ''}`"
                   >
                     <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
                     <div class="task-box-name">{{ task.task_name }}</div>
                     <div class="task-box-status">{{ task.status }}</div>
-                    <div v-if="task.assigned_to" class="task-box-assignee">
-                      <i class="bi bi-person"></i> {{ getUserName(task.assigned_to) }}
+                    <div v-if="task.collaborators && task.collaborators.length > 0" class="task-box-assignee">
+                      <i class="bi bi-people"></i> {{ getCollaboratorNames(task.collaborators) }}
                     </div>
                   </div>
                 </div>
@@ -203,10 +203,6 @@
                 <span class="label">Type:</span>
                 <span class="value">{{ selectedTask.type || 'N/A' }}</span>
               </div>
-              <div class="detail-row" v-if="selectedTask.assigned_to">
-                <span class="label">Assigned To:</span>
-                <span class="value">{{ getUserName(selectedTask.assigned_to) }}</span>
-              </div>
               <div class="detail-row" v-if="selectedTask.project_id">
                 <span class="label">Project ID:</span>
                 <span class="value">{{ selectedTask.project_id }}</span>
@@ -225,7 +221,7 @@
               </div>
               <div class="detail-row" v-if="selectedTask.collaborators && selectedTask.collaborators.length > 0">
                 <span class="label">Collaborators:</span>
-                <span class="value">{{ selectedTask.collaborators.join(', ') }}</span>
+                <span class="value">{{ getCollaboratorNames(selectedTask.collaborators) }}</span>
               </div>
               <div class="detail-row" v-if="selectedTask.attachments && selectedTask.attachments.length > 0">
                 <span class="label">Attachments:</span>
@@ -337,6 +333,7 @@ const projectName = ref('')
 const teamMembers = ref([])
 const successMessage = ref('')
 const errorMessage = ref('')
+const users = ref({})
 
 // Filter data
 const showFilterPopup = ref(false)
@@ -525,7 +522,18 @@ const getTasksForDate = (date) => {
     }
   })
   
-  return tasksForDate.sort((a, b) => {
+  // Remove duplicates based on task ID
+  const uniqueTasks = []
+  const seenTaskIds = new Set()
+  
+  tasksForDate.forEach(task => {
+    if (!seenTaskIds.has(task.id)) {
+      seenTaskIds.add(task.id)
+      uniqueTasks.push(task)
+    }
+  })
+  
+  return uniqueTasks.sort((a, b) => {
     const timeA = new Date(a.due_date).getTime()
     const timeB = new Date(b.due_date).getTime()
     return timeA - timeB
@@ -564,10 +572,42 @@ const isTaskOverdue = (task) => {
   return due < now && task.status?.toLowerCase() !== 'completed'
 }
 
-const getUserName = (userId) => {
-  if (!userId) return 'Unassigned'
-  const member = teamMembers.value.find(m => String(m.id) === String(userId))
-  return member ? member.name : `User ${userId}`
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `User ${userid}`
+}
+
+const getCollaboratorNames = (collaborators) => {
+  if (!collaborators || collaborators.length === 0) return ''
+  return collaborators.map(id => getUserName(id)).join(', ')
 }
 
 const selectTask = (task) => {
@@ -643,13 +683,18 @@ const fetchProjectAndTasks = async () => {
     if (projectData.data) {
       projectName.value = projectData.data.proj_name || 'Project Team Schedule'
       
-      // Get collaborators
+      // Get collaborators (list of user IDs)
       const collaborators = projectData.data.collaborators || []
       
-      // Create team members list
-      teamMembers.value = collaborators.map(collab => ({
-        id: collab.user_id,
-        name: collab.user_name || `User ${collab.user_id}`
+      // Fetch user details for team members first
+      for (const userId of collaborators) {
+        await fetchUserDetails(userId)
+      }
+      
+      // Create team members list with actual names
+      teamMembers.value = collaborators.map(userId => ({
+        id: userId,
+        name: getUserName(userId)
       }))
       
       console.log('Team Members:', teamMembers.value)
@@ -657,9 +702,9 @@ const fetchProjectAndTasks = async () => {
       // Fetch tasks for each collaborator
       const allTasks = []
       
-      for (const collab of collaborators) {
+      for (const userId of collaborators) {
         try {
-          const taskResponse = await fetch(`http://127.0.0.1:5002/tasks/user-task/${collab.user_id}`, {
+          const taskResponse = await fetch(`http://127.0.0.1:5002/tasks/user-task/${userId}`, {
             headers: { 'Content-Type': 'application/json' }
           })
           
@@ -668,35 +713,46 @@ const fetchProjectAndTasks = async () => {
             
             if (taskData.data && Array.isArray(taskData.data)) {
               taskData.data.forEach(parentTask => {
-                // Only include tasks for this project
-                if (String(parentTask.project_id) === String(projectId.value)) {
-                  allTasks.push({
-                    ...parentTask,
-                    assigned_to: collab.user_id
-                  })
-                  
-                  // Add subtasks if they exist
-                  if (parentTask.subtasks && Array.isArray(parentTask.subtasks)) {
-                    parentTask.subtasks.forEach(subtask => {
-                      if (String(subtask.project_id) === String(projectId.value)) {
-                        allTasks.push({
-                          ...subtask,
-                          assigned_to: collab.user_id
-                        })
-                      }
+                // Add all tasks for this user
+                allTasks.push({
+                  ...parentTask,
+                  assigned_to: userId
+                })
+                
+                // Add subtasks if they exist
+                if (parentTask.subtasks && Array.isArray(parentTask.subtasks)) {
+                  parentTask.subtasks.forEach(subtask => {
+                    allTasks.push({
+                      ...subtask,
+                      assigned_to: userId
                     })
-                  }
+                  })
                 }
               })
             }
           }
         } catch (error) {
-          console.error(`Error fetching tasks for user ${collab.user_id}:`, error)
+          console.error(`Error fetching tasks for user ${userId}:`, error)
         }
       }
       
       tasks.value = allTasks
       console.log('Loaded tasks:', allTasks.length, 'total tasks')
+      
+      // Fetch user details for all unique collaborators
+      const uniqueUserIds = new Set()
+      allTasks.forEach(task => {
+        if (task.collaborators && Array.isArray(task.collaborators)) {
+          task.collaborators.forEach(id => uniqueUserIds.add(id))
+        }
+      })
+      
+      // Fetch user details for each unique user ID
+      for (const userId of uniqueUserIds) {
+        await fetchUserDetails(userId)
+      }
+      
+      console.log('Fetched user details for', uniqueUserIds.size, 'users')
     } else {
       console.warn('Unexpected project API response:', projectData)
     }
