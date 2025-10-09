@@ -229,7 +229,7 @@
               </div>
               <div class="detail-row" v-if="selectedTask.collaborators && selectedTask.collaborators.length > 0">
                 <span class="label">Collaborators:</span>
-                <span class="value">{{ selectedTask.collaborators.join(', ') }}</span>
+                <span class="value">{{ getCollaboratorNames(selectedTask.collaborators) }}</span>
               </div>
               <div class="detail-row" v-if="selectedTask.attachments && selectedTask.attachments.length > 0">
                 <span class="label">Attachments:</span>
@@ -358,6 +358,7 @@ const selectedStatusFilters = ref([])
 const appliedProjectFilter = ref('')
 const appliedStatusFilters = ref([])
 const showCompleted = ref(true)
+const users = ref({})
 
 // Calendar views configuration
 const views = [
@@ -650,6 +651,44 @@ const goToToday = () => {
   currentDate.value = new Date()
 }
 
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || `User ${userid}`
+}
+
+const getCollaboratorNames = (collaborators) => {
+  if (!collaborators || collaborators.length === 0) return ''
+  return collaborators.map(id => getUserName(id)).join(', ')
+}
+
 const fetchTasks = async () => {
   loading.value = true
   
@@ -693,6 +732,21 @@ const fetchTasks = async () => {
       
       tasks.value = allTasks
       console.log('Loaded tasks:', allTasks.length, 'total tasks')
+      
+      // Fetch user details for all unique collaborators
+      const uniqueUserIds = new Set()
+      allTasks.forEach(task => {
+        if (task.collaborators && Array.isArray(task.collaborators)) {
+          task.collaborators.forEach(id => uniqueUserIds.add(id))
+        }
+      })
+      
+      // Fetch user details for each unique user ID
+      for (const userId of uniqueUserIds) {
+        await fetchUserDetails(userId)
+      }
+      
+      console.log('Fetched user details for', uniqueUserIds.size, 'users')
       
       // Debug timezone handling
       allTasks.forEach(task => {
