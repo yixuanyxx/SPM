@@ -14,6 +14,7 @@ const TaskDetail = () => import('../pages/taskdetails/TaskDetails.vue')
 const ProjectView = () => import('../pages/projectview/ProjectView.vue')
 const ProjectDetail = () => import('../pages/projectdetails/ProjectDetails.vue')
 const ScheduleView = () => import('../pages/schedule/ScheduleView.vue')
+const ProjectMemberSchedule = () => import('../pages/schedule/ProjectMemberSchedule.vue')
 
 const routes = [
   { path: "/login", name: "Login", component: Login },
@@ -62,6 +63,10 @@ const routes = [
     name: 'schedule-view',
     component: ScheduleView
     // ,meta: { requiresAuth: true }
+  },
+  { path: '/schedule/project/:id',
+    name: 'project-member-schedule',
+    component: ProjectMemberSchedule
   }
 ];
 
