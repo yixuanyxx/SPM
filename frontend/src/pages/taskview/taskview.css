@@ -1430,6 +1430,18 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  margin-right: 1rem;
+}
+
+.filter-group:last-child {
+  margin-right: 0;
+}
+
+.sort-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .filter-dropdown {
@@ -1518,6 +1530,60 @@
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+}
+
+/* Project sections: make each project visually distinct and let member cards fill project width */
+.projects-members {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 0 1rem;
+}
+
+.project-section {
+  background: #ffffff;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  box-shadow: 0 1px 4px rgba(16,24,40,0.03);
+}
+
+.project-header.small {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed #f3f4f6;
+}
+
+.project-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.project-meta {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+/* Inside a project section, allow members container to stretch wider and use smaller cards */
+.project-section .members-container {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  max-width: 100%;
+  padding: 0.5rem 0;
+  gap: 1rem;
+  justify-items: stretch;
+}
+
+.project-section .member-card {
+  max-width: none;
+  width: 100%;
 }
 
 .members-view .main-content-member {
@@ -1677,6 +1743,13 @@
   font-size: 0.7rem;
   opacity: 0.8;
   margin-top: 0.125rem;
+}
+
+.project-task-count {
+  font-size: 0.65rem;
+  opacity: 0.6;
+  margin-top: 0.125rem;
+  font-style: italic;
 }
 
 /* Member Tasks Summary */
