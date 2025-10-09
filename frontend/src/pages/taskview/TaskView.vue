@@ -11,10 +11,16 @@
           <h1 class="page-title">My Personal Tasks</h1>
           <p class="page-subtitle">View and Create Your Personal Tasks</p>
         </div>
-        <button class="create-task-btn" @click="showCreateModal = true">
+        <button v-if="canCreateTask" @click="openCreateTask" class="create-task-btn">
             <i class="bi bi-plus-lg"></i>
             Create New Task
         </button>
+        
+        <CreateNewTaskForm 
+          :isVisible="isCreateTaskVisible"
+          @close="isCreateTaskVisible = false"
+          @task-created="handleTaskCreated"
+        />
       </div>
       
     <!-- Stats Section -->
@@ -150,8 +156,16 @@
                       <i class="bi bi-flag-fill"></i>
                       <span>{{ task.priority }}</span>
                     </div>
-                  </div>
+                    <!-- New Create Subtask Button -->
+                    <button 
+                      class="create-subtask-btn" 
+                      @click.stop="openSubtaskModal(task)"
+                      title="Create subtasks"
+                    >
+                    <i class="bi bi-plus-lg"></i>
+                  </button>
                 </div>
+              </div>
                 <div class="task-people">
                   <div v-if="task.owner_id" class="task-owner">
                     <i class="bi bi-person-fill"></i>
@@ -250,110 +264,39 @@
         </div>
       </div>
     </div>
-    <!-- Create Task Modal -->
-    <div v-if="showCreateModal" class="modal-overlay">
-      <div class="modal-content">
-        <h2>Create New Task</h2>
-
-        <label>Task Name* </label>
-        <input v-model="newTask.task_name" placeholder="Enter task name" :class="{ 'input-error': newTask.task_name.trim() === '' }" required/>
-
-        <label>Description* </label>
-        <textarea v-model="newTask.description" placeholder="Enter description" :class="{ 'input-error': newTask.description.trim() === '' }" required></textarea>
-
-        <label>Due Date* </label>
-        <input type="date" v-model="newTask.due_date" :class="{ 'input-error': newTask.due_date.trim() === '' }" required/>
-
-        <!-- Priority Level -->
-        <div class="form-group mt-4">
-          <label for="priority">Priority Level: {{ newTask.priority }}</label>
-          <div class="priority-slider-container">
-            <input
-              id="priority"
-              type="range"
-              min="1"
-              max="10"
-              v-model="newTask.priority"
-              class="priority-slider"
-            />
-            <div class="priority-labels">
-              <span class="priority-label-left">1 - Least Important</span>
-              <span class="priority-label-right">10 - Most Important</span>
-            </div>
-          </div>
+  </div>
+<!-- Subtask Creation Modal -->
+<teleport to="body">
+  <div v-if="isSubtaskModalVisible" class="modal-overlay" @click="closeSubtaskModal">
+    <div class="modal-container" @click.stop>
+      <div class="modal-header">
+        <div class="modal-title-section">
+          <h2>Create Subtask</h2>
         </div>
-
-        <label>Status</label>
-        <select v-model="newTask.status">
-          <option v-if="isManagerOrDirector" value="Unassigned">Unassigned</option>
-          <option value="Ongoing">Ongoing</option>
-          <option value="Under Review">Under Review</option>
-          <option value="Completed">Completed</option>
-        </select>
-
-        <label>Project</label>
-        <select v-model="newTask.project_id">
-          <option value="">-- Select Project --</option>
-          <template v-if="userProjects.length > 0">
-            <option 
-              v-for="project in userProjects" 
-              :key="project.id" 
-              :value="project.id"
-            >
-              {{ project.proj_name }}
-            </option>
-          </template>
-           <option v-else disabled>No projects available</option>
-        </select>
-
-        <label>Collaborators (emails)</label>
-        <div class="autocomplete">
-          <input 
-            type="text"
-            v-model="collaboratorQuery"
-            placeholder="Type email..."
-          />
-
-          <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
-            <li 
-              v-for="user in collaboratorSuggestions" 
-              :key="user.id"
-              @click="addCollaborator(user)"
-            >
-              {{ user.email }}
-            </li>
-          </ul>
-
-          <div class="selected-collaborators">
-            <span 
-              v-for="user in selectedCollaborators" 
-              :key="user.id" 
-              class="selected-email"
-            >
-              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
-            </span>
-          </div>
-        </div>
-
-        <label>Subtask IDs (comma-separated)</label>
-        <input type="text" v-model="newTask.subtasks" placeholder="e.g., 201,202" />
-
-        <label>Attach PDF</label>
-        <input type="file" @change="handleFileUpload" accept="application/pdf" />
-
-        <div class="modal-actions">
-          <button @click="submitNewTask" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
-            Create
-          </button>
-          <button @click="showCreateModal = false">Cancel</button>
-        </div>
+        <button @click="closeSubtaskModal" class="modal-close-btn">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      
+      <div class="modal-body">
+        <SubtaskForm 
+          v-model="currentSubtasks"
+          :parent-task="selectedTask"
+        />
+      </div>
+      
+      <div class="modal-footer">
+        <button @click="closeSubtaskModal" class="btn-modal-cancel">
+          Cancel
+        </button>
+        <button @click="saveSubtasks" class="btn-modal-save">
+          <i class="bi bi-check-lg"></i>
+          Save Subtasks
+        </button>
       </div>
     </div>
-    <div v-if="showSuccessMessage" class="success-popup">
-      Task created successfully!
-    </div>
-
   </div>
+</teleport>
 </div>
 </template>
 
@@ -361,6 +304,8 @@
 import { ref, computed, onMounted,watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
+import CreateNewTaskForm from '../../components/CreateNewTask.vue'
+import SubtaskForm from '../../components/CreateSubtask.vue'
 import { getCurrentUserData } from '../../services/session.js'
 import "./taskview.css"
 
@@ -551,154 +496,220 @@ watch(collaboratorQuery, async (query) => {
   }
 });
 
-const newTaskFile = ref(null)
-const handleFileUpload = (event) => {
-  const file = event.target.files[0]
-  if (file && file.type === "application/pdf") {
-    newTaskFile.value = file
-  } else {
-    alert("Only PDF files are allowed")
-    event.target.value = null
-    newTaskFile.value = null
-  }
+// Computed property to determine if user can create tasks
+const canCreateTask = computed(() => {
+  return userRole.value === "manager" || userRole.value === "director" || userRole.value === "staff";
+});
+
+// Popup visibility state
+const isCreateTaskVisible = ref(false);
+
+function openCreateTask() {
+  console.log("Clicked create task button!");
+  isCreateTaskVisible.value = true;
 }
 
-const newTask = ref({
-  owner_id: null, // Will be set when userId is available
-  task_name: '',
-  description: '',
-  type: 'parent',
-  due_date: '',
-  priority: '5',
-  status: 'Ongoing',
-  project_id: '',
-  collaborators: '',
-  parent_task: '',
-  subtasks: '', 
-})
+const handleTaskCreated = (newTaskData) => {
+  tasks.value.push(newTaskData)
+  isCreateTaskVisible.value = false
+  showSuccessMessage.value = true
+  setTimeout(() => {
+    showSuccessMessage.value = false
+  }, 3000)
+}
 
-// Watch for userId changes and update newTask.owner_id
-watch(userId, (newUserId) => {
-  if (newUserId) {
-    newTask.value.owner_id = newUserId
-  }
-}, { immediate: true })
+// Add these refs
+const isSubtaskModalVisible = ref(false)
+const selectedTask = ref(null)
+const currentSubtasks = ref([])
 
-const isFormValid = computed(() => {
-  return newTask.value.task_name.trim() !== '' &&
-         newTask.value.description.trim() !== '' &&
-         newTask.value.due_date.trim() !== ''   
-})
+// Add these methods
+const openSubtaskModal = (task) => {
+  selectedTask.value = task
+  currentSubtasks.value = [] // Reset subtasks
+  isSubtaskModalVisible.value = true
+}
 
-// send POST to backend
-const submitNewTask = async () => {
-  if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
-    alert('Please fill out all required fields: Task Name, Description, and Due Date.')
+const closeSubtaskModal = () => {
+  isSubtaskModalVisible.value = false
+  selectedTask.value = null
+  currentSubtasks.value = []
+}
+
+const saveSubtasks = async () => {
+  if (currentSubtasks.value.length === 0) {
+    alert('Please add at least one subtask')
     return
   }
-  try {
-    // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
-    // Staff uses the staff endpoint (automatically adds owner as collaborator)
-    let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
-      ? 'http://localhost:5002/tasks/manager-task/create'
-      : 'http://localhost:5002/tasks/staff-task/create'
-
-    // Use FormData to handle file uploads properly
-    const formData = new FormData()
-    
-    // Add all task fields to FormData
-    formData.append('owner_id', newTask.value.owner_id)
-    formData.append('task_name', newTask.value.task_name)
-    formData.append('description', newTask.value.description)
-    formData.append('type', newTask.value.type)
-    formData.append('due_date', newTask.value.due_date)
-    formData.append('priority', newTask.value.priority)
-    formData.append('status', newTask.value.status)
-    
-    if (newTask.value.project_id) {
-      formData.append('project_id', newTask.value.project_id)
-    }
-    
-    if (newTask.value.parent_task) {
-      formData.append('parent_task', newTask.value.parent_task)
-    }
-    
-    // Add collaborators as comma-separated string with role-based logic
-    const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
-    
-    // Role-based owner inclusion in collaborators:
-    // - Staff: Include owner as collaborator
-    // - Manager/Director: Owner only, NOT in collaborators
-    if (userRole.value === 'staff') {
-      // For staff, ensure owner is always included in collaborators
-      if (!collaboratorIds.includes(newTask.value.owner_id)) {
-        collaboratorIds.push(newTask.value.owner_id)
-        console.log('Added staff owner to collaborators')
-      }
-    }
-    
-    // Only append collaborators if there are any
-    if (collaboratorIds.length > 0) {
-      const collaboratorString = collaboratorIds.join(',')
-      console.log('Appending collaborators string:', collaboratorString)
-      formData.append('collaborators', collaboratorString)
-    } else {
-      console.log('No collaborators to append - skipping collaborators field entirely')
-    }
   
-    // Add subtasks as comma-separated string
-    if (newTask.value.subtasks) {
-      formData.append('subtasks', newTask.value.subtasks)
+  try {
+    // Here you would make API calls to save the subtasks
+    // For now, we'll just add them to the parent task locally
+    if (selectedTask.value) {
+      if (!selectedTask.value.subtasks) {
+        selectedTask.value.subtasks = []
+      }
+      selectedTask.value.subtasks.push(...currentSubtasks.value)
     }
     
-    // Add the actual file for upload
-    if (newTaskFile.value) {
-      formData.append('attachment', newTaskFile.value)
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
-    })
-
-    const data = await response.json()
-
-    if (response.ok && data.Code === 201) {
-      tasks.value.push(data.data)
-      // reset form
-      newTask.value = {
-        owner_id: userId.value,
-        task_name: '',
-        description: '',
-        type: 'parent',
-        due_date: '',
-        priority: '5',
-        status: 'Ongoing',
-        project_id: '',
-        collaborators: '',
-        parent_task: '',
-        subtasks: ''
-      }
-      selectedCollaborators.value = []
-      newTaskFile.value = null
-      // Clear the file input element
-      const fileInput = document.querySelector('input[type="file"]')
-      if (fileInput) {
-        fileInput.value = ''
-      }
-      showCreateModal.value = false
-      showSuccessMessage.value = true
-      setTimeout(() => {
-        showSuccessMessage.value = false
-      }, 3000)
-    } else {
-      alert('Failed: ' + data.Message)
-    }
-  } catch (err) {
-    console.error(err)
-    alert('Error creating task')
+    console.log('Saving subtasks:', currentSubtasks.value)
+    closeSubtaskModal()
+    
+    // Show success message
+  } catch (error) {
+    console.error('Error saving subtasks:', error)
+    alert('Failed to save subtasks')
   }
 }
+
+// const newTaskFile = ref(null)
+// const handleFileUpload = (event) => {
+//   const file = event.target.files[0]
+//   if (file && file.type === "application/pdf") {
+//     newTaskFile.value = file
+//   } else {
+//     alert("Only PDF files are allowed")
+//     event.target.value = null
+//     newTaskFile.value = null
+//   }
+// }
+
+// const newTask = ref({
+//   owner_id: null, // Will be set when userId is available
+//   task_name: '',
+//   description: '',
+//   type: 'parent',
+//   due_date: '',
+//   priority: '5',
+//   status: 'Ongoing',
+//   project_id: '',
+//   collaborators: '',
+//   parent_task: '',
+//   subtasks: [], 
+// })
+
+// // Watch for userId changes and update newTask.owner_id
+// watch(userId, (newUserId) => {
+//   if (newUserId) {
+//     newTask.value.owner_id = newUserId
+//   }
+// }, { immediate: true })
+
+// const isFormValid = computed(() => {
+//   return newTask.value.task_name.trim() !== '' &&
+//          newTask.value.description.trim() !== '' &&
+//          newTask.value.due_date.trim() !== ''   
+// })
+
+// // send POST to backend
+// const submitNewTask = async () => {
+//   if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
+//     alert('Please fill out all required fields: Task Name, Description, and Due Date.')
+//     return
+//   }
+//   try {
+//     // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
+//     // Staff uses the staff endpoint (automatically adds owner as collaborator)
+//     let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
+//       ? 'http://localhost:5002/tasks/manager-task/create'
+//       : 'http://localhost:5002/tasks/staff-task/create'
+
+//     // Use FormData to handle file uploads properly
+//     const formData = new FormData()
+    
+//     // Add all task fields to FormData
+//     formData.append('owner_id', newTask.value.owner_id)
+//     formData.append('task_name', newTask.value.task_name)
+//     formData.append('description', newTask.value.description)
+//     formData.append('type', newTask.value.type)
+//     formData.append('due_date', newTask.value.due_date)
+//     formData.append('priority', newTask.value.priority)
+//     formData.append('status', newTask.value.status)
+    
+//     if (newTask.value.project_id) {
+//       formData.append('project_id', newTask.value.project_id)
+//     }
+    
+//     if (newTask.value.parent_task) {
+//       formData.append('parent_task', newTask.value.parent_task)
+//     }
+    
+//     // Add collaborators as comma-separated string with role-based logic
+//     const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
+    
+//     // Role-based owner inclusion in collaborators:
+//     // - Staff: Include owner as collaborator
+//     // - Manager/Director: Owner only, NOT in collaborators
+//     if (userRole.value === 'staff') {
+//       // For staff, ensure owner is always included in collaborators
+//       if (!collaboratorIds.includes(newTask.value.owner_id)) {
+//         collaboratorIds.push(newTask.value.owner_id)
+//         console.log('Added staff owner to collaborators')
+//       }
+//     }
+    
+//     // Only append collaborators if there are any
+//     if (collaboratorIds.length > 0) {
+//       const collaboratorString = collaboratorIds.join(',')
+//       console.log('Appending collaborators string:', collaboratorString)
+//       formData.append('collaborators', collaboratorString)
+//     } else {
+//       console.log('No collaborators to append - skipping collaborators field entirely')
+//     }
+  
+//     // Add subtasks - send as JSON if backend expects subtask objects
+//     if (newTask.value.subtasks && newTask.value.subtasks.length > 0) {
+//       formData.append('subtasks', JSON.stringify(newTask.value.subtasks))
+//     }
+    
+//     // Add the actual file for upload
+//     if (newTaskFile.value) {
+//       formData.append('attachment', newTaskFile.value)
+//     }
+
+//     const response = await fetch(endpoint, {
+//       method: 'POST',
+//       body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
+//     })
+
+//     const data = await response.json()
+
+//     if (response.ok && data.Code === 201) {
+//       tasks.value.push(data.data)
+//       // reset form
+//       newTask.value = {
+//         owner_id: userId.value,
+//         task_name: '',
+//         description: '',
+//         type: 'parent',
+//         due_date: '',
+//         priority: '5',
+//         status: 'Ongoing',
+//         project_id: '',
+//         collaborators: '',
+//         parent_task: '',
+//         subtasks: [],
+//       }
+//       selectedCollaborators.value = []
+//       newTaskFile.value = null
+//       // Clear the file input element
+//       const fileInput = document.querySelector('input[type="file"]')
+//       if (fileInput) {
+//         fileInput.value = ''
+//       }
+//       showCreateModal.value = false
+//       showSuccessMessage.value = true
+//       setTimeout(() => {
+//         showSuccessMessage.value = false
+//       }, 3000)
+//     } else {
+//       alert('Failed: ' + data.Message)
+//     }
+//   } catch (err) {
+//     console.error(err)
+//     alert('Error creating task')
+//   }
+// }
 
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'

@@ -66,7 +66,7 @@
           <!-- Priority Level -->
           <div class="form-group">
             <label for="priority">Priority Level: {{ editedTask.priority }}</label>
-            <div class="priority-slider-container">
+            <div class="priority-slider-wrapper">
               <input
                 id="priority"
                 type="range"
@@ -76,9 +76,9 @@
                 :disabled="isLoading"
                 class="priority-slider"
               />
-              <div class="priority-labels">
-                <span class="priority-label-left">1 - Least Important</span>
-                <span class="priority-label-right">10 - Most Important</span>
+              <div class="priority-range-labels">
+                <span>1 - Least Important</span>
+                <span>10 - Most Important</span>
               </div>
             </div>
           </div>
@@ -987,8 +987,6 @@ export default {
   cursor: not-allowed;
 }
 
-
-
 .message {
   position: fixed;
   bottom: 2rem;
@@ -1219,19 +1217,22 @@ export default {
   }
 }
 
-.priority-slider-container {
+.priority-slider-wrapper {
   margin-top: 8px;
+  position: relative;
 }
 
 .priority-slider {
   width: 100%;
   height: 8px;
-  border-radius: 5px;
-  background: linear-gradient(to right, #9ca3af 0%, #fbbf24 50%, #ef4444 100%);
-  outline: none;
+  border-radius: 999px;
+  background: transparent;
+  outline: none !important;
   -webkit-appearance: none;
   appearance: none;
   cursor: pointer;
+  border: none !important;
+  box-shadow: none !important;
 }
 
 .priority-slider:disabled {
@@ -1239,7 +1240,29 @@ export default {
   opacity: 0.6;
 }
 
+.priority-slider:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.priority-slider:active {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 /* Webkit browsers (Chrome, Safari, Edge) */
+.priority-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #10b981 0%, #34d399 20%, #fbbf24 40%, #fb923c 60%, #f97316 80%, #ef4444 100%);
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
 .priority-slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
@@ -1247,35 +1270,74 @@ export default {
   width: 20px;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid #374151;
-  cursor: pointer;
+  border: 3px solid #6b7280;
+  cursor: grab;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  margin-top: -6px;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.priority-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  outline: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important; /* Keep only the thumb shadow */
 }
 
 .priority-slider::-webkit-slider-thumb:hover {
-  border-color: #111827;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+  border-color: #374151;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+  outline: none;
+}
+
+.priority-slider::-webkit-slider-thumb:focus {
+  outline: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Firefox */
+.priority-slider::-moz-range-track {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(to right, #10b981 0%, #34d399 20%, #fbbf24 40%, #fb923c 60%, #f97316 80%, #ef4444 100%);
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
 .priority-slider::-moz-range-thumb {
   height: 20px;
   width: 20px;
   border-radius: 50%;
   background: #ffffff;
-  border: 2px solid #374151;
-  cursor: pointer;
+  border: 3px solid #6b7280;
+  cursor: grab;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.priority-slider::-moz-range-thumb:active {
+  cursor: grabbing;
+  outline: none !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
+}
+
+.priority-slider::-moz-range-thumb:hover {
+  border-color: #374151;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+  transform: scale(1.1);
+  outline: none;
+}
+
+.priority-slider::-moz-range-thumb:focus {
+  outline: none !important;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.priority-slider::-moz-range-track {
-  height: 8px;
-  border-radius: 5px;
-  background: linear-gradient(to right, #9ca3af 0%, #fbbf24 50%, #ef4444 100%);
-  border: none;
-}
-
-.priority-labels {
+.priority-range-labels {
   display: flex;
   justify-content: space-between;
   margin-top: 4px;
