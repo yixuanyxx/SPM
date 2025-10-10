@@ -1,15 +1,15 @@
 <template>
-    <div class="app-layout ms-2">
+    <div class="project-app-layout ms-2">
       <!-- Side Navigation -->
       <SideNavbar />
       
       <!-- Main Content Area -->
-      <div class="app-container">
+      <div class="project-app-container">
         <!-- Header Section -->
-        <div class="header-section">
+        <div class="project-header-section">
           <div class="header-content">
-            <h1 class="page-title">My Projects</h1>
-            <p class="page-subtitle">View and manage your project collaborations</p>
+            <h1 class="project-view-page-title">My Projects</h1>
+            <p class="project-view-page-subtitle">View and manage your project collaborations</p>
           </div>
           <button class="create-project-btn" @click="showCreateModal = true">
             <i class="bi bi-plus-lg"></i>
@@ -20,7 +20,7 @@
         <div class="content-wrapper">
 
           <!-- Main Content -->
-          <div class="main-content">
+          <div class="project-main-content">
             <!-- if no projects found -->
             <div v-if="projects.length === 0" class="empty-state">
               <div class="empty-icon">
@@ -30,7 +30,7 @@
               <p class="empty-subtitle">Create your first project to get started!</p>
             </div>
 
-            <div v-else class="projects-grid">
+            <div v-else class="project-view-projects-grid">
               <!-- Dynamic Project Cards -->
               <div v-for="project in projects" 
                    :key="project.id" 
@@ -61,24 +61,24 @@
                     <div class="collaborators">
                       <div v-for="(collab, index) in filterCollaborators(project)" 
                           :key="index" 
-                          class="avatar">
+                          class="project-avatar">
                         {{ getInitials(collab.name || collab.toString()) }}
                       </div>
                       <div v-if="filterCollaborators(project).length > 3" 
-                          class="avatar more-collaborators">
+                          class="project-avatar project-more-collaborators">
                         +{{ filterCollaborators(project).length - 3 }}
                       </div>
                     </div>
                   </div>
                 </div>
     
-                <div class="progress-section">
-                  <div class="progress-bar">
-                    <div class="progress-fill" 
+                <div class="project-progress-section">
+                  <div class="project-progress-bar">
+                    <div class="project-progress-fill" 
                         :style="{ width: calculateProgress(project.tasks) + '%' }">
                     </div>
                   </div>
-                  <div class="progress-text">
+                  <div class="project-progress-text">
                     {{ getCompletedTasksCount(project.tasks) }} of {{ (project.tasks || []).length }} tasks completed
                   </div>
                 </div>
@@ -92,14 +92,14 @@
                   <div v-if="getMyTasks(project.tasks).length === 0" class="no-tasks">
                     No tasks assigned
                   </div>
-                  <div v-else class="task-list">
+                  <div v-else class="project-task-list">
                     <div v-for="task in getMyTasks(project.tasks)" 
                         :key="task.id" 
-                        class="task-item">
-                      <div class="task-content">
-                        <span class="task-name">{{ task.task_name }}</span>
+                        class="project-task-item">
+                      <div class="project-task-content">
+                        <span class="project-task-name">{{ task.task_name }}</span>
                       </div>
-                      <span :class="['status-badge', `status-${task.status.toLowerCase()}`]">
+                      <span :class="['project-status-badge', `project-status-${task.status.toLowerCase()}`]">
                         {{ task.status }}
                       </span>
                     </div>
@@ -151,9 +151,9 @@
                      draggable="true"
                      @dragstart="handleDragStart($event, task)"
                      @click="navigateToTask(task.id)">
-                  <div class="task-content">
-                    <span class="task-name">{{ task.task_name }}</span>
-                    <span :class="['status-badge', `status-${task.status.toLowerCase()}`]">
+                  <div class="project-task-content">
+                    <span class="project-task-name">{{ task.task_name }}</span>
+                    <span :class="['project-status-badge', `project-status-${task.status.toLowerCase()}`]">
                       {{ task.status }}
                     </span>
                   </div>

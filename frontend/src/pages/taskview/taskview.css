@@ -65,6 +65,7 @@
   box-sizing: border-box;
   flex: 1;
   margin-left: 250px; /* Account for sidebar width */
+  transition: margin-left 0.3s ease; /* Smooth transition when sidebar collapses */
 }
 
 .main-content {
@@ -958,6 +959,10 @@
 
 /* Loading State */
 .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   padding: 3rem 1rem;
   color: #6b7280;
@@ -975,22 +980,18 @@
 }
 
 .loading-spinner {
-  font-size: 2rem;
-  margin-bottom: 1rem;
-  color: #3b82f6;
-}
-
-.loading-spinner i {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f4f6;
+  border-top: 3px solid #3b82f6;
+  border-radius: 50%;
   animation: spin 1s linear infinite;
+  margin: 0 auto 1rem auto;
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .loading-text {
@@ -1975,11 +1976,12 @@
 
 /* ===== RESPONSIVE DESIGN ===== */
 
-/* Large tablets and small desktops */
+/* Large tablets and small desktops - Sidebar collapses at 1024px */
 @media (max-width: 1024px) {
   .app-container {
-    margin-left: 200px; /* Smaller sidebar */
+    margin-left: 0; /* Remove sidebar margin when collapsed */
     padding: 1.5rem;
+    padding-top: 5rem; /* Account for mobile header */
   }
   
   .header-section {
@@ -2002,7 +2004,7 @@
 /* Tablets */
 @media (max-width: 768px) {
   .app-container {
-    margin-left: 0; /* Remove sidebar margin on mobile */
+    margin-left: 0; /* Keep no margin for collapsed sidebar */
     padding: 1rem;
     padding-top: 5rem; /* Account for mobile header */
   }

@@ -142,6 +142,7 @@ const expandedMenus = ref([])
 const userRole = ref('')
 const userId = ref(null)
 const isMobileMenuOpen = ref(false)
+const windowWidth = ref(window.innerWidth) // Track window width reactively
 const router = useRouter()
 const route = useRoute()
 
@@ -155,9 +156,14 @@ onMounted(async () => {
   if (storedUserRole) {
     userRole.value = storedUserRole
   }
+})
 
-  // Add resize listener to close mobile menu on desktop
+onMounted(() => {
+  // Add resize listener to close mobile menu on desktop and prevent content blocking
   window.addEventListener('resize', handleResize)
+  
+  // Also check initial state
+  handleResize()
 })
 
 onUnmounted(() => {
@@ -165,8 +171,17 @@ onUnmounted(() => {
 })
 
 const handleResize = () => {
-  if (window.innerWidth > 640 && isMobileMenuOpen.value) {
-    isMobileMenuOpen.value = false
+  // Update reactive window width
+  windowWidth.value = window.innerWidth
+  
+  // Collapse sidebar when screen gets too small to accommodate both sidebar and content
+  // 1024px ensures sufficient space for content when sidebar is 250px wide
+  // This prevents sidebar from blocking main content
+  if (windowWidth.value <= 1024) {
+    // Ensure sidebar is collapsed on smaller screens
+    if (isMobileMenuOpen.value) {
+      isMobileMenuOpen.value = false
+    }
   }
 }
 
@@ -188,8 +203,8 @@ const closeMobileMenu = () => {
 }
 
 const handleNavItemClick = () => {
-  // Close mobile menu when a nav item is clicked (on mobile)
-  if (window.innerWidth <= 640) {
+  // Close mobile menu when a nav item is clicked (on smaller screens)
+  if (isMobileMode.value) {
     closeMobileMenu()
   }
   // Don't auto-close expanded menus - let them stay open to show current page
@@ -558,8 +573,8 @@ async function onLogout() {
   }
 }
 
-/* Mobile */
-@media (max-width: 640px) {
+/* Tablet and smaller screens - Sidebar should collapse to prevent content blocking */
+@media (max-width: 1024px) {
   .mobile-header {
     display: flex;
   }
@@ -576,7 +591,7 @@ async function onLogout() {
     width: 280px;
     transform: translateX(-100%);
     z-index: 1200;
-    top: 0; /* Start from top instead of below mobile header */
+    top: 0;
   }
   
   .side-navbar.mobile-open {
@@ -590,6 +605,21 @@ async function onLogout() {
   /* Add padding to body content when mobile header is visible */
   :global(body) {
     padding-top: 68px;
+  }
+}
+
+/* Mobile fine-tuning */
+@media (max-width: 640px) {
+  .side-navbar {
+    width: 260px; /* Slightly smaller on very small screens */
+  }
+  
+  .mobile-header {
+    padding: 0 0.75rem; /* Adjust padding for smaller screens */
+  }
+  
+  .mobile-brand .brand-text {
+    font-size: 1rem; /* Smaller text on mobile */
   }
 }
 

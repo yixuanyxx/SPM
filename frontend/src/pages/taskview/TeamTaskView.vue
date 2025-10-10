@@ -206,9 +206,7 @@
 
         <!-- Loading State for Member View -->
         <div v-if="isLoadingTasks" class="loading-state">
-          <div class="loading-spinner">
-            <i class="bi bi-arrow-clockwise spin"></i>
-          </div>
+          <div class="loading-spinner"></div>
           <p class="loading-text">Loading team members and tasks...</p>
         </div>
 

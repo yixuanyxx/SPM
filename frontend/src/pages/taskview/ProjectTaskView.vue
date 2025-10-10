@@ -44,9 +44,7 @@
       <div v-if="!selectedProjectId" class="projects-grid-container">
         <!-- Loading state -->
         <div v-if="isLoadingProjects" class="loading-state">
-          <div class="loading-spinner">
-            <i class="bi bi-arrow-clockwise spin"></i>
-          </div>
+          <div class="loading-spinner"></div>
           <p class="loading-text">Loading your projects...</p>
         </div>
 
@@ -255,9 +253,7 @@
 
             <!-- Loading state -->
             <div v-if="isLoadingTasks" class="loading-state">
-              <div class="loading-spinner">
-                <i class="bi bi-arrow-clockwise spin"></i>
-              </div>
+              <div class="loading-spinner"></div>
               <p class="loading-text">Loading project tasks...</p>
             </div>
 
@@ -357,9 +353,7 @@
             <div class="tasks-container">
               <!-- Loading state -->
               <div v-if="isLoadingTasks" class="loading-state">
-                <div class="loading-spinner">
-                  <i class="bi bi-arrow-clockwise spin"></i>
-                </div>
+                <div class="loading-spinner"></div>
                 <p class="loading-text">Loading project tasks...</p>
               </div>
 

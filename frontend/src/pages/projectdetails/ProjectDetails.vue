@@ -41,16 +41,16 @@
         </div>
 
         <!-- Header Section -->
-        <div class="header-section">
+        <div class="project-details-header-section">
           <div class="header-content">
             <div class="projectdetails-header">
-              <div class="title-section">
-                <div class="title-row">
-                  <h1 class="page-title">{{ project.proj_name }}</h1>
+              <div class="project-details-title-section">
+                <div class="project-details-title-row">
+                  <h1 class="project-details-page-title">{{ project.proj_name }}</h1>
                   <div class="project-id">Project ID: #{{ project.id }}</div>
                 </div>
               </div>
-              <div class="header-actions">
+              <div class="project-details-header-actions">
                 <button 
                   class="btn-primary edit-project-btn" 
                   @click="navigateToWorkload"
@@ -101,12 +101,12 @@
               <i class="bi bi-list-task"></i>
               Tasks
               <div class="tasks-progress">
-                <div class="progress-bar">
-                  <div class="progress-fill" 
+                <div class="project-details-progress-bar">
+                  <div class="project-details-progress-fill" 
                        :style="{ width: `${calculateProgress(project.tasks)}%` }">
                   </div>
                 </div>
-                <span class="progress-text">
+                <span class="project-details-progress-text">
                   {{ getCompletedTasksCount(project.tasks) }}/{{ (project.tasks || []).length }}
                 </span>
               </div>
@@ -116,20 +116,20 @@
                    class="no-tasks">
                 No tasks in this project
               </div>
-              <div v-else class="tasks-list">
+              <div v-else class="project-details-tasks-list">
                 <div v-for="task in project.tasks" 
                      :key="task.id"
-                     class="task-item"
+                     class="project-details-task-item"
                      @click="navigateToTask(task.id)">
-                  <div class="task-content">
-                    <h4 class="task-name">{{ task.task_name }}</h4>
-                    <div class="task-meta">
-                      <span :class="['status-badge', `status-${task.status.toLowerCase()}`]">
+                  <div class="project-details-task-content">
+                    <h4 class="project-details-task-name">{{ task.task_name }}</h4>
+                    <div class="project-details-task-meta">
+                      <span :class="['project-details-status-badge', `project-details-status-${task.status.toLowerCase().replace(' ', '-')}`]">
                         {{ task.status }}
                       </span>
                     </div>
                   </div>
-                  <div class="task-arrow">
+                  <div class="project-details-task-arrow">
                     <i class="bi bi-arrow-right"></i>
                   </div>
                 </div>

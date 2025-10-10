@@ -120,9 +120,7 @@
 
         <!-- Loading state -->
         <div v-if="isLoadingTasks || !hasInitialized" class="loading-state">
-          <div class="loading-spinner">
-            <i class="bi bi-arrow-clockwise spin"></i>
-          </div>
+          <div class="loading-spinner"></div>
           <p class="loading-text">Loading your tasks...</p>
         </div>
 

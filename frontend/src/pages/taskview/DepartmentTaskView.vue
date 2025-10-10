@@ -44,9 +44,7 @@
       <div v-if="!selectedTeamId" class="teams-grid-container">
         <!-- Loading state -->
         <div v-if="isLoadingTeams" class="loading-state">
-          <div class="loading-spinner">
-            <i class="bi bi-arrow-clockwise spin"></i>
-          </div>
+          <div class="loading-spinner"></div>
           <p class="loading-text">Loading department teams and statistics...</p>
         </div>
 
