@@ -92,13 +92,33 @@
         </div>
 
         <!-- Schedule -->
-        <div class="nav-item">
-          <router-link to="/schedule" class="nav-link" @click="handleNavItemClick">
+        <div class="nav-item" :class="{ expanded: expandedMenus.includes('schedule') }">
+          <div class="nav-link" @click="toggleMenu('schedule')">
             <div class="nav-icon">
               <i class="bi bi-calendar3"></i>
             </div>
             <span class="nav-text">Schedule</span>
-          </router-link>
+            <div class="nav-arrow" :class="{ rotated: expandedMenus.includes('schedule') }">
+              <i class="bi bi-chevron-down"></i>
+            </div>
+          </div>
+
+          <transition name="dropdown">
+            <div v-if="expandedMenus.includes('schedule')" class="nav-dropdown">
+              <router-link to="/schedule" class="dropdown-item" @click="handleNavItemClick">
+                <i class="bi bi-person-check"></i>
+                <span>My Schedule</span>
+              </router-link>
+
+              <!-- Role-based. If staff do not show. -->
+              <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'">
+                <router-link :to="teamScheduleRoute" class="dropdown-item" @click="handleNavItemClick">
+                  <i :class="teamScheduleIcon"></i>
+                  <span>{{ teamScheduleLabel }}</span>
+                </router-link>
+              </div>
+            </div>
+          </transition>
         </div>
 
 
@@ -209,6 +229,18 @@ const handleNavItemClick = () => {
   }
   // Don't auto-close expanded menus - let them stay open to show current page
 }
+
+const teamScheduleRoute = computed(() => {
+  return userRole.value?.toLowerCase() === 'director' ? '/schedule/department' : '/schedule/team'
+})
+
+const teamScheduleLabel = computed(() => {
+  return userRole.value?.toLowerCase() === 'director' ? "Dept's Schedule" : "Team's Schedule"
+})
+
+const teamScheduleIcon = computed(() => {
+  return userRole.value?.toLowerCase() === 'director' ? 'bi bi-building' : 'bi bi-people'
+})
 
 
 // Watch for route changes to auto-expand relevant menus
