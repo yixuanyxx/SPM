@@ -368,6 +368,20 @@
             </div>
           </div>
 
+          <!-- Comment Section -->
+            <div>
+            <CommentSection 
+              :taskId="taskId"
+              :taskOwnerId="task.owner_id"
+              :comments="taskComments"
+              :users="users"
+              @add-comment="handleAddComment"
+              @edit-comment="handleEditComment"
+              @delete-comment="handleDeleteComment"
+              @reply-comment="handleReplyComment"
+            />
+          </div>
+
           <!-- Parent Task Reference -->
           <div v-if="parentTask" class="content-block">
             <h3 class="block-title">
@@ -432,6 +446,7 @@ import EditPopup from '@/components/EditPopup.vue'
 import SideNavbar from '../../components/SideNavbar.vue'
 import '../taskview/taskview.css'
 import './taskdetails.css'
+import CommentSection from '@/components/CommentSection.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -871,5 +886,30 @@ const updateSuccess = async (updateData) => {
   await fetchTaskDetails()
   
   console.log('Task refreshed')
+}
+
+const taskComments = ref([])
+
+const handleAddComment = (commentData) => {
+  // Send to backend API
+  fetch(`http://localhost:5002/comments`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(commentData)
+  })
+  .then(res => res.json())
+  .then(data => {
+    taskComments.value.push(data.data)
+    // Optional: Send notifications to mentioned users
+  })
+}
+
+const handleDeleteComment = (commentId) => {
+  fetch(`http://localhost:5002/comments/${commentId}`, {
+    method: 'DELETE'
+  })
+  .then(() => {
+    taskComments.value = taskComments.value.filter(c => c.id !== commentId)
+  })
 }
 </script>
