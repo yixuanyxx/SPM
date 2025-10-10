@@ -637,10 +637,13 @@ const selectedTask = ref(null)
 const currentSubtasks = ref([])
 
 // Add these methods
+// Also update the openSubtaskModal to ensure selectedTask is properly set:
 const openSubtaskModal = (task) => {
+  // Make sure we're working with the actual task object from the tasks array
   selectedTask.value = task
-  currentSubtasks.value = [] // Reset subtasks
+  currentSubtasks.value = [] // Reset subtasks form
   isSubtaskModalVisible.value = true
+  console.log('Opened subtask modal for task:', task.id)
 }
 
 const closeSubtaskModal = () => {
@@ -656,25 +659,83 @@ const saveSubtasks = async () => {
   }
   
   try {
-    // Here you would make API calls to save the subtasks
-    // For now, we'll just add them to the parent task locally
-    if (selectedTask.value) {
-      if (!selectedTask.value.subtasks) {
-        selectedTask.value.subtasks = []
+    // Prepare subtask data with required fields
+    const subtasksToSave = currentSubtasks.value.map(subtask => ({
+      task_name: subtask.task_name || subtask.name || '',
+      description: subtask.description || '',
+      due_date: subtask.due_date || '',
+      priority: subtask.priority || '5',
+      status: subtask.status || 'Ongoing',
+      owner_id: subtask.owner_id || userId.value,
+      type: 'subtask',
+      parent_task: selectedTask.value.id,
+      project_id: selectedTask.value.project_id || null // Get project ID from parent task
+    }))
+
+    // Step 1: Save subtasks to database
+    // Use the specialized subtask endpoints that automatically update parent task
+    const endpoint = (userRole.value === 'manager' || userRole.value === 'director')
+      ? 'http://localhost:5002/tasks/manager-subtask/create'
+      : 'http://localhost:5002/tasks/staff-subtask/create'
+
+    // Create and save each subtask
+    const savedSubtasks = []
+    for (const subtaskData of subtasksToSave) {
+      const formData = new FormData()
+      
+      // Append all fields to FormData
+      Object.keys(subtaskData).forEach(key => {
+        if (subtaskData[key] !== null && subtaskData[key] !== undefined) {
+          formData.append(key, subtaskData[key])
+        }
+      })
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data.Code === 201) {
+        const savedSubtask = data.data
+        savedSubtasks.push(savedSubtask)
+        console.log('Subtask saved to database:', savedSubtask)
+      } else {
+        console.error('Failed to save subtask:', data.Message)
+        throw new Error(`Failed to save subtask: ${data.Message}`)
       }
-      selectedTask.value.subtasks.push(...currentSubtasks.value)
     }
-    
-    console.log('Saving subtasks:', currentSubtasks.value)
+
+    // Step 2: Update parent task with the saved subtask IDs
+    // The specialized subtask endpoints automatically update the parent task,
+    // but we need to update it locally for immediate UI feedback
+    if (selectedTask.value) {
+      const existingSubtaskIds = Array.isArray(selectedTask.value.subtasks) 
+        ? selectedTask.value.subtasks 
+        : []
+      const allSubtaskIds = [...existingSubtaskIds, ...savedSubtasks.map(st => st.id)]
+      selectedTask.value.subtasks = allSubtaskIds
+      
+      console.log('Updated parent task with subtask IDs:', allSubtaskIds)
+    }
+
+    // Step 3: Fetch user details for the newly created subtasks
+    await fetchTaskSpecificUsers(selectedTask.value)
+
+    // Step 4: Close modal and reset
     closeSubtaskModal()
+
+    // Step 5: Show success message
+    console.log('Subtasks saved successfully')
+    showSuccessMessage.value = true
+    setTimeout(() => {
+      showSuccessMessage.value = false
+    }, 3000)
     
-    // Fetch user details for the newly created subtasks
-    await fetchTaskUsers()
-    
-    // Show success message
   } catch (error) {
     console.error('Error saving subtasks:', error)
-    alert('Failed to save subtasks')
+    alert(`Failed to save subtasks: ${error.message}`)
   }
 }
 
