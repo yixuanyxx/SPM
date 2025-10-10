@@ -318,6 +318,100 @@ export default {
     removeCollaborator(user) {
       this.selectedCollaborators = this.selectedCollaborators.filter(u => u.userid !== user.userid);
     },
+    // async handleCreate() {
+    //   if (!this.isFormValid) {
+    //     this.showErrors = true;
+    //     this.errorMessage = "Please fill out all required fields: Task Name, Description, and Due Date.";
+    //     return;
+    //   }
+
+    //   this.isLoading = true;
+    //   this.errorMessage = "";
+    //   this.successMessage = "";
+
+    //   try {
+    //     const formData = new FormData();
+    //     formData.append("owner_id", this.newTask.owner_id);
+    //     formData.append("task_name", this.newTask.task_name);
+    //     formData.append("description", this.newTask.description);
+    //     formData.append("type", this.newTask.type);
+    //     formData.append("status", this.newTask.status);
+    //     formData.append("priority", this.newTask.priority);
+        
+    //     if (this.newTask.project_id) {
+    //       formData.append("project_id", this.newTask.project_id);
+    //     }
+
+    //     if (this.newTask.due_date) {
+    //       const localDate = new Date(this.newTask.due_date)
+    //       // Convert to ISO string in UTC
+    //       const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
+    //       formData.append('due_date', utcDateString)
+    //     }
+
+    //     if (this.newTask.parent_task) {
+    //       formData.append("parent_task", this.newTask.parent_task);
+    //     }
+        
+    //     if (this.newAttachmentFile) {
+    //       formData.append("attachment", this.newAttachmentFile);
+    //     }
+
+    //     // Add subtasks
+    //     if (this.newTask.subtasks && this.newTask.subtasks.length > 0) {
+    //       formData.append('subtasks', JSON.stringify(this.newTask.subtasks));
+    //     }
+
+    //     // Role-based endpoint selection
+    //     let endpoint = "";
+    //     if (this.userRole === "manager" || this.userRole === "director") {
+    //       endpoint = "http://localhost:5002/tasks/manager-task/create";
+    //     } else {
+    //       endpoint = "http://localhost:5002/tasks/staff-task/create";
+    //     }
+
+    //     // Collaborators inclusion
+    //     const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
+
+    //     // For staff, auto-add owner_id if not included
+    //     if (this.userRole === "staff" && !collaboratorIds.includes(this.newTask.owner_id)) {
+    //       collaboratorIds.push(this.newTask.owner_id);
+    //     }
+
+    //     if (collaboratorIds.length > 0) {
+    //       formData.append("collaborators", collaboratorIds.join(","));
+    //     }
+
+    //     console.log('Submitting task with endpoint:', endpoint);
+
+    //     const res = await fetch(endpoint, {
+    //       method: "POST",
+    //       body: formData
+    //     });
+
+    //     const data = await res.json();
+
+    //     if (res.ok && data.Code === 201) {
+    //       this.successMessage = "Task created successfully!";
+    //       this.$emit("task-created", data.data);
+
+    //       setTimeout(() => {
+    //         this.successMessage = "";
+    //         this.resetForm();
+    //         this.closePopup();
+    //       }, 1500);
+    //     } else {
+    //       throw new Error(data.Message || 'Failed to create task');
+    //     }
+        
+    //   } catch (err) {
+    //     console.error("Error creating task:", err);
+    //     this.errorMessage = err.message || "Failed to create task";
+    //   } finally {
+    //     this.isLoading = false;
+    //   }
+    // },
+
     async handleCreate() {
       if (!this.isFormValid) {
         this.showErrors = true;
@@ -330,11 +424,12 @@ export default {
       this.successMessage = "";
 
       try {
+        // ===== STEP 1: Create Parent Task =====
         const formData = new FormData();
         formData.append("owner_id", this.newTask.owner_id);
         formData.append("task_name", this.newTask.task_name);
         formData.append("description", this.newTask.description);
-        formData.append("type", this.newTask.type);
+        formData.append("type", "parent"); // Force parent type
         formData.append("status", this.newTask.status);
         formData.append("priority", this.newTask.priority);
         
@@ -343,66 +438,112 @@ export default {
         }
 
         if (this.newTask.due_date) {
-          const localDate = new Date(this.newTask.due_date)
-          // Convert to ISO string in UTC
-          const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
-          formData.append('due_date', utcDateString)
-        }
-
-        if (this.newTask.parent_task) {
-          formData.append("parent_task", this.newTask.parent_task);
+          const localDate = new Date(this.newTask.due_date);
+          const utcDateString = localDate.toISOString();
+          formData.append('due_date', utcDateString);
         }
         
         if (this.newAttachmentFile) {
           formData.append("attachment", this.newAttachmentFile);
         }
 
-        // Add subtasks
-        if (this.newTask.subtasks && this.newTask.subtasks.length > 0) {
-          formData.append('subtasks', JSON.stringify(this.newTask.subtasks));
-        }
-
-        // Role-based endpoint selection
-        let endpoint = "";
-        if (this.userRole === "manager" || this.userRole === "director") {
-          endpoint = "http://localhost:5002/tasks/manager-task/create";
-        } else {
-          endpoint = "http://localhost:5002/tasks/staff-task/create";
-        }
-
-        // Collaborators inclusion
+        // Collaborators
         const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
-
-        // For staff, auto-add owner_id if not included
         if (this.userRole === "staff" && !collaboratorIds.includes(this.newTask.owner_id)) {
           collaboratorIds.push(this.newTask.owner_id);
         }
-
         if (collaboratorIds.length > 0) {
           formData.append("collaborators", collaboratorIds.join(","));
         }
 
-        console.log('Submitting task with endpoint:', endpoint);
+        // Role-based endpoint for PARENT task
+        let parentEndpoint = "";
+        if (this.userRole === "manager" || this.userRole === "director") {
+          parentEndpoint = "http://localhost:5002/tasks/manager-task/create";
+        } else {
+          parentEndpoint = "http://localhost:5002/tasks/staff-task/create";
+        }
 
-        const res = await fetch(endpoint, {
+        console.log('Creating parent task...');
+        const parentRes = await fetch(parentEndpoint, {
           method: "POST",
           body: formData
         });
 
-        const data = await res.json();
+        const parentData = await parentRes.json();
 
-        if (res.ok && data.Code === 201) {
-          this.successMessage = "Task created successfully!";
-          this.$emit("task-created", data.data);
-
-          setTimeout(() => {
-            this.successMessage = "";
-            this.resetForm();
-            this.closePopup();
-          }, 1500);
-        } else {
-          throw new Error(data.Message || 'Failed to create task');
+        if (!parentRes.ok || parentData.Code !== 201) {
+          throw new Error(parentData.Message || 'Failed to create parent task');
         }
+
+        const createdParentTask = parentData.data;
+        console.log('Parent task created:', createdParentTask);
+
+        // ===== STEP 2: Create Subtasks (if any) =====
+        const createdSubtasks = [];
+        
+        if (this.newTask.subtasks && this.newTask.subtasks.length > 0) {
+          console.log(`Creating ${this.newTask.subtasks.length} subtasks...`);
+          
+          // Determine subtask endpoint based on role
+          let subtaskEndpoint = "";
+          if (this.userRole === "manager" || this.userRole === "director") {
+            subtaskEndpoint = "http://localhost:5002/tasks/manager-subtask/create";
+          } else {
+            subtaskEndpoint = "http://localhost:5002/tasks/staff-subtask/create";
+          }
+
+          for (const [index, subtask] of this.newTask.subtasks.entries()) {
+            try {
+              // Prepare subtask data
+              const subtaskData = {
+                owner_id: this.newTask.owner_id,
+                task_name: subtask.task_name,
+                description: subtask.description || '',
+                due_date: subtask.due_date,
+                priority: subtask.priority.toString(),
+                status: subtask.status || 'Ongoing',
+                project_id: this.newTask.project_id || null,
+                parent_task: createdParentTask.id, // Link to parent
+                collaborators: collaboratorIds.length > 0 ? collaboratorIds.join(',') : ''
+              };
+
+              console.log(`Creating subtask ${index + 1}/${this.newTask.subtasks.length}:`, subtaskData);
+
+              const subtaskRes = await fetch(subtaskEndpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subtaskData)
+              });
+
+              const subtaskResult = await subtaskRes.json();
+              
+              if (subtaskRes.ok && subtaskResult.Code === 201) {
+                createdSubtasks.push(subtaskResult.data);
+                console.log(`Subtask ${index + 1} created successfully`);
+              } else {
+                console.error(`Failed to create subtask ${index + 1}:`, subtaskResult.Message);
+              }
+            } catch (error) {
+              console.error(`Error creating subtask ${index + 1}:`, error);
+            }
+          }
+
+          console.log(`Created ${createdSubtasks.length}/${this.newTask.subtasks.length} subtasks`);
+        }
+
+        // Attach subtasks to parent task for emit
+        createdParentTask.subtasks = createdSubtasks;
+
+        // ===== Success =====
+        this.successMessage = "Task created successfully!";
+        this.$emit("task-created", createdParentTask);
+
+        setTimeout(() => {
+          this.successMessage = "";
+          this.resetForm();
+          this.closePopup();
+        }, 1500);
         
       } catch (err) {
         console.error("Error creating task:", err);
@@ -411,6 +552,7 @@ export default {
         this.isLoading = false;
       }
     },
+
     resetForm() {
       this.newTask = {
         owner_id: this.userId,

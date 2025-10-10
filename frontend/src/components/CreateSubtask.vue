@@ -12,7 +12,7 @@
       <label>Subtasks</label>
       <button 
         type="button"
-        @click="showSubtaskForm = !showSubtaskForm" 
+        @click="toggleSubtaskForm" 
         class="add-subtask-btn"
       >
         <i class="bi bi-plus-lg"></i>
@@ -23,59 +23,67 @@
     <!-- Inline Subtask Form -->
     <div v-if="showSubtaskForm" class="subtask-form">
       <div class="form-group">
-        <label>Subtask Name*</label>
+        <label :class="{ 'error-label': showErrors && !currentSubtask.task_name.trim() }">
+          Subtask Name<span class="required">*</span>
+        </label>
         <input 
           v-model="currentSubtask.task_name" 
           placeholder="Enter subtask name..."
           type="text"
+          :class="{ 'input-error': showErrors && !currentSubtask.task_name.trim() }"
         />
       </div>
 
       <div class="form-group">
-        <label>Description*</label>
+        <label :class="{ 'error-label': showErrors && !currentSubtask.description.trim() }">
+          Description<span class="required">*</span>
+        </label>
         <textarea 
           v-model="currentSubtask.description" 
           placeholder="Enter description..."
           rows="3"
+          :class="{ 'input-error': showErrors && !currentSubtask.description.trim() }"
         ></textarea>
       </div>
       
       <div class="form-group">
         <label>Status</label>
         <select v-model="currentSubtask.status">
-        <option value="Ongoing">Ongoing</option>
-        <option value="Under Review">Under Review</option>
-        <option value="Completed">Completed</option>
+          <option value="Ongoing">Ongoing</option>
+          <option value="Under Review">Under Review</option>
+          <option value="Completed">Completed</option>
         </select>
       </div>
 
       <div class="form-group">
-        <label>Due Date*</label>
+        <label :class="{ 'error-label': showErrors && !currentSubtask.due_date }">
+          Due Date & Time<span class="required">*</span>
+        </label>
         <input 
-          type="date" 
+          type="datetime-local" 
           v-model="currentSubtask.due_date"
-          :min="getTodayDate()"
+          :min="getTodayDateTime()"
+          :class="{ 'input-error': showErrors && !currentSubtask.due_date }"
         />
       </div>
 
       <div class="form-group">
         <label for="priority-subtask">Priority Level: {{ currentSubtask.priority }}</label>
         <div class="priority-slider-wrapper">
-            <input
-                id="priority-subtask"
-                type="range"
-                min="1"
-                max="10"
-                v-model="currentSubtask.priority"
-                :disabled="isLoading"
-                class="priority-slider"
-                />
-                <div class="priority-range-labels">
-                    <span>1 - Least Important</span>
-                    <span>10 - Most Important</span>
-                </div>
-            </div>
+          <input
+            id="priority-subtask"
+            type="range"
+            min="1"
+            max="10"
+            v-model="currentSubtask.priority"
+            class="priority-slider"
+          />
+          <div class="priority-range-labels">
+            <span>1 - Least Important</span>
+            <span>10 - Most Important</span>
+          </div>
         </div>
+      </div>
 
       <div class="form-actions">
         <button type="button" @click="addSubtask" class="btn-primary">
@@ -88,10 +96,10 @@
       </div>
     </div>
 
-    <!-- Subtask List -->
-    <div v-if="modelValue.length > 0" class="subtask-list">
+    <!-- Subtask List - Sorted by Priority (High to Low) -->
+    <div v-if="sortedSubtasks.length > 0" class="subtask-list">
       <div 
-        v-for="(subtask, index) in modelValue" 
+        v-for="(subtask, index) in sortedSubtasks" 
         :key="subtask.id"
         class="subtask-item"
       >
@@ -112,32 +120,42 @@
             </span>
             <span class="subtask-badge date-badge">
               <i class="bi bi-calendar3"></i>
-              {{ formatDate(subtask.due_date) }}
+              {{ formatDateTime(subtask.due_date) }}
             </span>
           </div>
         </div>
-        <button 
-          type="button"
-          @click="removeSubtask(subtask.id)" 
-          class="remove-subtask-btn"
-          title="Remove subtask"
-        >
-          <i class="bi bi-x-lg"></i>
-        </button>
+        <div class="subtask-actions">
+          <button 
+            type="button"
+            @click="editSubtask(index)" 
+            class="edit-subtask-btn"
+            title="Edit subtask"
+          >
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button 
+            type="button"
+            @click="removeSubtask(index)" 
+            class="remove-subtask-btn"
+            title="Remove subtask"
+          >
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Only show if there are no subtasks AND the form is closed -->
-    <p v-if="modelValue.length === 0 && !showSubtaskForm" class="no-subtasks">
-    <i class="bi bi-clipboard"></i>
-    No subtasks added yet. Click "Add Subtask" to create one.
+    <p v-if="sortedSubtasks.length === 0 && !showSubtaskForm" class="no-subtasks">
+      <i class="bi bi-clipboard"></i>
+      No subtasks added yet. Click "Add Subtask" to create one.
     </p>
 
   </div>
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 
 const props = defineProps({
   modelValue: {
@@ -153,6 +171,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const showSubtaskForm = ref(false)
+const showErrors = ref(false)
+const editingIndex = ref(null)
 
 // Watch for autoOpen prop and automatically open the form
 watch(() => props.autoOpen, (newValue) => {
@@ -160,6 +180,7 @@ watch(() => props.autoOpen, (newValue) => {
     showSubtaskForm.value = true
   }
 }, { immediate: true })
+
 const currentSubtask = ref({
   task_name: '',
   description: '',
@@ -173,6 +194,13 @@ const toast = ref({
   message: '',
   type: 'error',
   icon: ''
+})
+
+// Computed property to sort subtasks by priority (highest to lowest)
+const sortedSubtasks = computed(() => {
+  return [...props.modelValue].sort((a, b) => {
+    return parseInt(b.priority) - parseInt(a.priority)
+  })
 })
 
 const showToast = (message, type = 'error') => {
@@ -199,16 +227,16 @@ const addSubtask = () => {
   if (!currentSubtask.value.task_name.trim() || 
       !currentSubtask.value.description.trim() || 
       !currentSubtask.value.due_date) {
+    showErrors.value = true
     showToast('Please fill out all required subtask fields', 'error')
     return
   }
 
   // Validate that due date is not in the past
   const selectedDate = new Date(currentSubtask.value.due_date)
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const now = new Date()
   
-  if (selectedDate < today) {
+  if (selectedDate < now) {
     showToast('Due date cannot be in the past. Please select today or a future date.', 'error')
     return
   }
@@ -218,38 +246,102 @@ const addSubtask = () => {
     task_name: currentSubtask.value.task_name,
     description: currentSubtask.value.description,
     due_date: currentSubtask.value.due_date,
-    priority: parseInt(currentSubtask.value.priority), // Convert to integer
+    priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
     id: Date.now() // Temporary ID for frontend display
   }
 
-  // Emit to parent component
-  emit('update:modelValue', [...props.modelValue, newSubtask])
-
-  // Show success message
-  showToast('Subtask added successfully!', 'success')
+  if (editingIndex.value !== null) {
+    // Update existing subtask
+    const updatedSubtasks = [...props.modelValue]
+    updatedSubtasks[editingIndex.value] = newSubtask
+    emit('update:modelValue', updatedSubtasks)
+    showToast('Subtask updated successfully!', 'success')
+    editingIndex.value = null
+  } else {
+    // Add new subtask
+    emit('update:modelValue', [...props.modelValue, newSubtask])
+    showToast('Subtask added successfully!', 'success')
+  }
   
   // Reset form and close
   resetForm()
   showSubtaskForm.value = false
+  showErrors.value = false
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'No date'
-  const date = new Date(dateString)
+const editSubtask = (sortedIndex) => {
+  // Get the actual subtask from sorted list
+  const subtaskToEdit = sortedSubtasks.value[sortedIndex]
+  
+  // Find its index in the original unsorted array
+  const originalIndex = props.modelValue.findIndex(s => s.id === subtaskToEdit.id)
+  
+  currentSubtask.value = {
+    task_name: subtaskToEdit.task_name,
+    description: subtaskToEdit.description,
+    due_date: subtaskToEdit.due_date,
+    priority: subtaskToEdit.priority,
+    status: subtaskToEdit.status
+  }
+  editingIndex.value = originalIndex
+  showSubtaskForm.value = true
+  showErrors.value = false
+}
+
+const resetForm = () => {
+  currentSubtask.value = {
+    task_name: '',
+    description: '',
+    due_date: '',
+    priority: 5,
+    status: 'Ongoing'
+  }
+  editingIndex.value = null
+}
+
+const cancelForm = () => {
+  resetForm()
+  showSubtaskForm.value = false
+  showErrors.value = false
+}
+
+const toggleSubtaskForm = () => {
+  if (showSubtaskForm.value) {
+    resetForm()
+    showErrors.value = false
+  }
+  showSubtaskForm.value = !showSubtaskForm.value
+}
+
+const removeSubtask = (index) => {
+  const updatedSubtasks = [...props.modelValue]
+  updatedSubtasks.splice(index, 1)
+  emit('update:modelValue', updatedSubtasks)
+  showToast('Subtask removed', 'success')
+}
+
+const formatDateTime = (dateTimeString) => {
+  if (!dateTimeString) return 'No date'
+  const date = new Date(dateTimeString)
   return date.toLocaleDateString('en-SG', { 
     month: 'short', 
     day: 'numeric',
-    year: 'numeric'
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
   })
 }
 
-const getTodayDate = () => {
-  const today = new Date()
-  const year = today.getFullYear()
-  const month = String(today.getMonth() + 1).padStart(2, '0')
-  const day = String(today.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+const getTodayDateTime = () => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
 const getStatusClass = (status) => {
@@ -418,6 +510,16 @@ const getPriorityClass = (priority) => {
   margin-bottom: 0.5rem;
   font-weight: 500;
   color: #374151;
+  transition: color 0.2s;
+}
+
+.form-group label.error-label {
+  color: #dc2626;
+}
+
+.required {
+  color: #dc2626;
+  margin-left: 2px;
 }
 
 .form-group input,
@@ -441,6 +543,18 @@ const getPriorityClass = (priority) => {
 .form-group textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+.form-group input.input-error,
+.form-group textarea.input-error {
+  border-color: #dc2626;
+  background-color: #fee2e2;
+}
+
+.form-group input.input-error:focus,
+.form-group textarea.input-error:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
 }
 
 .form-actions {
@@ -551,7 +665,7 @@ const getPriorityClass = (priority) => {
   margin-bottom: 0.75rem;
   line-height: 1.5;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -616,15 +730,36 @@ const getPriorityClass = (priority) => {
   color: #4b5563;
 }
 
+.subtask-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.edit-subtask-btn,
 .remove-subtask-btn {
   padding: 0.5rem;
   background: transparent;
-  color: #ef4444;
   border: none;
   border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.2s;
-  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edit-subtask-btn {
+  color: #3b82f6;
+}
+
+.edit-subtask-btn:hover {
+  background: #dbeafe;
+  transform: scale(1.1);
+}
+
+.remove-subtask-btn {
+  color: #ef4444;
 }
 
 .remove-subtask-btn:hover {
@@ -714,7 +849,7 @@ const getPriorityClass = (priority) => {
 .priority-slider::-webkit-slider-thumb:active {
   cursor: grabbing;
   outline: none !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important; /* Keep only the thumb shadow */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
 }
 
 .priority-slider::-webkit-slider-thumb:hover {
