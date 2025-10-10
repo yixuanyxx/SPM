@@ -293,7 +293,6 @@
         <!-- Loading State for Member View -->
         <div v-if="isLoadingTasks" class="loading-state">
           <div class="loading-spinner">
-            <i class="bi bi-arrow-clockwise spin"></i>
           </div>
           <p class="loading-text">Loading department members and tasks...</p>
         </div>
