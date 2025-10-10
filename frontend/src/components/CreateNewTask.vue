@@ -17,7 +17,7 @@
               id="title"
               v-model="newTask.task_name"
               :disabled="isLoading"
-              class="form-input"
+              :class="{ 'input-error': showErrors && !newTask.task_name }"
               placeholder="Enter task name..."
             />
           </div>
@@ -30,9 +30,22 @@
               v-model="newTask.description"
               rows="3"
               :disabled="isLoading"
-              class="form-textarea"
+              :class="{ 'input-error': showErrors && !newTask.description }"
               placeholder="Enter task description..."
             ></textarea>
+          </div>
+
+          <!-- Due Date -->
+          <div class="form-group">
+            <label for="dueDate">Due Date*</label>
+            <input
+              type="datetime-local"
+              id="dueDate"
+              v-model="newTask.due_date"
+              :disabled="isLoading"
+              :class="{ 'input-error': showErrors && !newTask.due_date }"
+              :min="getCurrentDate()"
+            />
           </div>
 
           <!-- Status -->
@@ -49,19 +62,6 @@
               <option value="Under Review">Under Review</option>
               <option value="Completed">Completed</option>
             </select>
-          </div>
-
-          <!-- Due Date -->
-          <div class="form-group">
-            <label for="dueDate">Due Date*</label>
-            <input
-              type="date"
-              id="dueDate"
-              v-model="newTask.due_date"
-              :disabled="isLoading"
-              class="form-input"
-              :min="getCurrentDate()"
-            />
           </div>
 
           <!-- Priority -->
@@ -156,7 +156,7 @@
           <div class="form-actions">
             <button 
               type="submit" 
-              :disabled="isLoading || !isFormValid"
+              :disabled="isLoading"
               class="btn-primary"
             >
               <i class="bi bi-plus-circle" v-if="!isLoading"></i>
@@ -178,12 +178,18 @@
   </div>
 
   <!-- Messages -->
-  <div v-if="successMessage" class="message success">
+  <!-- Success Popup -->
+  <div v-if="successMessage" class="success-popup">
     <i class="bi bi-check-circle-fill"></i> {{ successMessage }}
   </div>
-  <div v-if="errorMessage" class="message error">
-    <i class="bi bi-exclamation-circle-fill"></i> {{ errorMessage }}
+
+  <!-- Error Popup -->
+  <div v-if="errorMessage" class="error-popup">
+    <i class="bi bi-exclamation-triangle-fill"></i>
+    <span>{{ errorMessage }}</span>
+    <button class="close-btn" @click="errorMessage = ''">&times;</button>
   </div>
+
 </template>
 
 <script>
@@ -222,6 +228,7 @@ export default {
       },
       newAttachmentFile: null,
       isLoading: false,
+      showErrors: false,
       successMessage: "",
       errorMessage: ""
     };
@@ -296,7 +303,7 @@ export default {
       if (file && file.type === "application/pdf") {
         this.newAttachmentFile = file;
       } else {
-        alert("Only PDF files are allowed");
+        this.errorMessage = "Only PDF files are allowed";
         e.target.value = null;
         this.newAttachmentFile = null;
       }
@@ -313,7 +320,8 @@ export default {
     },
     async handleCreate() {
       if (!this.isFormValid) {
-        alert('Please fill out all required fields: Task Name, Description, and Due Date.');
+        this.showErrors = true;
+        this.errorMessage = "Please fill out all required fields: Task Name, Description, and Due Date.";
         return;
       }
 
@@ -328,11 +336,17 @@ export default {
         formData.append("description", this.newTask.description);
         formData.append("type", this.newTask.type);
         formData.append("status", this.newTask.status);
-        formData.append("due_date", this.newTask.due_date);
         formData.append("priority", this.newTask.priority);
         
         if (this.newTask.project_id) {
           formData.append("project_id", this.newTask.project_id);
+        }
+
+        if (this.newTask.due_date) {
+          const localDate = new Date(this.newTask.due_date)
+          // Convert to ISO string in UTC
+          const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
+          formData.append('due_date', utcDateString)
         }
 
         if (this.newTask.parent_task) {
@@ -814,6 +828,81 @@ export default {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+input.input-error,
+textarea.input-error {
+  background-color: #ffe5e5 !important; /* light red */
+  border: 1px solid #ff4d4d !important; /* red border */
+}
+
+input.input-error:focus,
+textarea.input-error:focus {
+  outline: none;
+  border-color: #ff0000 !important;
+  box-shadow: 0 0 4px rgba(255, 0, 0, 0.3);
+}
+
+.success-popup {
+  position: fixed;
+  top: 2rem;
+  right: 2rem;
+  background: #d1fae5;
+  color: #059669;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1),
+              0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  z-index: 1001;
+  font-weight: 600;
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  animation: slideInRight 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.error-popup {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: #f44336;
+  color: white;
+  padding: 16px 24px;
+  border-radius: 8px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  z-index: 1000;
+  min-width: 280px;
+  max-width: 90%;
+  text-align: center;
+}
+
+.error-popup .close-btn {
+  background: transparent;
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  margin-left: auto;
+}
+
+/* ✅ Animation */
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 
 @keyframes spin {
   from {
