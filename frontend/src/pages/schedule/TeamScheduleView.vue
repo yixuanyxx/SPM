@@ -124,7 +124,8 @@
         <!-- Member View -->
         <div v-if="viewMode === 'members'" class="members-view">
           <div class="sort-controls">
-            <div class="sort-container">
+            <div class="sort-container d-flex align-items-center justify-content-between">
+              <!-- Member Filter -->
               <div class="filter-group ms-4">
                 <label for="memberFilter">Filter by member:</label>
                 <select id="memberFilter" v-model="selectedMember" class="filter-dropdown">
@@ -134,13 +135,36 @@
                   </option>
                 </select>
               </div>
+
+              <!-- Workload Legend -->
+              <div class="workload-legend ms-4">
+                <div class="legend-item">
+                  <span class="legend-color low"></span> Light
+               </div>
+               <div class="legend-item">
+                 <span class="legend-color moderate"></span> Moderate
+               </div>
+                <div class="legend-item">
+                  <span class="legend-color high"></span> Heavy
+                </div>
+                <div class="legend-item">
+                  <span class="legend-color overload"></span> Overloaded
+                </div>
+              </div>
             </div>
           </div>
 
           <!-- Member Cards -->
-          <div v-if="filteredMembers.length > 0" class="members-container">
+          <!-- Loading Spinner -->
+          <div class="members-container-wrapper">
+          <div v-if="!isMemberDataReady" class="members-loading">
+            <div class="loading-spinner"></div>
+            <p>Loading team members and tasks...</p>
+          </div>
+
+          <div v-else class="members-container">
             <div
-              v-for="(member, index) in filteredMembers"
+              v-for="(member, index) in teamMembers.filter(m => m.userid !== currentUserId)"
               :key="member.userid"
               class="member-card"
               :class="getWorkloadClass(member)"
@@ -162,6 +186,35 @@
                   <div class="task-count">{{ getMemberTasks(member.userid).length }} tasks</div>
                 </div>
               </div>
+
+              <div class="member-tasks-summary">
+                <div class="task-breakdown">
+                  <div class="breakdown-item ongoing">
+                    <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Ongoing').length }}</span>
+                    <span class="breakdown-label">Ongoing</span>
+                  </div>
+                  <div class="breakdown-item under-review">
+                    <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Under Review').length }}</span>
+                    <span class="breakdown-label">Review</span>
+                  </div>
+                  <div class="breakdown-item completed">
+                    <span class="breakdown-count">{{ getMemberTasksByStatus(member.userid, 'Completed').length }}</span>
+                    <span class="breakdown-label">Done</span>
+                  </div>
+                </div>
+
+                <div class="priority-breakdown">
+                  <div class="priority-item high" v-if="getMemberHighPriorityTasks(member.userid) > 0">
+                    <i class="bi bi-flag-fill"></i>
+                    <span>{{ getMemberHighPriorityTasks(member.userid) }} high priority</span>
+                  </div>
+                  <div class="upcoming-tasks" v-if="getMemberUpcomingTasks(member.userid) > 0">
+                    <i class="bi bi-clock"></i>
+                    <span>{{ getMemberUpcomingTasks(member.userid) }} due soon</span>
+                  </div>
+                </div>
+              </div>
+
               <!-- Member Actions -->
               <div class="member-actions">
                 <button class="view-schedule-btn" @click="viewMemberSchedule(member.userid)">
@@ -172,9 +225,10 @@
             </div>
           </div>
 
-          <div v-else class="empty-state">
+          <div v-if="teamMembers.length < 0" class="empty-state">
             <p>No members match the filter.</p>
           </div>
+        </div>
         </div>
 
         <!-- Schedule View -->
@@ -515,13 +569,23 @@ const users = ref({})
 const userId = ref(null)
 const teamId = ref(null)
 const isLoadingTasks = ref(false)
+const isLoadingMembers = ref(false)
+const isLoading = computed(() => {
+  return isLoadingTasks.value || teamMembers.value.length === 0
+})
+const isMemberDataReady = computed(() => {
+  // Only true if tasks and members are both loaded
+  return !isLoadingTasks.value && teamMembers.value.length > 0
+})
 const userRole = ref('')
+const currentUserId = ref(null)
 
 /* ----------------------------------------------------------
    Lifecycle: Fetch user, team, and tasks
 ---------------------------------------------------------- */
 onMounted(async () => {
   const userData = getCurrentUserData()
+  currentUserId.value = userData?.userid || null
   userRole.value = userData.role?.toLowerCase() || ''
   userId.value = parseInt(userData.userid) || null
   
@@ -767,27 +831,50 @@ const showMemberView = () => {
 /* ----------------------------------------------------------
    Workload Helpers
 ---------------------------------------------------------- */
-const getMemberTasks = (memberId) =>
-  tasks.value.filter(
-    task => task.owner_id === memberId || (task.collaborators?.includes(memberId))
+const getMemberTasks = (memberId) => {
+  return tasks.value.filter(task => 
+    task.owner_id === memberId || 
+    (task.collaborators && task.collaborators.includes(memberId))
   )
+}
+
+const getMemberTasksByStatus = (memberId, status) => {
+  return getMemberTasks(memberId).filter(task => task.status === status)
+}
+
+const getMemberHighPriorityTasks = (memberId) => {
+  return getMemberTasks(memberId).filter(task => parseInt(task.priority) >= 8).length
+}
+
+const getMemberUpcomingTasks = (memberId) => {
+  const now = new Date()
+  const threeDaysFromNow = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000))
+  return getMemberTasks(memberId).filter(task => {
+    if (!task.due_date || task.status === 'Completed') return false
+    const dueDate = new Date(task.due_date)
+    return dueDate >= now && dueDate <= threeDaysFromNow
+  }).length
+}
 
 const getWorkloadClass = (member) => {
-  const taskCount = getMemberTasks(member.userid).length
-  if (taskCount >= 8) return 'overload'
-  if (taskCount >= 5) return 'high'
+  const taskCount = getMemberTasks(member.userid).filter(task => task.status !== 'Completed').length
+  const highPriorityCount = getMemberHighPriorityTasks(member.userid)
+  
+  if (taskCount >= 8 || highPriorityCount >= 4) return 'overload'
+  if (taskCount >= 5 || highPriorityCount >= 2) return 'high'
   if (taskCount >= 3) return 'moderate'
   return 'low'
 }
 
 const getWorkloadLevel = (member) => {
+  const workloadClass = getWorkloadClass(member)
   const levels = {
-    low: 'Light',
-    moderate: 'Moderate',
-    high: 'Heavy',
-    overload: 'Overloaded'
+    'low': 'Light',
+    'moderate': 'Moderate', 
+    'high': 'Heavy',
+    'overload': 'Overloaded'
   }
-  return levels[getWorkloadClass(member)] || 'Light'
+  return levels[workloadClass] || 'Light'
 }
 
 /* ----------------------------------------------------------
@@ -826,6 +913,20 @@ const getCollaboratorNames = (collaboratorIds) => {
     })
     .join(", ");
 };
+
+const displayedTasks = computed(() => {
+  if (scheduleViewMode.value === 'team') {
+    return filteredTasks.value
+  } else if (scheduleViewMode.value === 'member' && selectedMemberSchedule.value) {
+    // Only tasks assigned to this member
+    return filteredTasks.value.filter(task => 
+      task.owner_id === selectedMemberSchedule.value ||
+      (task.collaborators && task.collaborators.includes(selectedMemberSchedule.value))
+    )
+  }
+  return []
+})
+
 
 /* ----------------------------------------------------------
    Filters & Calendar View Setup
@@ -893,6 +994,33 @@ const getWeekStart = (date) => {
   const day = d.getDay()
   const diff = d.getDate() - day
   return new Date(d.setDate(diff))
+}
+
+/* ----------------------------------------------------------
+   Calendar Navigation
+---------------------------------------------------------- */
+const previousPeriod = () => {
+  if (currentView.value === 'day') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 1))
+  } else if (currentView.value === 'week') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 7))
+  } else if (currentView.value === 'month') {
+    currentDate.value = new Date(currentDate.value.setMonth(currentDate.value.getMonth() - 1))
+  }
+}
+
+const nextPeriod = () => {
+  if (currentView.value === 'day') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() + 1))
+  } else if (currentView.value === 'week') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() + 7))
+  } else if (currentView.value === 'month') {
+    currentDate.value = new Date(currentDate.value.setMonth(currentDate.value.getMonth() + 1))
+  }
+}
+
+const goToToday = () => {
+  currentDate.value = new Date()
 }
 
 /* ----------------------------------------------------------
@@ -982,16 +1110,14 @@ const activeFilterCount = computed(() => {
    Task Helpers
 ---------------------------------------------------------- */
 const getTasksForDate = (date) => {
-  if (!date || !filteredTasks.value?.length) return []
+  if (!date || !displayedTasks.value?.length) return []
   const targetDateString = new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
 
-  const tasksForDate = filteredTasks.value.filter(task => {
+  return displayedTasks.value.filter(task => {
     if (!task.due_date) return false
     const taskDateString = new Date(task.due_date).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
     return taskDateString === targetDateString
-  })
-
-  return tasksForDate.sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+  }).sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
 }
 
 const getTasksForDateAndHour = (date, hour) => {
@@ -1003,6 +1129,7 @@ const getTasksForDateAndHour = (date, hour) => {
     return h === hour
   })
 }
+
 
 const getTaskStatusClass = (status) => {
   switch (status?.toLowerCase()) {
@@ -1182,4 +1309,108 @@ window.debugCalendar = {
   animation: spin 1s linear infinite;
   margin: 0 auto 1rem auto;
 }
+
+.sort-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* filter on left, legend on right */
+  width: 100%;
+}
+
+.header-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.header-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-actions {
+  display: flex;
+  gap: 0.75rem; /* space between the two buttons */
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.view-schedule-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.view-schedule-btn:hover {
+  background: #e5e7eb;
+  color: #1f2937;
+}
+
+.members-container-wrapper {
+  position: relative;
+  min-height: 300px; /* keeps height consistent even while loading */
+}
+
+.members-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 300px;
+  color: #4b5563; /* subtle gray */
+  font-size: 0.95rem;
+  gap: 0.75rem;
+}
+
+.loading-spinner {
+  border: 3px solid #e5e7eb;
+  border-top: 3px solid #3b82f6; /* blue accent */
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  animation: spin 0.8s linear infinite;
+}
+
+
+.workload-legend {
+  display: flex;
+  align-items: center;
+  gap: 1rem; /* space between legend items */
+  font-size: 0.75rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.legend-color.low { background: #d1fae5; color: #065f46; }
+.legend-color.moderate { background: #fef3c7; color: #92400e;} 
+.legend-color.high { background: #fecaca; color: #991b1b;}
+.legend-color.overload { background: #fee2e2; color: #7f1d1d;} 
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+
 </style>
