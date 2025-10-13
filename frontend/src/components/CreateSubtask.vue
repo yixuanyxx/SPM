@@ -47,8 +47,13 @@
       </div>
       
       <div class="form-group">
-        <label>Status</label>
-        <select v-model="currentSubtask.status">
+        <label for="status">Status</label>
+        <select
+          id="status"
+          v-model="currentSubtask.status"
+          class="form-select"
+        >
+          <option v-if="userRole === 'manager' || userRole === 'director'" value="Unassigned">Unassigned</option>
           <option value="Ongoing">Ongoing</option>
           <option value="Under Review">Under Review</option>
           <option value="Completed">Completed</option>
@@ -81,6 +86,40 @@
           <div class="priority-range-labels">
             <span>1 - Least Important</span>
             <span>10 - Most Important</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collaborators -->
+      <div class="form-group">
+        <label>Collaborators (emails)</label>
+        <div class="autocomplete">
+          <input 
+            type="text"
+            v-model="collaboratorQuery"
+            placeholder="Type email..."
+            class="form-input"
+          />
+
+          <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+            <li 
+              v-for="user in collaboratorSuggestions" 
+              :key="user.id"
+              @click="addCollaborator(user)"
+              class="suggestion-item"
+            >
+              {{ user.email }}
+            </li>
+          </ul>
+
+          <div class="selected-collaborators">
+            <span 
+              v-for="user in selectedCollaborators" 
+              :key="user.id" 
+              class="selected-email"
+            >
+              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+            </span>
           </div>
         </div>
       </div>
@@ -173,6 +212,34 @@ const emit = defineEmits(['update:modelValue'])
 const showSubtaskForm = ref(false)
 const showErrors = ref(false)
 const editingIndex = ref(null)
+const collaboratorQuery = ref('')
+const selectedCollaborators = ref([])
+const collaboratorSuggestions = ref([])
+const userRole = ref('')
+
+// Get user role on component mount
+import { getCurrentUserData } from '../services/session.js'
+
+const initUserRole = () => {
+  try {
+    const userData = getCurrentUserData()
+    userRole.value = userData.role?.toLowerCase() || ''
+  } catch (err) {
+    console.error('Error getting user data:', err)
+    userRole.value = ''
+  }
+}
+
+// Initialize on setup
+initUserRole()
+
+// Helper function to get default status based on user role
+const getDefaultStatus = () => {
+  if (userRole.value === 'manager' || userRole.value === 'director') {
+    return 'Unassigned'
+  }
+  return 'Ongoing'
+}
 
 // Watch for autoOpen prop and automatically open the form
 watch(() => props.autoOpen, (newValue) => {
@@ -181,12 +248,31 @@ watch(() => props.autoOpen, (newValue) => {
   }
 }, { immediate: true })
 
+// Watch for collaborator query changes
+watch(collaboratorQuery, async (query) => {
+  if (!query) {
+    collaboratorSuggestions.value = []
+    return
+  }
+
+  try {
+    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`)
+    if (!res.ok) throw new Error('Failed to fetch user emails')
+    const data = await res.json()
+    collaboratorSuggestions.value = data.data || []
+  } catch (err) {
+    console.error(err)
+    collaboratorSuggestions.value = []
+  }
+})
+
 const currentSubtask = ref({
   task_name: '',
   description: '',
   due_date: '',
   priority: 5,
-  status: 'Ongoing'
+  status: getDefaultStatus(),
+  collaborators: []
 })
 
 const toast = ref({
@@ -222,6 +308,18 @@ const showToast = (message, type = 'error') => {
   }, 3500)
 }
 
+const addCollaborator = (user) => {
+  if (!selectedCollaborators.value.find(u => u.userid === user.userid)) {
+    selectedCollaborators.value.push(user)
+  }
+  collaboratorQuery.value = ''
+  collaboratorSuggestions.value = []
+}
+
+const removeCollaborator = (user) => {
+  selectedCollaborators.value = selectedCollaborators.value.filter(u => u.userid !== user.userid)
+}
+
 const addSubtask = () => {
   // Validate required fields
   if (!currentSubtask.value.task_name.trim() || 
@@ -229,6 +327,21 @@ const addSubtask = () => {
       !currentSubtask.value.due_date) {
     showErrors.value = true
     showToast('Please fill out all required subtask fields', 'error')
+    return
+  }
+
+  // Validate for duplicate subtask name
+  const taskNameLower = currentSubtask.value.task_name.trim().toLowerCase()
+  const isDuplicate = props.modelValue.some((subtask, index) => {
+    // If editing, exclude the current subtask from duplication check
+    if (editingIndex.value !== null && index === editingIndex.value) {
+      return false
+    }
+    return subtask.task_name.toLowerCase() === taskNameLower
+  })
+
+  if (isDuplicate) {
+    showToast('A subtask with this name already exists. Please use a different name.', 'error')
     return
   }
 
@@ -248,6 +361,7 @@ const addSubtask = () => {
     due_date: currentSubtask.value.due_date,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
+    collaborators: selectedCollaborators.value.map(u => parseInt(u.userid)),
     id: Date.now() // Temporary ID for frontend display
   }
 
@@ -282,7 +396,8 @@ const editSubtask = (sortedIndex) => {
     description: subtaskToEdit.description,
     due_date: subtaskToEdit.due_date,
     priority: subtaskToEdit.priority,
-    status: subtaskToEdit.status
+    status: subtaskToEdit.status,
+    collaborators: subtaskToEdit.collaborators || []
   }
   editingIndex.value = originalIndex
   showSubtaskForm.value = true
@@ -295,8 +410,12 @@ const resetForm = () => {
     description: '',
     due_date: '',
     priority: 5,
-    status: 'Ongoing'
+    status: getDefaultStatus(),
+    collaborators: []
   }
+  selectedCollaborators.value = []
+  collaboratorQuery.value = ''
+  collaboratorSuggestions.value = []
   editingIndex.value = null
 }
 
@@ -524,20 +643,38 @@ const getPriorityClass = (priority) => {
 
 .form-group input,
 .form-group textarea,
-.form-group select {
-  padding: 0.625rem 0.875rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
-  font-size: 0.9rem;
-  transition: all 0.2s;
+.form-group select,
+.form-input {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #111827;
+  background-color: white;
+  transition: border-color 0.15s ease-in-out;
+  width: 100%;
+}
+
+.form-select {
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #111827;
+  background-color: white;
+  transition: border-color 0.15s ease-in-out;
+  width: 100%;
+  cursor: pointer;
 }
 
 .form-group input:focus,
 .form-group textarea:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-input:focus,
+.form-select:focus {
   outline: none;
   border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
 
 .form-group textarea {
@@ -554,7 +691,71 @@ const getPriorityClass = (priority) => {
 .form-group input.input-error:focus,
 .form-group textarea.input-error:focus {
   border-color: #dc2626;
-  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
+}
+
+/* Autocomplete Styles */
+.autocomplete {
+  position: relative;
+}
+
+.suggestions-list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 0;
+}
+
+.suggestion-item {
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.suggestion-item:hover {
+  background-color: #f3f4f6;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.selected-collaborators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.selected-email {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+}
+
+.selected-email i {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.selected-email i:hover {
+  color: #1e3a8a;
 }
 
 .form-actions {
