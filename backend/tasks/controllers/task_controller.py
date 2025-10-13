@@ -247,6 +247,7 @@ def update_task():
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask")
     - priority: Priority level (integer)
+    - completed_at: Completion timestamp (auto-set when status changes to Completed)
 
     RETURNS:
     {
