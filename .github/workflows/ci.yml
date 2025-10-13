@@ -18,16 +18,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
 
-      - name: Show Python version
-        run: python --version
-
-      - name: Install root requirements (optional)
-        if: ${{ hashFiles('requirements.txt') != '' }}
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
 
       - name: Discover and test each microservice
         env:
@@ -48,7 +39,12 @@ jobs:
             echo "Service: ${svc%/}"
             echo "=============================="
 
-            # 1) Install per-service requirements if present
+            # 1) Create and activate virtual environment
+            echo "Creating virtual environment for ${svc%/} ..."
+            python -m venv "${svc}venv_ci"
+            source "${svc}venv_ci/bin/activate"
+
+            # 2) Install per-service requirements if present
             if [[ -f "${svc}requirements.txt" ]]; then
               echo "Installing requirements for ${svc%/} ..."
               pip install -r "${svc}requirements.txt"
@@ -56,11 +52,16 @@ jobs:
               echo "No requirements.txt in ${svc%/} — skipping install."
             fi
 
-            # 2) Run tests if run_tests.py exists
+            # 3) Run tests if run_tests.py exists
             if [[ -f "${svc}run_tests.py" ]]; then
               echo "Running tests for ${svc%/} ..."
               python "${svc}run_tests.py"
             else
               echo "No run_tests.py in ${svc%/} — nothing to run."
             fi
+
+            # 4) Deactivate and cleanup virtual environment
+            deactivate
+            rm -rf "${svc}venv_ci"
+            echo "Cleaned up virtual environment for ${svc%/}"
           done
