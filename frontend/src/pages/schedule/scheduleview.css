@@ -874,17 +874,67 @@ button {
   border-radius: 6px;
 }
 
-.reschedule-btn {
-  background-color: #3b82f6;
-  color: white;
+.task-card {
+  min-height: 110px; /* Adjust for your design */
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.task-buttons {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+/* Day view → horizontal layout */
+.task-buttons.day {
+  flex-direction: row;
+}
+
+/* Week view → stacked layout */
+.task-buttons.week {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.reschedule-btn,
+.btn-complete {
+  display: inline-block;
+  width: 100%;
+  text-align: center;
+  padding: 4px 8px;
+  margin-top: 4px;
   border: none;
   border-radius: 6px;
-  padding: 3px 8px;
-  margin-top: 3px;
   cursor: pointer;
   font-size: 0.7rem;
+  color: white;
+  box-sizing: border-box;
 }
-.reschedule-btn:hover { background-color: #2563eb; }
+
+.btn-complete{
+  padding: 1px 8px;
+}
+
+/* Specific colors */
+.reschedule-btn {
+  background-color: #3b82f6;
+}
+
+.reschedule-btn:hover {
+  background-color: #2563eb;
+}
+
+.btn-complete {
+  background-color: #16a34a;
+}
+
+.btn-complete:hover {
+  background-color: #15803d;
+}
+
 
 .modal-actions { margin-top: 10px; }
 .confirm-btn {

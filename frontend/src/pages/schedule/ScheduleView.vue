@@ -111,6 +111,15 @@
                   >
                     Reschedule
                   </button>
+
+                  <button
+                    v-if="isTaskOverdue(task)"
+                    @click="markAsCompleted(task)"
+                    class="btn-complete"
+                  >
+                    Mark as Completed
+                  </button>
+
                 </div>
               </div>
             </div>
@@ -151,6 +160,15 @@
                 >
                 Reschedule
                 </button>
+
+                <button
+                  v-if="isTaskOverdue(task)"
+                  @click="markAsCompleted(task)"
+                  class="btn-complete"
+                >
+                  Mark as Completed
+                </button>
+
               </div>
             </div>
           </div>
@@ -842,6 +860,40 @@ const confirmReschedule = async () => {
     closeRescheduleModal()
   }
 }
+
+const markAsCompleted = async (task) => {
+  if (!task?.id) return;
+
+  const previousStatus = task.status;
+  task.status = 'completed'; // optimistic update
+  showSuccess(`Task "${task.task_name}" marked as completed!`);
+
+  try {
+    const payload = {
+      task_id: task.id,
+      status: 'Completed'
+    };
+
+    const response = await fetch(`http://localhost:5002/tasks/update`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (data.Code !== 200) {
+      task.status = previousStatus; // revert if API fails
+      showError(`Failed to update task: ${data.Message || 'Unknown error'}`);
+    }
+  } catch (err) {
+    task.status = previousStatus; // revert
+    console.error(err);
+    showError('Error marking task as completed.');
+  }
+};
+
+
 
 // Filter methods
 const toggleShowCompleted = () => {
