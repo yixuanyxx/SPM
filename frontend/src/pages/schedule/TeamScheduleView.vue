@@ -319,13 +319,23 @@
                       </div>
                       <div class="task-time">{{ formatTime(task.due_date) }}</div>
                     </div>
+
                     <button 
-                      v-if="isTaskOverdue(task)" 
+                      v-if="isTaskOverdue(task) && task.owner_id === currentUserId" 
                       class="reschedule-btn" 
                       @click.stop="openRescheduleModal(task)"
                     >
                       Reschedule
                     </button>
+
+                    <button
+                    v-if="['ongoing', 'overdue'].includes(task.status?.toLowerCase()) && task.owner_id === currentUserId"
+                    @click="markAsCompleted(task)"
+                    class="btn-complete"
+                  >
+                    Mark as Completed
+                  </button>
+
                   </div>
                 </div>
               </div>
@@ -359,13 +369,23 @@
                     {{ task.status }}
                   </div>
                   <div class="task-time">{{ formatTime(task.due_date) }}</div>
+
                   <button 
-                    v-if="isTaskOverdue(task)" 
+                    v-if="isTaskOverdue(task) && task.owner_id === currentUserId" 
                     class="reschedule-btn" 
                     @click.stop="openRescheduleModal(task)"
                   >
                   Reschedule
                   </button>
+
+                  <button
+                    v-if="['ongoing', 'overdue'].includes(task.status?.toLowerCase()) && task.owner_id === currentUserId"
+                    @click="markAsCompleted(task)"
+                    class="btn-complete"
+                  >
+                    Mark as Completed
+                  </button>
+
                 </div>
               </div>
             </div>
@@ -1255,6 +1275,26 @@ const fetchProjects = async () => {
     projects.value = []
   }
 }
+
+const markAsCompleted = async (task) => {
+  try {
+    const response = await fetch(`http://localhost:5002/tasks/${task.task_id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed" })
+    });
+
+    if (response.ok) {
+      task.status = "completed"; // Update UI immediately
+      console.log(`Task ${task.task_id} marked as completed`);
+    } else {
+      console.error("Failed to update task status:", await response.text());
+    }
+  } catch (error) {
+    console.error("Error marking task as completed:", error);
+  }
+};
+
 
 /* ----------------------------------------------------------
    Lifecycle and Watchers
