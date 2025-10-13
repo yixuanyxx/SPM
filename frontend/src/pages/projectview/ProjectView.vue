@@ -40,51 +40,32 @@
                    @dragover.prevent="handleDragOver($event, project)"
                    @dragleave="handleDragLeave(project)"
                    @drop="handleDrop($event, project)">
+  
                 <div class="project-header">
-                  <h3 class="project-title">{{ project.proj_name }}</h3>
-                  <span class="project-id">Project ID: {{ project.id }}</span>
-
+                  <div class="project-icon">
+                    <i class="bi bi-folder-fill"></i>
+                  </div>
+                  <div class="project-info">
+                    <h3 class="project-name mt-3">{{ project.proj_name }}</h3>
+                  </div>
                 </div>
-    
+                
                 <div class="project-meta">
                   <div class="meta-item">
-                    <div class="meta-icon">
-                      <i class="bi bi-person"></i>
-                    </div>
-                    <span>Project Owner: <span class="owner-name">{{project.owner_id || 'Unknown'}}</span></span>
+                    <i class="bi bi-person-fill"></i>
+                    <span>Owner: {{ getUserName(project.owner_id) }}</span>
                   </div>
-                  <div class="meta-item">
-                    <div class="meta-icon">
-                      <i class="bi bi-people"></i>
-                    </div>
-                    <span>Collaborators:</span>
-                    <div class="collaborators">
-                      <div v-for="(collab, index) in filterCollaborators(project)" 
-                          :key="index" 
-                          class="project-avatar">
-                        {{ getInitials(collab.name || collab.toString()) }}
-                      </div>
-                      <div v-if="filterCollaborators(project).length > 3" 
-                          class="project-avatar project-more-collaborators">
-                        +{{ filterCollaborators(project).length - 3 }}
-                      </div>
-                    </div>
+                  <div class="meta-item" v-if="project.collaborators">
+                    <i class="bi bi-people-fill"></i>
+                    <span>{{ getProjectMemberCount(project) }} members</span>
                   </div>
-                </div>
-    
-                <div class="project-progress-section">
-                  <div class="project-progress-bar">
-                    <div class="project-progress-fill" 
-                        :style="{ width: calculateProgress(project.tasks) + '%' }">
-                    </div>
-                  </div>
-                  <div class="project-progress-text">
-                    {{ getCompletedTasksCount(project.tasks) }} of {{ (project.tasks || []).length }} tasks completed
+                  <div class="meta-item" v-if="project.created_at">
+                    <i class="bi bi-calendar3"></i>
+                    <span>Created {{ formatDate(project.created_at) }}</span>
                   </div>
                 </div>
 
-                
-
+                <!-- Keep your existing My Tasks section -->
                 <div class="my-tasks">
                   <div class="tasks-header">
                     <span class="tasks-title">My Tasks</span>
@@ -94,8 +75,8 @@
                   </div>
                   <div v-else class="project-task-list">
                     <div v-for="task in getMyTasks(project.tasks)" 
-                        :key="task.id" 
-                        class="project-task-item">
+                         :key="task.id" 
+                         class="project-task-item">
                       <div class="project-task-content">
                         <span class="project-task-name">{{ task.task_name }}</span>
                       </div>
@@ -208,31 +189,27 @@ const fetchProjects = async () => {
     }
     
     const data = await response.json()
-    console.log('Initial project data:', data) // Debug log
     
     if (data.data && Array.isArray(data.data)) {
       const projectsWithTasks = await Promise.all(
         data.data.map(async (project) => {
+          // Fetch owner details first
+          await fetchUserDetails(project.owner_id)
+          
           try {
             const taskResponse = await fetch(`http://localhost:5002/tasks/project/${project.id}`)
             const taskData = await taskResponse.json()
-            console.log(`Tasks for project ${project.id}:`, taskData) // Debug log
-            
-            // Check if taskData has a data property
             project.tasks = taskData.data || taskData.tasks || []
-            return project
           } catch (error) {
             console.error(`Error fetching tasks for project ${project.id}:`, error)
             project.tasks = []
-            return project
           }
+          return project
         })
       )
       
       projects.value = projectsWithTasks
-      console.log('Final projects with tasks:', projects.value) // Debug log
     } else {
-      console.warn('No projects data found in response:', data) // Debug log
       projects.value = []
     }
   } catch (error) {
@@ -504,5 +481,55 @@ const handleDragLeave = (project) => {
   if (isDraggingOver.value === project.id) {
     isDraggingOver.value = null
   }
+}
+
+// Add this with your other refs
+const users = ref({})
+
+// Add this method to your existing methods
+const getProjectMemberCount = (project) => {
+  let count = 1 // Owner
+  if (project.collaborators && Array.isArray(project.collaborators)) {
+    count += project.collaborators.length
+  }
+  return count
+}
+
+// Add this with your other methods
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) return users.value[userid]
+  
+  try {
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      const user = data.data || data
+      if (user) {
+        users.value[userid] = user
+        return user
+      }
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
+const getUserName = (userid) => {
+  const user = users.value[userid]
+  return user?.name || 'Unknown User'
+}
+
+// Add this with your other methods
+const formatDate = (dateString) => {
+  if (!dateString) return 'No date'
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-SG', { 
+    timeZone: 'Asia/Singapore',
+    month: 'short', 
+    day: 'numeric',
+    year: 'numeric'
+  })
 }
 </script>
