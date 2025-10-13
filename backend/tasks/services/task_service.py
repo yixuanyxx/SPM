@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional
+from datetime import datetime, UTC
 from models.task import Task
 from repo.supa_task_repo import SupabaseTaskRepo
 
@@ -119,6 +120,19 @@ class TaskService:
         
         if not update_fields:
             return {"__status": 400, "Message": "No fields to update provided", "data": existing_task_data}
+        
+        # Handle status change logic - auto-set completed_at timestamp
+        if 'status' in update_fields:
+            new_status = update_fields['status']
+            old_status = existing_task_data.get('status')
+            
+            # If status is changing TO "Completed", set completed_at timestamp
+            if new_status == 'Completed' and old_status != 'Completed':
+                update_fields['completed_at'] = datetime.now(UTC).isoformat()
+            
+            # If status is changing FROM "Completed" to something else, clear completed_at
+            elif old_status == 'Completed' and new_status != 'Completed':
+                update_fields['completed_at'] = None
         
         # Create Task object from existing data for proper type handling
         existing_task = Task.from_dict(existing_task_data)
