@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+
+      - name: Discover and test each microservice
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CORS_ORIGINS: "http://localhost:5173"
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          echo "==> Scanning backend microservices..."
+          for svc in backend/*/ ; do
+            [[ -d "$svc" ]] || continue
+
+            echo ""
+            echo "=============================="
+            echo "Service: ${svc%/}"
+            echo "=============================="
+
+            # 1) Create and activate virtual environment
+            echo "Creating virtual environment for ${svc%/} ..."
+            python -m venv "${svc}venv_ci"
+            source "${svc}venv_ci/bin/activate"
+
+            # 2) Install per-service requirements if present
+            if [[ -f "${svc}requirements.txt" ]]; then
+              echo "Installing requirements for ${svc%/} ..."
+              pip install -r "${svc}requirements.txt"
+            else
+              echo "No requirements.txt in ${svc%/} — skipping install."
+            fi
+
+            # 3) Run tests if run_tests.py exists
+            if [[ -f "${svc}run_tests.py" ]]; then
+              echo "Running tests for ${svc%/} ..."
+              python "${svc}run_tests.py"
+            else
+              echo "No run_tests.py in ${svc%/} — nothing to run."
+            fi
+
+            # 4) Deactivate and cleanup virtual environment
+            deactivate
+            rm -rf "${svc}venv_ci"
+            echo "Cleaned up virtual environment for ${svc%/}"
+          done
