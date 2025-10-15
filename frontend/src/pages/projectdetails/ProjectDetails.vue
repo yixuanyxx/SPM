@@ -77,17 +77,37 @@
             <h3 class="block-title">Project Information</h3>
             <div class="block-content">
               <div class="info-grid">
-                <div class="info-item">
-                  <label>Owner:</label>
-                  <span>{{ project.owner_id }}</span>
+                <div class="property-item">
+                  <label class="property-label">
+                    <i class="bi bi-person"></i>
+                    Owner
+                  </label>
+                  <div class="property-value">
+                    <div class="user-chip">
+                      <div class="user-avatar">
+                        <i class="bi bi-person-circle"></i>
+                      </div>
+                      <span>{{ getUserName(project.owner_id) }}</span>
+                    </div>
+                  </div>
                 </div>
-                <div class="info-item">
-                  <label>Collaborators:</label>
-                  <div class="collaborators-list">
-                    <div v-for="collab in filterCollaborators(project)" 
-                         :key="collab" 
-                         class="collaborator-chip">
-                      {{ collab }}
+
+                <div v-if="project.collaborators && project.collaborators.length > 0" 
+                     class="property-item">
+                  <label class="property-label">
+                    <i class="bi bi-people"></i>
+                    Collaborators
+                  </label>
+                  <div class="property-value">
+                    <div class="collaborators-list">
+                      <div v-for="collaboratorId in filterCollaborators(project)" 
+                           :key="collaboratorId" 
+                           class="user-chip">
+                        <div class="user-avatar">
+                          <i class="bi bi-person-circle"></i>
+                        </div>
+                        <span>{{ getUserName(collaboratorId) }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -329,6 +349,7 @@ const showErrorPopup = ref(false)
 const errorMessage = ref('')
 const userId = ref(getCurrentUserData().userid)
 const userRole = ref(getCurrentUserData().role?.toLowerCase())
+const users = ref({}) // Add this with your other refs
 
 // Add the new task form data
 const newTask = ref({
@@ -367,36 +388,27 @@ const fetchProjectDetails = async () => {
     }
     const projectData = await projectResponse.json()
     
+    // Get initial project data
+    project.value = {
+      ...(projectData.data || projectData),
+      tasks: []
+    }
+
+    // Fetch all user details
+    await fetchProjectUsers()
+    
     // Fetch tasks for this project
     try {
       const tasksResponse = await fetch(`http://localhost:5002/tasks/project/${projectId}`)
       const tasksData = await tasksResponse.json()
-      
-      // Combine project and tasks data
-      project.value = {
-        ...(projectData.data || projectData),
-        tasks: tasksData.data || tasksData.tasks || []
-      }
+      project.value.tasks = tasksData.data || tasksData.tasks || []
     } catch (taskError) {
-      // If tasks fetch fails, still show project with empty tasks array
       console.warn('Failed to fetch tasks:', taskError)
-      project.value = {
-        ...(projectData.data || projectData),
-        tasks: []
-      }
+      project.value.tasks = []
     }
-    
-    // Set edited project data
-    editedProject.value = {
-      proj_name: project.value.proj_name,
-      collaborators: project.value.collaborators || [],
-    }
-    
-    console.log('Project with tasks:', project.value)
     
   } catch (err) {
     error.value = err.message
-    console.error('Error fetching project details:', err)
   } finally {
     loading.value = false
   }
@@ -609,10 +621,61 @@ const updateProject = async () => {
   }
 }
 
+// Update the fetchProjectUsers function
+const fetchProjectUsers = async () => {
+  const userIds = new Set()
+  
+  // Collect all unique user IDs from project
+  if (project.value.owner_id) userIds.add(project.value.owner_id)
+  if (project.value.collaborators) {
+    project.value.collaborators.forEach(id => userIds.add(id))
+  }
+  
+  // Fetch user details for all unique IDs
+  const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
+  const results = await Promise.all(fetchPromises)
+  console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
+}
+
+// Update the fetchUserDetails function
+const fetchUserDetails = async (userid) => {
+  if (!userid) return null
+  if (users.value[userid]) {
+    return users.value[userid] // Return cached user
+  }
+  
+  try {
+    console.log(`Fetching user details for userid: ${userid}`)
+    const response = await fetch(`http://localhost:5003/users/${userid}`)
+    if (response.ok) {
+      const data = await response.json()
+      console.log(`User data received for ${userid}:`, data)
+      const user = data.data
+      if (user) {
+        users.value[userid] = user
+        console.log(`Cached user ${userid}:`, user)
+        return user
+      }
+    } else {
+      console.error(`Failed to fetch user ${userid}: ${response.status}`)
+    }
+  } catch (error) {
+    console.error(`Error fetching user ${userid}:`, error)
+  }
+  return null
+}
+
 // Initialize edit form when edit modal is shown
 watch(() => showEditModal.value, (newValue) => {
   if (newValue) {
     initializeEditForm()
   }
 })
+
+// Add this helper method
+const getUserName = (userid) => {
+  if (!userid) return 'Unknown User'
+  const user = users.value[userid]
+  return user?.name || 'Unknown User'
+}
 </script>
