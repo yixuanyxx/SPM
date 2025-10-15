@@ -304,12 +304,14 @@
                 <i class="bi bi-folder"></i>
                 Project
               </label>
-              <select v-model="selectedProjectFilter" class="filter-select">
-                <option value="">All Projects</option>
-                <option v-for="project in projects" :key="project.id" :value="project.id">
-                  {{ project.name }}
-                </option>
-              </select>
+              <div class="multiselect-dropdown">
+                <div class="multiselect-trigger" @click="toggleProjectDropdown">
+                  <span class="multiselect-text">
+                    {{ getProjectDropdownText() }}
+                  </span>
+                  <i class="bi bi-chevron-down" :class="{ 'rotated': showProjectDropdown }"></i>
+                </div>
+              </div>
             </div>
 
             <!-- Status Filter -->
@@ -350,12 +352,20 @@
         </div>
       </div>
 
+      <!-- Project Dropdown Options (Outside modal for proper z-index) -->
+      <div v-if="showProjectDropdown" class="multiselect-options" @click.stop>
+        <label class="multiselect-option" v-for="project in projects" :key="project.id" @click.stop>
+          <input type="checkbox" :value="project.id" v-model="selectedProjectFilters" @click.stop />
+          <span>{{ project.name }}</span>
+        </label>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import SideNavbar from '../../components/SideNavbar.vue'
 import { sessionState } from '../../services/session.js'
 
@@ -371,11 +381,12 @@ const selectedTaskForReschedule = ref(null)
 // Filter data
 const showFilterPopup = ref(false)
 const projects = ref([])
-const selectedProjectFilter = ref('')
+const selectedProjectFilters = ref([])
 const selectedStatusFilters = ref([])
-const appliedProjectFilter = ref('')
+const appliedProjectFilters = ref([])
 const appliedStatusFilters = ref([])
 const showCompleted = ref(true)
+const showProjectDropdown = ref(false)
 const users = ref({})
 
 // Calendar views configuration
@@ -456,10 +467,12 @@ const filteredTasks = computed(() => {
   }
   
   // Apply project filter
-  if (appliedProjectFilter.value) {
+  if (appliedProjectFilters.value.length > 0) {
     filtered = filtered.filter(task => {
-      // Convert both to strings for comparison to handle type mismatches
-      return String(task.project_id) === String(appliedProjectFilter.value)
+      // Check if task is assigned to any of the selected projects
+      return appliedProjectFilters.value.some(projectId => 
+        String(task.project_id) === String(projectId)
+      )
     })
   }
   
@@ -475,13 +488,13 @@ const filteredTasks = computed(() => {
 
 // Check if there are active filters
 const hasActiveFilters = computed(() => {
-  return appliedProjectFilter.value !== '' || appliedStatusFilters.value.length > 0
+  return appliedProjectFilters.value.length > 0 || appliedStatusFilters.value.length > 0
 })
 
 // Count active filters
 const activeFilterCount = computed(() => {
   let count = 0
-  if (appliedProjectFilter.value) count++
+  if (appliedProjectFilters.value.length > 0) count += appliedProjectFilters.value.length
   if (appliedStatusFilters.value.length > 0) count += appliedStatusFilters.value.length
   return count
 })
@@ -909,19 +922,59 @@ const toggleFilterPopup = () => {
 
 const closeFilterPopup = () => {
   showFilterPopup.value = false
+  showProjectDropdown.value = false
+}
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (showProjectDropdown.value && 
+      !event.target.closest('.multiselect-dropdown') && 
+      !event.target.closest('.multiselect-options')) {
+    showProjectDropdown.value = false
+  }
 }
 
 const clearFilters = () => {
-  selectedProjectFilter.value = ''
+  selectedProjectFilters.value = []
   selectedStatusFilters.value = []
-  appliedProjectFilter.value = ''
+  appliedProjectFilters.value = []
   appliedStatusFilters.value = []
 }
 
 const applyFilters = () => {
-  appliedProjectFilter.value = selectedProjectFilter.value
+  appliedProjectFilters.value = [...selectedProjectFilters.value]
   appliedStatusFilters.value = [...selectedStatusFilters.value]
   closeFilterPopup()
+}
+
+const toggleProjectDropdown = () => {
+  showProjectDropdown.value = !showProjectDropdown.value
+  if (showProjectDropdown.value) {
+    // Calculate position for fixed dropdown
+    nextTick(() => {
+      const trigger = document.querySelector('.multiselect-trigger')
+      const options = document.querySelector('.multiselect-options')
+      if (trigger && options) {
+        const rect = trigger.getBoundingClientRect()
+        options.style.top = `${rect.bottom}px`
+        options.style.left = `${rect.left}px`
+        options.style.width = `${rect.width}px`
+      }
+    })
+  }
+}
+
+const getProjectDropdownText = () => {
+  if (selectedProjectFilters.value.length === 0) {
+    return 'All Projects'
+  }
+  
+  if (selectedProjectFilters.value.length === 1) {
+    const project = projects.value.find(p => p.id === selectedProjectFilters.value[0])
+    return project ? project.name : 'Unknown'
+  }
+  
+  return `${selectedProjectFilters.value.length} projects selected`
 }
 
 const fetchProjects = async () => {
@@ -956,6 +1009,11 @@ const fetchProjects = async () => {
 // Lifecycle
 onMounted(() => {
   fetchTasks()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // Watch for userid changes

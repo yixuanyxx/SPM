@@ -253,12 +253,14 @@
                 <i class="bi bi-people"></i>
                 Team Member
               </label>
-              <select v-model="selectedMemberFilter" class="filter-select">
-                <option value="">All Team Members</option>
-                <option v-for="member in teamMembers" :key="member.id" :value="member.id">
-                  {{ member.name }}
-                </option>
-              </select>
+              <div class="multiselect-dropdown">
+                <div class="multiselect-trigger" @click="toggleMemberDropdown">
+                  <span class="multiselect-text">
+                    {{ getMemberDropdownText() }}
+                  </span>
+                  <i class="bi bi-chevron-down" :class="{ 'rotated': showMemberDropdown }"></i>
+                </div>
+              </div>
             </div>
 
             <!-- Status Filter -->
@@ -310,12 +312,24 @@
         <button class="close-btn" @click="errorMessage = ''">&times;</button>
       </div>
 
+      <!-- Member Dropdown Options (Outside modal for proper z-index) -->
+      <div v-if="showMemberDropdown" class="multiselect-options" @click.stop>
+        <label class="multiselect-option" v-for="member in teamMembers" :key="member.id" @click.stop>
+          <input type="checkbox" :value="member.id" v-model="selectedMemberFilters" @click.stop />
+          <span>{{ member.name }}</span>
+        </label>
+        <label class="multiselect-option" @click.stop>
+          <input type="checkbox" value="unassigned" v-model="selectedMemberFilters" @click.stop />
+          <span>Unassigned</span>
+        </label>
+      </div>
+
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
 
@@ -337,11 +351,12 @@ const users = ref({})
 
 // Filter data
 const showFilterPopup = ref(false)
-const selectedMemberFilter = ref('')
+const selectedMemberFilters = ref([])
 const selectedStatusFilters = ref([])
-const appliedMemberFilter = ref('')
+const appliedMemberFilters = ref([])
 const appliedStatusFilters = ref([])
 const showCompleted = ref(true)
+const showMemberDropdown = ref(false)
 
 // Calendar views configuration
 const views = [
@@ -417,9 +432,17 @@ const filteredTasks = computed(() => {
   }
   
   // Apply team member filter
-  if (appliedMemberFilter.value) {
+  if (appliedMemberFilters.value.length > 0) {
     filtered = filtered.filter(task => {
-      return String(task.assigned_to) === String(appliedMemberFilter.value)
+      // If "unassigned" is selected, show tasks with no assigned_to
+      if (appliedMemberFilters.value.includes('unassigned') && !task.assigned_to) {
+        return true
+      }
+      
+      // Check if task is assigned to any of the selected members
+      return appliedMemberFilters.value.some(memberId => 
+        String(task.assigned_to) === String(memberId)
+      )
     })
   }
   
@@ -435,13 +458,17 @@ const filteredTasks = computed(() => {
 
 // Check if there are active filters
 const hasActiveFilters = computed(() => {
-  return appliedMemberFilter.value !== '' || appliedStatusFilters.value.length > 0
+  return appliedMemberFilters.value.length > 0 || appliedStatusFilters.value.length > 0
 })
 
 // Count active filters
 const activeFilterCount = computed(() => {
   let count = 0
-  if (appliedMemberFilter.value) count++
+  if (appliedMemberFilters.value.length > 0) {
+    // Don't count "all" as a filter since it shows everything
+    const memberFilters = appliedMemberFilters.value.filter(filter => filter !== 'all')
+    count += memberFilters.length
+  }
   if (appliedStatusFilters.value.length > 0) count += appliedStatusFilters.value.length
   return count
 })
@@ -778,24 +805,73 @@ const toggleFilterPopup = () => {
 
 const closeFilterPopup = () => {
   showFilterPopup.value = false
+  showMemberDropdown.value = false
 }
 
 const clearFilters = () => {
-  selectedMemberFilter.value = ''
+  selectedMemberFilters.value = []
   selectedStatusFilters.value = []
-  appliedMemberFilter.value = ''
+  appliedMemberFilters.value = []
   appliedStatusFilters.value = []
 }
 
 const applyFilters = () => {
-  appliedMemberFilter.value = selectedMemberFilter.value
+  appliedMemberFilters.value = [...selectedMemberFilters.value]
   appliedStatusFilters.value = [...selectedStatusFilters.value]
   closeFilterPopup()
+}
+
+const toggleMemberDropdown = () => {
+  showMemberDropdown.value = !showMemberDropdown.value
+  if (showMemberDropdown.value) {
+    // Calculate position for fixed dropdown
+    nextTick(() => {
+      const trigger = document.querySelector('.multiselect-trigger')
+      const options = document.querySelector('.multiselect-options')
+      if (trigger && options) {
+        const rect = trigger.getBoundingClientRect()
+        options.style.top = `${rect.bottom}px`
+        options.style.left = `${rect.left}px`
+        options.style.width = `${rect.width}px`
+      }
+    })
+  }
+}
+
+const getMemberDropdownText = () => {
+  if (selectedMemberFilters.value.length === 0) {
+    return 'All Team Members'
+  }
+  
+  if (selectedMemberFilters.value.length === 1) {
+    const filter = selectedMemberFilters.value[0]
+    if (filter === 'unassigned') {
+      return 'Unassigned'
+    }
+    const member = teamMembers.value.find(m => m.id === filter)
+    return member ? member.name : 'Unknown'
+  }
+  
+  return `${selectedMemberFilters.value.length} members selected`
+}
+
+// Close dropdown when clicking outside
+const handleClickOutside = (event) => {
+  if (showMemberDropdown.value && 
+      !event.target.closest('.multiselect-dropdown') && 
+      !event.target.closest('.multiselect-options')) {
+    showMemberDropdown.value = false
+  }
 }
 
 // Lifecycle
 onMounted(() => {
   fetchProjectAndTasks()
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // Watch for project ID changes

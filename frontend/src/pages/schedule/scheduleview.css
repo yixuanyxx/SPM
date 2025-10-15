@@ -1390,6 +1390,96 @@ button {
   padding: 0.5rem 0;
 }
 
+/* Multiselect Dropdown */
+.multiselect-dropdown {
+  position: relative;
+  width: 100%;
+  z-index: 1002;
+}
+
+.multiselect-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 44px;
+}
+
+.multiselect-trigger:hover {
+  border-color: #9ca3af;
+}
+
+.multiselect-trigger:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.multiselect-text {
+  font-size: 0.9rem;
+  color: #374151;
+  flex: 1;
+  text-align: left;
+}
+
+.multiselect-trigger i {
+  color: #6b7280;
+  transition: transform 0.2s ease;
+  font-size: 0.8rem;
+}
+
+.multiselect-trigger i.rotated {
+  transform: rotate(180deg);
+}
+
+.multiselect-options {
+  position: fixed;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 9999;
+  max-height: 200px;
+  overflow-y: auto;
+  opacity: 1;
+  min-width: 200px;
+  pointer-events: auto;
+}
+
+.multiselect-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  color: #374151;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border-bottom: 1px solid #f3f4f6;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.multiselect-option:last-child {
+  border-bottom: none;
+}
+
+.multiselect-option:hover {
+  background: #f9fafb;
+}
+
+.multiselect-option input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
