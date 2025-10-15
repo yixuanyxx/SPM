@@ -87,6 +87,17 @@
                   </div>
                 </div>
 
+                <!-- Workload View Button -->
+                <div class="project-actions">
+                  <button 
+                    class="btn-primary edit-project-btn" 
+                    @click.stop="navigateToWorkload(project)"
+                  >
+                    <i class="bi bi-bar-chart"></i>
+                    View Workload
+                  </button>
+                </div>
+
               </div>
             </div>
 
@@ -339,6 +350,7 @@ const handleCardClick = (project) => {
   router.push(`/projects/${project.id}`)
 }
 
+
 const getMyTasks = (tasks) => {
   if (!tasks) return []
   return tasks.filter(task => {
@@ -421,6 +433,11 @@ onMounted(async () => {
 const navigateToTask = (taskId) => {
   router.push(`/tasks/${taskId}`)
 }
+
+const navigateToWorkload = (project) => {
+  router.push(`/tasks/projects?projectId=${project.id}`)
+}
+
 
 const handleDragStart = (event, task) => {
   event.dataTransfer.setData('taskId', task.id.toString())
