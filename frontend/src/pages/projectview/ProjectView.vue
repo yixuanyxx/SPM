@@ -11,7 +11,7 @@
             <h1 class="project-view-page-title">My Projects</h1>
             <p class="project-view-page-subtitle">View and manage your project collaborations</p>
           </div>
-          <button class="create-project-btn" @click="showCreateModal = true">
+          <button class="create-project-btn" @click="openCreateProject">
             <i class="bi bi-plus-lg"></i>
             Create New Project
           </button>
@@ -102,28 +102,12 @@
             </div>
 
 
-            <!-- Create Project Modal -->
-            <div v-if="showCreateModal" class="modal-overlay">
-              <div class="modal-content">
-                <h2>Create New Project</h2>
-
-                <label>Project Name* </label>
-                <input v-model="newProject.proj_name" placeholder="Enter project name" :class="{ 'input-error': newProject.proj_name.trim() === '' }" required/>
-
-                <label>Collaborators (comma-separated user IDs)</label>
-                <input type="text" v-model="newProject.collaborators" placeholder="e.g., 101,102,103" />
-
-                <label>Tasks (comma-separated task IDs)</label>
-                <input type="text" v-model="newProject.tasks" placeholder="e.g., 201,202" />
-
-                <div class="modal-actions">
-                  <button @click="submitNewProject" :disabled="!isFormValid" :class="{ 'btn-disabled': !isFormValid }">
-                    Create
-                  </button>
-                  <button @click="showCreateModal = false">Cancel</button>
-                </div>
-              </div>
-            </div>
+            <!-- Standardized Create New Project Modal -->
+            <CreateNewProject 
+              :is-visible="isCreateProjectVisible"
+              @close="isCreateProjectVisible = false"
+              @project-created="handleProjectCreated"
+            />
           </div>
         
           <div class="unassigned-tasks-sidebar">
@@ -166,6 +150,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import SideNavbar from '../../components/SideNavbar.vue'
+import CreateNewProject from '../../components/CreateNewProject.vue'
 import { enhancedNotificationService } from '../../services/notifications.js'
 import '../projectview/projectview.css'
 import { useRouter } from 'vue-router'
@@ -174,7 +159,7 @@ const router = useRouter()
 
 // State
 const projects = ref([])
-const showCreateModal = ref(false)
+const isCreateProjectVisible = ref(false)
 const userId = localStorage.getItem("spm_userid")
 const unassignedTasks = ref([])
 
@@ -186,10 +171,18 @@ const newProject = ref({
   tasks: ''
 })
 
-// Form validation
-const isFormValid = computed(() => {
-  return newProject.value.proj_name.trim() !== ''
-})
+// Open/close handlers for standardized modal
+const openCreateProject = () => {
+  isCreateProjectVisible.value = true
+}
+
+const handleProjectCreated = async (createdProject) => {
+  // Optimistically add then refresh to fetch tasks/owner details
+  if (createdProject) {
+    projects.value.push(createdProject)
+  }
+  await fetchProjects()
+}
 
 // Methods
 const fetchProjects = async () => {
@@ -234,70 +227,7 @@ onMounted(() => {
   fetchProjects()
 })
 
-// Submit new project
-const submitNewProject = async () => {
-  if (!newProject.value.proj_name.trim()) {
-    alert('Please fill out the required field: Project Name.')
-    return
-  }
-
-  try {
-    // Convert comma-separated strings to arrays where needed
-    const payload = {
-      ...newProject.value,
-      collaborators: newProject.value.collaborators
-        ? newProject.value.collaborators.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
-        : [],
-      tasks: newProject.value.tasks
-        ? newProject.value.tasks.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id))
-        : []
-    }
-
-    const response = await fetch('http://localhost:5001/projects/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await response.json()
-
-    if (response.ok && data.status === 201) {
-      // Add the new project to the list
-      const createdProject = data.data
-      if (createdProject) {
-        projects.value.push(createdProject)
-      }
-      
-      // Trigger notifications for collaborators
-      if (payload.collaborators && payload.collaborators.length > 0) {
-        await triggerProjectCollaboratorNotifications(
-          createdProject.id,
-          payload.collaborators,
-          createdProject.proj_name
-        )
-      }
-      
-      // Reset form
-      newProject.value = {
-        owner_id: userId,
-        proj_name: '',
-        collaborators: '',
-        tasks: ''
-      }
-      
-      showCreateModal.value = false
-      alert('Project created successfully!')
-      
-      // Refresh the projects list
-      fetchProjects()
-    } else {
-      alert('Failed to create project: ' + (data.error || data.message || 'Unknown error'))
-    }
-  } catch (err) {
-    console.error('Error creating project:', err)
-    alert('Error creating project. Please try again.')
-  }
-}
+// Removed inline submitNewProject; handled in CreateNewProject component
 
 // Trigger notifications for collaborators when a project is created
 const triggerProjectCollaboratorNotifications = async (projectId, collaboratorIds, projectName) => {
