@@ -28,38 +28,99 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
+          # Track overall success/failure
+          OVERALL_SUCCESS=true
+          FAILED_SERVICES=()
+          TOTAL_SERVICES=0
+          PASSED_SERVICES=0
+
           echo "==> Scanning backend microservices..."
           for svc in backend/*/ ; do
             [[ -d "$svc" ]] || continue
+            TOTAL_SERVICES=$((TOTAL_SERVICES + 1))
+            SERVICE_NAME="${svc%/}"
 
             echo ""
             echo "=============================="
-            echo "Service: ${svc%/}"
+            echo "Service: $SERVICE_NAME"
             echo "=============================="
 
+            # Track service-specific success
+            SERVICE_SUCCESS=true
+
             # 1) Create and activate virtual environment
-            echo "Creating virtual environment for ${svc%/} ..."
-            python -m venv "${svc}venv_ci"
+            echo "Creating virtual environment for $SERVICE_NAME ..."
+            if ! python -m venv "${svc}venv_ci"; then
+              echo "❌ ERROR: Failed to create virtual environment for $SERVICE_NAME"
+              OVERALL_SUCCESS=false
+              FAILED_SERVICES+=("$SERVICE_NAME (venv creation)")
+              continue
+            fi
+
             source "${svc}venv_ci/bin/activate"
 
             # 2) Install per-service requirements if present
             if [[ -f "${svc}requirements.txt" ]]; then
-              echo "Installing requirements for ${svc%/} ..."
-              pip install -r "${svc}requirements.txt"
+              echo "Installing requirements for $SERVICE_NAME ..."
+              if ! pip install -r "${svc}requirements.txt"; then
+                echo "❌ ERROR: Failed to install requirements for $SERVICE_NAME"
+                SERVICE_SUCCESS=false
+              fi
             else
-              echo "No requirements.txt in ${svc%/} — skipping install."
+              echo "No requirements.txt in $SERVICE_NAME — skipping install."
             fi
 
             # 3) Run tests if run_tests.py exists
             if [[ -f "${svc}run_tests.py" ]]; then
-              echo "Running tests for ${svc%/} ..."
-              python "${svc}run_tests.py"
+              echo "Running tests for $SERVICE_NAME ..."
+              if ! python "${svc}run_tests.py"; then
+                echo "❌ ERROR: Tests failed for $SERVICE_NAME"
+                SERVICE_SUCCESS=false
+              fi
             else
-              echo "No run_tests.py in ${svc%/} — nothing to run."
+              echo "No run_tests.py in $SERVICE_NAME — nothing to run."
             fi
 
             # 4) Deactivate and cleanup virtual environment
             deactivate
             rm -rf "${svc}venv_ci"
-            echo "Cleaned up virtual environment for ${svc%/}"
+            echo "Cleaned up virtual environment for $SERVICE_NAME"
+
+            # Update counters
+            if $SERVICE_SUCCESS; then
+              echo "✅ SUCCESS: $SERVICE_NAME completed successfully"
+              PASSED_SERVICES=$((PASSED_SERVICES + 1))
+            else
+              echo "❌ FAILED: $SERVICE_NAME had errors"
+              OVERALL_SUCCESS=false
+              FAILED_SERVICES+=("$SERVICE_NAME")
+            fi
           done
+
+          # Final summary
+          echo ""
+          echo "=========================================="
+          echo "CI TEST SUMMARY"
+          echo "=========================================="
+          echo "Total Services: $TOTAL_SERVICES"
+          echo "Passed: $PASSED_SERVICES"
+          echo "Failed: ${#FAILED_SERVICES[@]}"
+          
+          if [ ${#FAILED_SERVICES[@]} -gt 0 ]; then
+            echo ""
+            echo "Failed Services:"
+            for failed in "${FAILED_SERVICES[@]}"; do
+              echo "  - $failed"
+            done
+          fi
+
+          if $OVERALL_SUCCESS; then
+            echo ""
+            echo "🎉 ALL TESTS PASSED! CI SUCCESSFUL!"
+            exit 0
+          else
+            echo ""
+            echo "💥 CI FAILED! Some tests did not pass."
+            echo "Please check the logs above for details."
+            exit 1
+          fi
