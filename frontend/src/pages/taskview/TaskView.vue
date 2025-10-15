@@ -361,7 +361,7 @@ onMounted(() => {
       })
       .then(async data => {
         // API returns { "tasks": [ {...}, {...} ] }
-        tasks.value = data.tasks.data
+        tasks.value = data.data
         console.log('Fetched tasks:', tasks.value)
         
         // Fetch user details for all users mentioned in tasks - wait for completion
@@ -372,6 +372,7 @@ onMounted(() => {
       })
       .finally(() => {
         isLoadingTasks.value = false // End loading
+        hasInitialized.value = true // Mark as fully initialized
       })
 
     // Fetch projects owned by user
@@ -509,67 +510,6 @@ const fetchTaskSpecificUsers = async (taskData) => {
     await Promise.all(fetchPromises)
   }
 }
-
-onMounted(() => {
-  const userData = getCurrentUserData()
-  userRole.value = userData.role?.toLowerCase() || ''
-  userId.value = parseInt(userData.userid) || null
-  
-  console.log('User data from session:', userData)
-  console.log('Fetching projects for userId:', userId.value)
-
-  // Only fetch data if userId is available
-  if (userId.value) {
-    isLoadingTasks.value = true // Start loading
-    
-    fetch(`http://localhost:5002/tasks/user-task/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(async data => {
-        // API returns { "tasks": [ {...}, {...} ] }
-        tasks.value = data.data
-        console.log('Fetched tasks:', tasks.value)
-        
-        // Fetch user details for all users mentioned in tasks - wait for completion
-        await fetchTaskUsers()
-      })
-      .catch(error => {
-        console.error('Error fetching tasks:', error)
-      })
-      .finally(() => {
-        isLoadingTasks.value = false // End loading
-        hasInitialized.value = true // Mark as fully initialized
-      })
-
-    // Fetch projects owned by user
-    fetch(`http://localhost:5001/projects/owner/${userId.value}`)
-      .then(response => {
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.warn('No projects found for this user')
-            userProjects.value = []
-            return
-          }
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-        return response.json()
-      })
-      .then(data => {
-      const allProjects = data.data || []
-      // filter projects where user is owner or in collaborators
-      userProjects.value = allProjects.filter(project => {
-        const collabs = project.collaborators || []
-        return project.owner_id == userId.value || collabs.includes(Number(userId.value))
-      })
-      console.log('Filtered projects for dropdown:', userProjects.value)
-      })
-      .catch(error => console.error('Error fetching projects:', error))
-  }
-})
 
 const collaboratorQuery = ref('');
 const selectedCollaborators = ref([]);

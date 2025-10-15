@@ -31,7 +31,7 @@ def create_project():
         
         # Call service to create project
         result = service.create(data)
-        status_code = result.pop("status", 201)
+        status_code = result.get("status", 201)
         
         return jsonify(result), status_code
         
@@ -61,7 +61,7 @@ def get_projects_by_user(user_id: int):
     """
     try:
         result = service.get_projects_by_user(user_id)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -89,7 +89,7 @@ def get_project_by_id(project_id: int):
     """
     try:
         result = service.get_project_by_id(project_id)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -132,7 +132,7 @@ def update_project():
         
         # Call service to update project
         result = service.update_project_by_id(payload)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -162,7 +162,7 @@ def get_projects_by_owner(owner_id: int):
     """
     try:
         result = service.get_projects_by_owner(owner_id)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -205,7 +205,7 @@ def add_task_to_project(project_id: int, task_id: int):
     """
     try:
         result = service.add_task_to_project(project_id, task_id)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         

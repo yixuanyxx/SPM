@@ -44,7 +44,7 @@
               v-model="newTask.due_date"
               :disabled="isLoading"
               :class="{ 'input-error': showErrors && !newTask.due_date }"
-              :min="getCurrentDate()"
+              :min="getTodayDateTime()"
             />
           </div>
 
@@ -57,7 +57,7 @@
               :disabled="isLoading"
               class="form-select"
             >
-              <option value="Unassigned">Unassigned</option>
+              <option v-if="userRole === 'manager' || userRole === 'director'" value="Unassigned">Unassigned</option>
               <option value="Ongoing">Ongoing</option>
               <option value="Under Review">Under Review</option>
               <option value="Completed">Completed</option>
@@ -137,7 +137,11 @@
           </div>
 
           <!-- Subtasks Component -->
-          <SubtaskForm v-model="newTask.subtasks" />
+          <SubtaskForm 
+            v-model="newTask.subtasks"
+            :parentTaskName="newTask.task_name"
+            :userRole="userRole"
+          />
         
           <!-- Attachments -->
           <div class="form-group mt-4">
@@ -163,7 +167,7 @@
               <i class="bi bi-arrow-repeat spin" v-else></i>
               {{ isLoading ? 'Creating...' : 'Create Task' }}
             </button>
-                        <button 
+            <button 
               type="button" 
               @click="closePopup" 
               :disabled="isLoading"
@@ -264,6 +268,9 @@ export default {
     this.userId = parseInt(userData.userid) || null;
     this.newTask.owner_id = this.userId;
 
+    // Set default status based on user role
+    this.newTask.status = (this.userRole === 'manager' || this.userRole === 'director') ? 'Unassigned' : 'Ongoing';
+
     console.log('CreateNewTaskForm mounted with userId:', this.userId);
 
     // Fetch projects owned by user
@@ -294,9 +301,14 @@ export default {
     }
   },
   methods: {
-    getCurrentDate() {
-      const today = new Date();
-      return today.toISOString().split("T")[0];
+    getTodayDateTime() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
     },
     handleFileUpload(e) {
       const file = e.target.files[0];
@@ -318,104 +330,30 @@ export default {
     removeCollaborator(user) {
       this.selectedCollaborators = this.selectedCollaborators.filter(u => u.userid !== user.userid);
     },
-    // async handleCreate() {
-    //   if (!this.isFormValid) {
-    //     this.showErrors = true;
-    //     this.errorMessage = "Please fill out all required fields: Task Name, Description, and Due Date.";
-    //     return;
-    //   }
-
-    //   this.isLoading = true;
-    //   this.errorMessage = "";
-    //   this.successMessage = "";
-
-    //   try {
-    //     const formData = new FormData();
-    //     formData.append("owner_id", this.newTask.owner_id);
-    //     formData.append("task_name", this.newTask.task_name);
-    //     formData.append("description", this.newTask.description);
-    //     formData.append("type", this.newTask.type);
-    //     formData.append("status", this.newTask.status);
-    //     formData.append("priority", this.newTask.priority);
-        
-    //     if (this.newTask.project_id) {
-    //       formData.append("project_id", this.newTask.project_id);
-    //     }
-
-    //     if (this.newTask.due_date) {
-    //       const localDate = new Date(this.newTask.due_date)
-    //       // Convert to ISO string in UTC
-    //       const utcDateString = localDate.toISOString() // format: "2025-10-07T02:45:00.000Z"
-    //       formData.append('due_date', utcDateString)
-    //     }
-
-    //     if (this.newTask.parent_task) {
-    //       formData.append("parent_task", this.newTask.parent_task);
-    //     }
-        
-    //     if (this.newAttachmentFile) {
-    //       formData.append("attachment", this.newAttachmentFile);
-    //     }
-
-    //     // Add subtasks
-    //     if (this.newTask.subtasks && this.newTask.subtasks.length > 0) {
-    //       formData.append('subtasks', JSON.stringify(this.newTask.subtasks));
-    //     }
-
-    //     // Role-based endpoint selection
-    //     let endpoint = "";
-    //     if (this.userRole === "manager" || this.userRole === "director") {
-    //       endpoint = "http://localhost:5002/tasks/manager-task/create";
-    //     } else {
-    //       endpoint = "http://localhost:5002/tasks/staff-task/create";
-    //     }
-
-    //     // Collaborators inclusion
-    //     const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
-
-    //     // For staff, auto-add owner_id if not included
-    //     if (this.userRole === "staff" && !collaboratorIds.includes(this.newTask.owner_id)) {
-    //       collaboratorIds.push(this.newTask.owner_id);
-    //     }
-
-    //     if (collaboratorIds.length > 0) {
-    //       formData.append("collaborators", collaboratorIds.join(","));
-    //     }
-
-    //     console.log('Submitting task with endpoint:', endpoint);
-
-    //     const res = await fetch(endpoint, {
-    //       method: "POST",
-    //       body: formData
-    //     });
-
-    //     const data = await res.json();
-
-    //     if (res.ok && data.Code === 201) {
-    //       this.successMessage = "Task created successfully!";
-    //       this.$emit("task-created", data.data);
-
-    //       setTimeout(() => {
-    //         this.successMessage = "";
-    //         this.resetForm();
-    //         this.closePopup();
-    //       }, 1500);
-    //     } else {
-    //       throw new Error(data.Message || 'Failed to create task');
-    //     }
-        
-    //   } catch (err) {
-    //     console.error("Error creating task:", err);
-    //     this.errorMessage = err.message || "Failed to create task";
-    //   } finally {
-    //     this.isLoading = false;
-    //   }
-    // },
-
     async handleCreate() {
       if (!this.isFormValid) {
         this.showErrors = true;
         this.errorMessage = "Please fill out all required fields: Task Name, Description, and Due Date.";
+        return;
+      }
+
+      // Validate that due date is not in the past
+      const selectedDate = new Date(this.newTask.due_date);
+      const now = new Date();
+      
+      if (selectedDate < now) {
+        this.errorMessage = "Due date cannot be in the past. Please select today or a future date.";
+        return;
+      }
+
+      // Validate for duplicate task and subtask names
+      const taskNameLower = this.newTask.task_name.trim().toLowerCase();
+      const hasDuplicateSubtask = this.newTask.subtasks.some(subtask => 
+        subtask.task_name.toLowerCase() === taskNameLower
+      );
+
+      if (hasDuplicateSubtask) {
+        this.errorMessage = "A subtask cannot have the same name as the parent task. Please use different names.";
         return;
       }
 
@@ -554,12 +492,13 @@ export default {
     },
 
     resetForm() {
+      const defaultStatus = (this.userRole === 'manager' || this.userRole === 'director') ? 'Unassigned' : 'Ongoing';
       this.newTask = {
         owner_id: this.userId,
         task_name: "",
         description: "",
         type: "parent",
-        status: "Ongoing",
+        status: defaultStatus,
         due_date: "",
         priority: 5,
         project_id: "",
@@ -659,7 +598,7 @@ export default {
 
 .form-input,
 .form-select,
-.form-textarea {
+textarea {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #e5e7eb;
@@ -670,14 +609,14 @@ export default {
   transition: border-color 0.15s ease-in-out;
 }
 
-.form-textarea {
+textarea {
   resize: vertical;
   min-height: 100px;
 }
 
 .form-input:focus,
 .form-select:focus,
-.form-textarea:focus {
+textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
@@ -747,7 +686,7 @@ export default {
 .priority-slider::-webkit-slider-thumb:active {
   cursor: grabbing;
   outline: none !important;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important; /* Keep only the thumb shadow */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2) !important;
 }
 
 .priority-slider::-webkit-slider-thumb:hover {
@@ -940,50 +879,6 @@ export default {
   cursor: not-allowed;
 }
 
-.message {
-  position: fixed;
-  bottom: 2rem;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 1rem 1.5rem;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  z-index: 1100;
-  animation: slideUp 0.3s ease-out;
-}
-
-.message.success {
-  background-color: #d1fae5;
-  color: #065f46;
-  border: 1px solid #86efac;
-}
-
-.message.error {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #fecaca;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-input.input-error,
-textarea.input-error {
-  background-color: #ffe5e5 !important; /* light red */
-  border: 1px solid #ff4d4d !important; /* red border */
-}
-
-input.input-error:focus,
-textarea.input-error:focus {
-  outline: none;
-  border-color: #ff0000 !important;
-  box-shadow: 0 0 4px rgba(255, 0, 0, 0.3);
-}
-
 .success-popup {
   position: fixed;
   top: 2rem;
@@ -1033,7 +928,23 @@ textarea.input-error:focus {
   margin-left: auto;
 }
 
-/* ✅ Animation */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+input.input-error,
+textarea.input-error {
+  background-color: #ffe5e5 !important;
+  border: 1px solid #ff4d4d !important;
+}
+
+input.input-error:focus,
+textarea.input-error:focus {
+  outline: none;
+  border-color: #ff0000 !important;
+  box-shadow: 0 0 4px rgba(255, 0, 0, 0.3);
+}
+
 @keyframes slideInRight {
   from {
     opacity: 0;
@@ -1045,7 +956,6 @@ textarea.input-error:focus {
   }
 }
 
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -1055,14 +965,7 @@ textarea.input-error:focus {
   }
 }
 
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translate(-50%, 100%);
-  }
-  to {
-    opacity: 1;
-    transform: translate(-50%, 0);
-  }
+.mt-4 {
+  margin-top: 1.5rem;
 }
 </style>

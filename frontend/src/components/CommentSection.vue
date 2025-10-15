@@ -83,13 +83,6 @@
               <button class="action-btn dislike-btn" title="Dislike">
                 <i class="bi bi-hand-thumbs-down"></i>
               </button>
-              <button 
-                @click="replyToComment(comment)"
-                class="action-btn reply-btn"
-              >
-                <i class="bi bi-reply"></i>
-                Reply
-              </button>
               <div class="action-menu">
                 <button 
                   v-if="canEditComment(comment.user_id)"
@@ -109,112 +102,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Reply Form (if replying to this comment) -->
-        <div v-if="replyingTo === comment.id" class="reply-form-container">
-          <img 
-            :src="getUserAvatar(currentUserId)" 
-            :alt="getCurrentUserName()"
-            class="user-avatar-small"
-          />
-          <div class="reply-form">
-            <textarea
-              v-model="newReply"
-              placeholder="Add a reply..."
-              rows="3"
-              class="reply-textarea"
-            ></textarea>
-            <div class="reply-actions">
-              <button 
-                @click="cancelReply"
-                class="btn-cancel"
-              >
-                Cancel
-              </button>
-              <button 
-                @click="submitReply(comment.id)"
-                :disabled="!newReply.trim()"
-                class="btn-reply"
-              >
-                Reply
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Replies Section -->
-        <div v-if="comment.replies && comment.replies.length > 0" class="replies-section">
-          <button 
-            v-if="!expandedReplies.includes(comment.id)"
-            @click="toggleReplies(comment.id)"
-            class="show-replies-btn"
-          >
-            <i class="bi bi-chevron-right"></i>
-            View {{ comment.replies.length }} {{ comment.replies.length === 1 ? 'reply' : 'replies' }}
-          </button>
-          
-          <div v-if="expandedReplies.includes(comment.id)" class="replies-list">
-            <button 
-              @click="toggleReplies(comment.id)"
-              class="hide-replies-btn"
-            >
-              <i class="bi bi-chevron-down"></i>
-              Hide replies
-            </button>
-
-            <div 
-              v-for="reply in comment.replies"
-              :key="reply.id"
-              class="reply"
-            >
-              <img 
-                :src="getUserAvatar(reply.user_id)" 
-                :alt="reply.user_name"
-                class="reply-avatar"
-              />
-              
-              <div class="reply-body">
-                <div class="reply-header">
-                  <span class="reply-author">{{ reply.user_name }}</span>
-                  <span class="reply-timestamp">{{ formatCommentTime(reply.created_at) }}</span>
-                </div>
-
-                <p class="reply-text" v-html="formatCommentText(reply.content)"></p>
-
-                <div class="reply-actions-small">
-                  <button class="small-action-btn">
-                    <i class="bi bi-hand-thumbs-up"></i>
-                  </button>
-                  <button class="small-action-btn">
-                    <i class="bi bi-hand-thumbs-down"></i>
-                  </button>
-                  <button 
-                    @click="replyToComment(comment, reply.id)"
-                    class="small-action-btn"
-                  >
-                    Reply
-                  </button>
-                  <div v-if="canEditComment(reply.user_id) || canDeleteComment(reply.user_id)" class="reply-menu">
-                    <button 
-                      v-if="canEditComment(reply.user_id)"
-                      @click="editReply(reply, comment.id)"
-                      class="menu-btn-small"
-                    >
-                      <i class="bi bi-pencil"></i>
-                    </button>
-                    <button 
-                      v-if="canDeleteComment(reply.user_id)"
-                      @click="deleteReply(reply.id, comment.id)"
-                      class="menu-btn-small delete"
-                    >
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -227,7 +114,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { getCurrentUserData } from '../services/session.js'
 
 const props = defineProps({
@@ -249,7 +136,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['add-comment', 'edit-comment', 'delete-comment', 'reply-comment'])
+const emit = defineEmits(['add-comment', 'edit-comment', 'delete-comment'])
 
 const userData = getCurrentUserData()
 const currentUserId = ref(parseInt(userData.userid) || null)
@@ -258,9 +145,6 @@ const currentUserRole = ref(userData.role?.toLowerCase() || '')
 const showCommentForm = ref(false)
 const isSubmitting = ref(false)
 const newComment = ref('')
-const newReply = ref('')
-const replyingTo = ref(null)
-const expandedReplies = ref([])
 
 const submitComment = async () => {
   if (!newComment.value.trim()) return
@@ -274,8 +158,7 @@ const submitComment = async () => {
       user_name: userData.username,
       user_role: currentUserRole.value,
       content: newComment.value,
-      created_at: new Date().toISOString(),
-      replies: []
+      created_at: new Date().toISOString()
     }
 
     emit('add-comment', commentData)
@@ -301,52 +184,6 @@ const editComment = (comment) => {
 const deleteComment = (commentId) => {
   if (confirm('Delete this comment?')) {
     emit('delete-comment', commentId)
-  }
-}
-
-const replyToComment = (comment) => {
-  replyingTo.value = comment.id
-  newReply.value = ''
-}
-
-const cancelReply = () => {
-  replyingTo.value = null
-  newReply.value = ''
-}
-
-const submitReply = (commentId) => {
-  if (!newReply.value.trim()) return
-
-  const replyData = {
-    id: Date.now(),
-    user_id: currentUserId.value,
-    user_name: userData.username,
-    content: newReply.value,
-    created_at: new Date().toISOString()
-  }
-
-  emit('reply-comment', { commentId, reply: replyData })
-  newReply.value = ''
-  replyingTo.value = null
-}
-
-const editReply = (reply, commentId) => {
-  newReply.value = reply.content
-  replyingTo.value = commentId
-}
-
-const deleteReply = (replyId, commentId) => {
-  if (confirm('Delete this reply?')) {
-    emit('delete-comment', { parentId: commentId, replyId })
-  }
-}
-
-const toggleReplies = (commentId) => {
-  const index = expandedReplies.value.indexOf(commentId)
-  if (index > -1) {
-    expandedReplies.value.splice(index, 1)
-  } else {
-    expandedReplies.value.push(commentId)
   }
 }
 
@@ -480,8 +317,7 @@ const capitalizeRole = (role) => {
 }
 
 .btn-cancel,
-.btn-comment,
-.btn-reply {
+.btn-comment {
   padding: 0.5rem 1rem;
   border: none;
   border-radius: 1.5rem;
@@ -500,19 +336,16 @@ const capitalizeRole = (role) => {
   background: #f0f0f0;
 }
 
-.btn-comment,
-.btn-reply {
+.btn-comment {
   background: #065fd4;
   color: white;
 }
 
-.btn-comment:hover:not(:disabled),
-.btn-reply:hover:not(:disabled) {
+.btn-comment:hover:not(:disabled) {
   background: #0d47a1;
 }
 
-.btn-comment:disabled,
-.btn-reply:disabled {
+.btn-comment:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -656,18 +489,13 @@ const capitalizeRole = (role) => {
   color: #ff4444;
 }
 
-.reply-btn:hover {
-  color: #065fd4;
-}
-
 .action-menu {
   margin-left: auto;
   display: flex;
   gap: 0.25rem;
 }
 
-.menu-btn,
-.menu-btn-small {
+.menu-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -677,153 +505,12 @@ const capitalizeRole = (role) => {
   transition: color 0.2s;
 }
 
-.menu-btn:hover,
-.menu-btn-small:hover {
+.menu-btn:hover {
   color: #030303;
 }
 
-.menu-btn.delete:hover,
-.menu-btn-small.delete:hover {
+.menu-btn.delete:hover {
   color: #ff4444;
-}
-
-.reply-form-container {
-  display: flex;
-  gap: 1rem;
-  margin: 1rem 0 1rem 0;
-  margin-left: 3rem;
-  padding: 1rem 0;
-}
-
-.reply-form {
-  flex: 1;
-}
-
-.reply-textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ccc;
-  border-radius: 0.5rem;
-  font-family: inherit;
-  font-size: 0.9rem;
-  resize: vertical;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.reply-textarea:focus {
-  border-color: #065fd4;
-}
-
-.reply-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-  justify-content: flex-end;
-}
-
-.replies-section {
-  margin-left: 3rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
-}
-
-.show-replies-btn,
-.hide-replies-btn {
-  background: none;
-  border: none;
-  color: #065fd4;
-  cursor: pointer;
-  font-size: 0.9rem;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  transition: all 0.2s;
-}
-
-.show-replies-btn:hover,
-.hide-replies-btn:hover {
-  color: #0d47a1;
-}
-
-.replies-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-
-.reply {
-  display: flex;
-  gap: 0.75rem;
-  padding: 0.75rem 0;
-}
-
-.reply-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-  margin-top: 0.125rem;
-}
-
-.reply-body {
-  flex: 1;
-}
-
-.reply-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
-}
-
-.reply-author {
-  font-weight: 500;
-  color: #030303;
-  font-size: 0.85rem;
-}
-
-.reply-timestamp {
-  font-size: 0.8rem;
-  color: #606060;
-}
-
-.reply-text {
-  margin: 0;
-  color: #030303;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  word-wrap: break-word;
-}
-
-.reply-actions-small {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-  align-items: center;
-}
-
-.small-action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #606060;
-  font-size: 0.8rem;
-  padding: 0.125rem 0.25rem;
-  transition: color 0.2s;
-}
-
-.small-action-btn:hover {
-  color: #030303;
-}
-
-.reply-menu {
-  margin-left: auto;
-  display: flex;
-  gap: 0.25rem;
 }
 
 .no-comments {
