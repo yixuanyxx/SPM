@@ -127,7 +127,7 @@
       <div class="form-actions">
         <button type="button" @click="addSubtask" class="btn-primary">
           <i class="bi bi-plus-circle"></i>
-          Add Subtask
+          Create Subtask
         </button>
         <button type="button" @click="cancelForm" class="btn-secondary">
           Cancel
