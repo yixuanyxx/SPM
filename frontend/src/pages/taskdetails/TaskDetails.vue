@@ -507,11 +507,11 @@ const canEditTask = computed(() => {
 const canAssignTask = computed(() => {
   if (!task.value) return false
   
-  // Only show assign button if task is unassigned AND user is manager/director
-  const isUnassigned = task.value.status === 'Unassigned'
+  // Only show assign button if user is manager/director
+  // const isUnassigned = task.value.status === 'Unassigned'
   const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
   
-  return isUnassigned && hasRolePermission
+  return hasRolePermission //&& isUnassigned
 })
 
 // Computed property to check if task has any attachments
