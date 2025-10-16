@@ -33,13 +33,10 @@ def run_model_tests():
     """Run project model tests (no environment variables needed)."""
     print("\nRunning Project Model Tests...")
     try:
-        # Add current directory to Python path to find tests module
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.getcwd()
-        
+        # Run tests directly from the tests directory
         result = subprocess.run([sys.executable, "-m", "unittest", 
-                               "tests.test_project_model", "-v"],
-                              capture_output=True, text=True, env=env)
+                               "test_project_model", "-v"],
+                              cwd="tests", capture_output=True, text=True)
         
         print("Model Test Results:")
         print(result.stdout)
@@ -62,13 +59,10 @@ def run_controller_tests():
     """Run project controller integration tests."""
     print("\nRunning Project Controller Tests...")
     try:
-        # Add current directory to Python path to find tests module
-        env = os.environ.copy()
-        env['PYTHONPATH'] = os.getcwd()
-        
+        # Run tests directly from the tests directory
         result = subprocess.run([sys.executable, "-m", "unittest", 
-                               "tests.test_project_controller_integration", "-v"],
-                              capture_output=True, text=True, env=env)
+                               "test_project_controller_integration", "-v"],
+                              cwd="tests", capture_output=True, text=True)
         
         print("Controller Test Results:")
         print(result.stdout)
