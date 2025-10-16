@@ -11,10 +11,14 @@
             <h1 class="project-view-page-title">My Projects</h1>
             <p class="project-view-page-subtitle">View and manage your project collaborations</p>
           </div>
-          <button class="create-project-btn" @click="openCreateProject">
-            <i class="bi bi-plus-lg"></i>
-            Create New Project
-          </button>
+          <div class="project-header-actions">
+            <div class="project-header-right-actions">
+              <button class="create-project-btn" @click="openCreateProject">
+                <i class="bi bi-plus-lg"></i>
+                Create New Project
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="content-wrapper">

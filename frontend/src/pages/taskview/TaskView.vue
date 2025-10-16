@@ -11,6 +11,7 @@
           <h1 class="page-title">My Personal Tasks</h1>
           <p class="page-subtitle">View and Create Your Personal Tasks</p>
         </div>
+        
         <div class="header-actions">
           <div class="header-right-actions">
             <button v-if="canCreateTask" @click="openCreateTask" class="create-task-btn">
