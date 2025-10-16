@@ -279,11 +279,15 @@ async function onLogout() {
     console.log('Logging out...');
     await logout();
     console.log('Logout successful, redirecting to login...');
-    router.push({ name: 'Login' });
+    // Force navigation to login page
+    await router.push({ name: 'Login' });
+    // Force reload to ensure clean state
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout failed:', error);
     // Still redirect to login even if logout fails
-    router.push({ name: 'Login' });
+    await router.push({ name: 'Login' });
+    window.location.href = '/login';
   }
 }
 </script>

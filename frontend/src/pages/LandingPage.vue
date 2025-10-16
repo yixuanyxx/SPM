@@ -22,7 +22,6 @@ const userName = ref('')
 const showNotificationDropdown = ref(false)
 const unreadCount = ref(0)
 const userPreferences = ref({ in_app: true, email: true })
-const inAppNotifications = ref([])
 
 const upcomingTasks = computed(() => {
   const list = Array.isArray(tasks.value) ? tasks.value.slice() : []
@@ -54,11 +53,15 @@ async function onLogout() {
     console.log('Logging out...');
     await logout();
     console.log('Logout successful, redirecting to login...');
-    router.push({ name: 'Login' });
+    // Force navigation to login page
+    await router.push({ name: 'Login' });
+    // Force reload to ensure clean state
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout failed:', error);
     // Still redirect to login even if logout fails
-    router.push({ name: 'Login' });
+    await router.push({ name: 'Login' });
+    window.location.href = '/login';
   }
 }
 
@@ -99,19 +102,11 @@ async function initializeNotifications() {
     const userData = await userPreferencesService.getUserData(userId)
     userPreferences.value = userData?.data?.notification_preferences || { in_app: true, email: true }
     
-    // Load in-app notifications if enabled
-    if (userPreferences.value.in_app) {
-      loadInAppNotifications()
-    }
-    
     // Set up periodic refresh for notifications (every 30 seconds)
     setInterval(async () => {
       try {
         await notificationStore.refresh(userId)
         unreadCount.value = notificationStore.unreadCount
-        if (userPreferences.value.in_app) {
-          loadInAppNotifications()
-        }
       } catch (error) {
         console.error('Failed to refresh notifications:', error)
       }
@@ -122,11 +117,6 @@ async function initializeNotifications() {
   }
 }
 
-function loadInAppNotifications() {
-  // Show only recent unread notifications for in-app display
-  const unreadNotifications = notificationStore.notifications.filter(n => !n.is_read)
-  inAppNotifications.value = unreadNotifications.slice(0, 3) // Show max 3 recent notifications
-}
 
 function toggleNotificationDropdown() {
   showNotificationDropdown.value = !showNotificationDropdown.value
@@ -136,15 +126,6 @@ function closeNotificationDropdown() {
   showNotificationDropdown.value = false
 }
 
-async function dismissInAppNotification(notificationId) {
-  try {
-    await notificationStore.markAsRead(notificationId)
-    loadInAppNotifications() // Refresh in-app notifications
-    unreadCount.value = notificationStore.unreadCount
-  } catch (error) {
-    console.error('Failed to dismiss notification:', error)
-  }
-}
 
 // Utility functions for notifications
 function formatTime(timestamp) {
@@ -268,45 +249,6 @@ function getNotificationColor(type) {
           </div>
         </div>
 
-        <!-- In-app notifications (if enabled) -->
-        <div v-if="userPreferences.in_app" class="tasks-container" style="margin-top: 1rem;">
-          <div class="in-app-notifications">
-            <div class="notifications-header">
-              <h4 class="notifications-title">
-                <i class="bi bi-bell-fill me-2"></i>
-                New Notifications
-              </h4>
-            </div>
-            
-            <!-- Show notifications if they exist -->
-            <div v-if="inAppNotifications.length > 0" class="notifications-list">
-              <div 
-                v-for="notification in inAppNotifications" 
-                :key="notification.id"
-                class="in-app-notification-item"
-              >
-                <div class="notification-icon">
-                  <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
-                </div>
-                <div class="notification-content">
-                  <div class="notification-message">{{ notification.notification }}</div>
-                  <div class="notification-time">{{ formatTime(notification.created_at) }}</div>
-                </div>
-                <button @click="dismissInAppNotification(notification.id)" class="dismiss-btn">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Show "no new notifications" message if no notifications -->
-            <div v-else class="no-notifications">
-              <div class="no-notifications-content">
-                <i class="bi bi-bell-slash"></i>
-                <span>No new notifications</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
         <!-- Upcoming tasks summary -->
         <div class="tasks-container" style="margin-top: 1rem;">
@@ -427,132 +369,6 @@ function getNotificationColor(type) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-/* In-app Notifications */
-.in-app-notifications {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
-}
-
-.notifications-header {
-  padding: 1rem 1.25rem;
-  background: rgba(59, 130, 246, 0.05);
-  border-bottom: 1px solid #bae6fd;
-}
-
-.notifications-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e40af;
-  display: flex;
-  align-items: center;
-}
-
-.notifications-list {
-  padding: 0.5rem 0;
-}
-
-.in-app-notification-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  transition: background-color 0.2s ease;
-  position: relative;
-}
-
-.in-app-notification-item:hover {
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.in-app-notification-item:not(:last-child) {
-  border-bottom: 1px solid rgba(186, 230, 253, 0.5);
-}
-
-.notification-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: white;
-  border-radius: 50%;
-  font-size: 0.9rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.notification-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.notification-message {
-  font-size: 0.9rem;
-  line-height: 1.4;
-  color: #1e40af;
-  margin-bottom: 0.25rem;
-  font-weight: 500;
-}
-
-.notification-time {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.dismiss-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.in-app-notification-item:hover .dismiss-btn {
-  opacity: 1;
-}
-
-.dismiss-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-/* No notifications message */
-.no-notifications {
-  padding: 1.5rem;
-  text-align: center;
-}
-
-.no-notifications-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  color: #9ca3af;
-}
-
-.no-notifications-content i {
-  font-size: 2rem;
-  opacity: 0.6;
-}
-
-.no-notifications-content span {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
