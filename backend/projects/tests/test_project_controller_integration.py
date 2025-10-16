@@ -1,6 +1,11 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import json
+import sys
+import os
+
+# Add parent directory to path to find modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.project_service import ProjectService
 from models.project import Project
 
