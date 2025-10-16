@@ -53,7 +53,9 @@ jobs:
             # 3) Run tests if run_tests.py exists
             if [[ -f "${svc}run_tests.py" ]]; then
               echo "Running tests for ${svc%/} ..."
-              python "${svc}run_tests.py"
+              cd "${svc}"
+              python run_tests.py
+              cd - > /dev/null
             else
               echo "No run_tests.py in ${svc%/} — nothing to run."
             fi
