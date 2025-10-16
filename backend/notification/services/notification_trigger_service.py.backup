@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from services.notification_service import NotificationService
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv('/Users/yixli/Documents/GitHub/SPM/backend/.env')
 
 class NotificationTriggerService:
     """
@@ -44,11 +44,15 @@ class NotificationTriggerService:
         # Get user details and preferences
         user_details = self.get_user_details(user_id)
         if not user_details:
+            print(f"DEBUG: User {user_id} not found in user service")
             return {"status": 404, "message": f"User {user_id} not found"}
         
         preferences = user_details.get("notification_preferences", {"in_app": True, "email": True})
         user_email = user_details.get("email")
         user_name = user_details.get("name", "User")
+        
+        print(f"DEBUG: User {user_id} preferences: {preferences}")
+        print(f"DEBUG: User {user_id} email: {user_email}")
         
         results = []
         
@@ -66,6 +70,7 @@ class NotificationTriggerService:
         
         # Send email notification if enabled and email is available
         if preferences.get("email", True) and user_email:
+            print(f"DEBUG: Sending email notification to {user_email}")
             # Create proper email subject and content
             subject, email_content = self._create_email_content(
                 notification_type, notification_content, user_name
@@ -73,7 +78,10 @@ class NotificationTriggerService:
             email_result = self.notification_service.send_email_notification(
                 user_email, subject, email_content
             )
+            print(f"DEBUG: Email result: {email_result}")
             results.append({"type": "email", "result": email_result})
+        else:
+            print(f"DEBUG: Email notification skipped - email enabled: {preferences.get('email', True)}, email available: {bool(user_email)}")
         
         return {"status": 200, "message": "Notifications sent based on user preferences", "results": results}
     
@@ -434,6 +442,72 @@ class NotificationTriggerService:
         
         return results
     
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
     def notify_task_due_date_change(self, task_id: int, user_ids: List[int], old_due_date: str, new_due_date: str, updater_name: str = "System") -> List[Dict[str, Any]]:
         """
         Send notification when task due date changes to all collaborators.
@@ -470,6 +544,72 @@ class NotificationTriggerService:
                 notification_content, 
                 "task_updated", 
                 None,  # Set to None to avoid foreign key constraint
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
                 plain_text
             )
             results.append({"user_id": user_id, "result": result})
@@ -538,6 +678,72 @@ class NotificationTriggerService:
         
         return results
     
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
     def notify_bulk_task_assignment(self, task_assignments: List[Dict[str, Any]], assigner_name: str = "System") -> List[Dict[str, Any]]:
         """
         Send notifications for multiple task assignments.
@@ -557,6 +763,72 @@ class NotificationTriggerService:
                 result = self.notify_task_assignment(task_id, user_id, assigner_name)
             
             results.append({"task_id": task_id, "user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
         
         return results
     
@@ -602,8 +874,12 @@ class NotificationTriggerService:
         # Get task details from Supabase for better notification content
         task_details = self._get_task_details_from_supabase(task_id)
         task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
         
-        # Build change summary for email and in-app
+        # Build change summary for email
         changes_html = ""
         changes_text = []
         
@@ -612,39 +888,36 @@ class NotificationTriggerService:
             old_value = change.get("old_value", "Not set")
             new_value = change.get("new_value", "Not set")
             
-            # Format values for display
-            if field_name == "Due Date" and old_value != "Not set":
-                try:
-                    from datetime import datetime
-                    old_date = datetime.fromisoformat(old_value.replace('Z', '+00:00')).strftime('%Y-%m-%d')
-                    new_date = datetime.fromisoformat(new_value.replace('Z', '+00:00')).strftime('%Y-%m-%d')
-                    old_value = old_date
-                    new_value = new_date
-                except:
-                    pass
-            
             changes_html += f"""
             <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
             """
             changes_text.append(f"{field_name}: {old_value} → {new_value}")
         
-        # HTML content for email - using your specified format with bold heading
+        # HTML content for email
         notification_content = f"""
-        <h2 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Update Summary</strong></h2>
-        <p style="color: #374151; margin-bottom: 12px;">Changes made to your task {task_id}:</p>
-        <ul style="color: #374151; margin-bottom: 16px;">
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
             {changes_html}
         </ul>
-        <p style="color: #6b7280; font-size: 14px;">Please review the updated task details and take any necessary actions.</p>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
         """
         
-        # Plain text content for in-app notification - using your specified format with bold heading
-        changes_summary = "\n".join(changes_text)
-        plain_text = f"""**Task Update Summary**
-Changes made to your task {task_id}:
-{changes_summary}
-
-Please review the updated task details and take any necessary actions."""
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
         
         results = []
         for user_id in user_ids:
@@ -652,7 +925,225 @@ Please review the updated task details and take any necessary actions."""
                 user_id,
                 notification_content,
                 "task_updated",
-                None,  # Set to None to avoid foreign key constraint issues
+                task_id,  # Set to task_id for proper foreign key relationship
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+
+    def notify_task_title_change(self, task_id: int, user_ids: List[int], old_title: str, new_title: str, updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send notification when task title changes to all collaborators.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Title Update</strong></p>
+        <p>The title of your assigned task has been updated:</p>
+        <ul>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Previous Title:</strong> {old_title}</li>
+            <li><strong>New Title:</strong> {new_title}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        <p>Please note the updated task title for future reference.</p>
+        """
+        
+        # Plain text content for in-app notification
+        plain_text = f"Task title changed from '{old_title}' to '{new_title}' by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id, 
+                notification_content, 
+                "task_updated", 
+                None,  # Set to None to avoid foreign key constraint
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_task_priority_change(self, task_id: int, user_ids: List[int], old_priority: str, new_priority: str, updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send notification when task priority changes to all collaborators.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Priority Update</strong></p>
+        <p>The priority of your assigned task has been updated:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Previous Priority:</strong> {old_priority}</li>
+            <li><strong>New Priority:</strong> {new_priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        <p>Please adjust your work schedule based on the new priority level.</p>
+        """
+        
+        # Plain text content for in-app notification
+        plain_text = f"Task '{task_name}' priority changed from {old_priority} to {new_priority} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id, 
+                notification_content, 
+                "task_updated", 
+                None,  # Set to None to avoid foreign key constraint
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        description = task_details.get("description", "No description available") if task_details else "No description available"
+        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
+        status = task_details.get("status", "Unknown") if task_details else "Unknown"
+        priority = task_details.get("priority", "Not set") if task_details else "Not set"
+        
+        # Build change summary for email
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email
+        notification_content = f"""
+        <p><strong>Task Update Summary</strong></p>
+        <p>The following changes have been made to your assigned task:</p>
+        <ul>
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Current Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {due_date}</li>
+            <li><strong>Priority:</strong> {priority}</li>
+            <li><strong>Updated by:</strong> {updater_name}</li>
+        </ul>
+        
+        <p><strong>Changes Made:</strong></p>
+        <ul>
+            {changes_html}
+        </ul>
+        
+        <p>Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification
+        changes_summary = "; ".join(changes_text)
+        plain_text = f"Task '{task_name}' updated: {changes_summary} by {updater_name}"
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                task_id,  # Set to task_id for proper foreign key relationship
                 plain_text
             )
             results.append({"user_id": user_id, "result": result})

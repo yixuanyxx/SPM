@@ -793,55 +793,72 @@ export default {
 
         if (collaboratorsToNotify.length === 0) return;
 
-        // Check what changed and send appropriate notifications
-        const promises = [];
+        // Collect all changes for consolidated notification
+        const changes = [];
 
-        // Status change notification
+        // Status change
         if (this.originalTask.status !== this.editedTask.status) {
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'status',
-              this.originalTask.status,
-              this.editedTask.status,
-              currentUserName
-            )
-          );
+          changes.push({
+            field: 'status',
+            old_value: this.originalTask.status,
+            new_value: this.editedTask.status,
+            field_name: 'Status'
+          });
         }
 
-        // Due date change notification
+        // Due date change
         if (this.originalTask.due_date !== this.editedTask.due_date) {
           const oldDate = this.originalTask.due_date || 'No due date';
           const newDate = this.editedTask.due_date || 'No due date';
-          
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'due_date',
-              oldDate,
-              newDate,
-              currentUserName
-            )
-          );
+          changes.push({
+            field: 'due_date',
+            old_value: oldDate,
+            new_value: newDate,
+            field_name: 'Due Date'
+          });
         }
 
-        // Description change notification
+        // Description change
         if (this.originalTask.description !== this.editedTask.description) {
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'description',
-              null,
-              null,
-              currentUserName
-            )
+          changes.push({
+            field: 'description',
+            old_value: this.originalTask.description || 'No description',
+            new_value: this.editedTask.description || 'No description',
+            field_name: 'Description'
+          });
+        }
+
+        // Priority change (if priority field exists)
+        if (this.originalTask.priority !== this.editedTask.priority) {
+          changes.push({
+            field: 'priority',
+            old_value: this.originalTask.priority || 'Not set',
+            new_value: this.editedTask.priority || 'Not set',
+            field_name: 'Priority'
+          });
+        }
+
+        // Task name change (if task_name field exists)
+        if (this.originalTask.task_name !== this.editedTask.task_name) {
+          changes.push({
+            field: 'task_name',
+            old_value: this.originalTask.task_name || 'No title',
+            new_value: this.editedTask.task_name || 'No title',
+            field_name: 'Task Title'
+          });
+        }
+
+        // Send consolidated notification if there are changes
+        if (changes.length > 0) {
+          await enhancedNotificationService.triggerConsolidatedTaskUpdateNotification(
+            this.taskId,
+            collaboratorsToNotify,
+            changes,
+            currentUserName
           );
         }
 
-        // Collaborator changes notification
+        // Handle collaborator changes separately (assignment notifications)
         const originalCollaborators = this.originalTask.collaborators || [];
         const newCollaborators = this.editedTask.collaborators || [];
         
@@ -859,14 +876,10 @@ export default {
               currentUserName
             )
           );
-          promises.push(...addPromises);
+          await Promise.all(addPromises);
         }
 
-        // Execute all notification triggers
-        if (promises.length > 0) {
-          await Promise.all(promises);
-          console.log('Task update notifications sent successfully');
-        }
+        console.log('Consolidated task update notifications sent successfully');
 
       } catch (error) {
         console.error('Failed to send task update notifications:', error);
