@@ -94,7 +94,15 @@
                 <!-- Workload View Button -->
                 <div class="project-actions">
                   <button 
-                    class="btn-primary edit-project-btn" 
+                    class="schedule-btn" 
+                    @click.stop="navigateToSchedule(project)"
+                  >
+                    <i class="bi bi-calendar3"></i>
+                    View Schedule
+                  </button>
+
+                  <button 
+                    class="workload-btn" 
                     @click.stop="navigateToWorkload(project)"
                   >
                     <i class="bi bi-bar-chart"></i>
@@ -366,6 +374,10 @@ onMounted(async () => {
 
 const navigateToTask = (taskId) => {
   router.push(`/tasks/${taskId}`)
+}
+
+const navigateToSchedule = (project) => {
+  router.push(`/schedule/project/${project.id}`)
 }
 
 const navigateToWorkload = (project) => {
