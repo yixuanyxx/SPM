@@ -1,7 +1,12 @@
 import unittest
 from unittest.mock import Mock, patch, MagicMock
 import json
+import sys
+import os
 from io import BytesIO
+
+# Add parent directory to path to find modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.task_service import TaskService
 from models.task import Task
 

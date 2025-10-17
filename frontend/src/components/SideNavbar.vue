@@ -46,39 +46,14 @@
           </router-link>
         </div>
 
-        <!-- Tasks -->
-        <div class="nav-item" :class="{ expanded: expandedMenus.includes('tasks') }">
-          <div class="nav-link" @click="toggleMenu('tasks')">
+        <!-- My Tasks -->
+         <div class="nav-item">
+          <router-link to="/tasks" class="nav-link" @click="handleNavItemClick">
             <div class="nav-icon">
-              <i class="bi bi-list-task"></i>
+              <i class="bi bi-person-check"></i>
             </div>
-            <span class="nav-text">Tasks</span>
-            <div class="nav-arrow" :class="{ rotated: expandedMenus.includes('tasks') }">
-              <i class="bi bi-chevron-down"></i>
-            </div>
-          </div>
-          
-          <transition name="dropdown">
-            <div v-if="expandedMenus.includes('tasks')" class="nav-dropdown">
-              <router-link to="/tasks" class="dropdown-item" @click="handleNavItemClick">
-                <i class="bi bi-person-check"></i>
-                <span>My Tasks</span>
-              </router-link>
-
-              <router-link to="/tasks/projects" class="dropdown-item" @click="handleNavItemClick">
-                <i class="bi bi-folder2-open"></i>
-                <span>Project Tasks</span>
-              </router-link>
-
-              <!-- Role-based. If staff do not show. -->
-              <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'">
-                <router-link :to="teamTasksRoute" class="dropdown-item" @click="handleNavItemClick">
-                  <i :class="teamTasksIcon"></i>
-                  <span>{{ teamTasksLabel }}</span>
-                </router-link>
-              </div>
-            </div>
-          </transition>
+            <span class="nav-text">My Tasks</span>
+          </router-link>
         </div>
 
         <!-- Projects -->
@@ -91,36 +66,25 @@
           </router-link>
         </div>
 
-        <!-- Schedule -->
-        <div class="nav-item" :class="{ expanded: expandedMenus.includes('schedule') }">
-          <div class="nav-link" @click="toggleMenu('schedule')">
+        <!-- Team/Dept Workload -->
+        <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'" class="nav-item">
+          <router-link :to="teamTasksRoute" class="nav-link" @click="handleNavItemClick"> 
             <div class="nav-icon">
-              <i class="bi bi-calendar3"></i>
+              <i :class="teamTasksIcon"></i>
             </div>
-            <span class="nav-text">Schedule</span>
-            <div class="nav-arrow" :class="{ rotated: expandedMenus.includes('schedule') }">
-              <i class="bi bi-chevron-down"></i>
-            </div>
-          </div>
-
-          <transition name="dropdown">
-            <div v-if="expandedMenus.includes('schedule')" class="nav-dropdown">
-              <router-link to="/schedule" class="dropdown-item" @click="handleNavItemClick">
-                <i class="bi bi-person-check"></i>
-                <span>My Schedule</span>
-              </router-link>
-
-              <!-- Role-based. If staff do not show. -->
-              <div v-if="userRole.toLowerCase() === 'manager' || userRole.toLowerCase() === 'director'">
-                <router-link :to="teamScheduleRoute" class="dropdown-item" @click="handleNavItemClick">
-                  <i :class="teamScheduleIcon"></i>
-                  <span>{{ teamScheduleLabel }}</span>
-                </router-link>
-              </div>
-            </div>
-          </transition>
+            <span class="nav-text">{{teamTasksLabel}}</span>
+          </router-link>
         </div>
 
+        <!-- Schedule -->
+        <div class="nav-item">
+          <router-link to="/schedule" class="nav-link" @click="handleNavItemClick"> <!-- UPDATE THIS -->
+            <div class="nav-icon">
+              <i class="bi bi-calendar"></i>
+            </div>
+            <span class="nav-text">My Schedule</span>
+          </router-link>
+        </div>
 
         <!-- Profile with dropdown -->
         <div class="nav-item" :class="{ expanded: expandedMenus.includes('profile') }">
@@ -230,18 +194,6 @@ const handleNavItemClick = () => {
   // Don't auto-close expanded menus - let them stay open to show current page
 }
 
-const teamScheduleRoute = computed(() => {
-  return userRole.value?.toLowerCase() === 'director' ? '/schedule/department' : '/schedule/team'
-})
-
-const teamScheduleLabel = computed(() => {
-  return userRole.value?.toLowerCase() === 'director' ? "Dept's Schedule" : "Team's Schedule"
-})
-
-const teamScheduleIcon = computed(() => {
-  return userRole.value?.toLowerCase() === 'director' ? 'bi bi-building' : 'bi bi-people'
-})
-
 
 // Watch for route changes to auto-expand relevant menus
 watch(() => route.path, (newPath) => {
@@ -265,7 +217,7 @@ const teamTasksRoute = computed(() => {
 })
 
 const teamTasksLabel = computed(() => {
-  return userRole.value?.toLowerCase() === 'director' ? "Dept's Tasks" : "Team's Tasks"
+  return userRole.value?.toLowerCase() === 'director' ? "Dept's Workload" : "Team's Workload"
 })
 
 const teamTasksIcon = computed(() => {
@@ -279,11 +231,15 @@ async function onLogout() {
     console.log('Logging out...');
     await logout();
     console.log('Logout successful, redirecting to login...');
-    router.push({ name: 'Login' });
+    // Force navigation to login page
+    await router.push({ name: 'Login' });
+    // Force reload to ensure clean state
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout failed:', error);
     // Still redirect to login even if logout fails
-    router.push({ name: 'Login' });
+    await router.push({ name: 'Login' });
+    window.location.href = '/login';
   }
 }
 </script>

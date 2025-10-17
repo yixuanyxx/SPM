@@ -1,10 +1,14 @@
 from typing import Dict, Any, Optional
+from datetime import datetime, UTC
 from models.task import Task
 from repo.supa_task_repo import SupabaseTaskRepo
+import requests
+import time
 
 class TaskService:
     def __init__(self, repo: Optional[SupabaseTaskRepo] = None):
         self.repo = repo or SupabaseTaskRepo()
+        self._notification_cache = {}  # Cache to prevent duplicate notifications
 
     def manager_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         # uniqueness per owner: task_name
@@ -120,6 +124,19 @@ class TaskService:
         if not update_fields:
             return {"__status": 400, "Message": "No fields to update provided", "data": existing_task_data}
         
+        # Handle status change logic - auto-set completed_at timestamp
+        if 'status' in update_fields:
+            new_status = update_fields['status']
+            old_status = existing_task_data.get('status')
+            
+            # If status is changing TO "Completed", set completed_at timestamp
+            if new_status == 'Completed' and old_status != 'Completed':
+                update_fields['completed_at'] = datetime.now(UTC).isoformat()
+            
+            # If status is changing FROM "Completed" to something else, clear completed_at
+            elif old_status == 'Completed' and new_status != 'Completed':
+                update_fields['completed_at'] = None
+        
         # Create Task object from existing data for proper type handling
         existing_task = Task.from_dict(existing_task_data)
         
@@ -136,6 +153,10 @@ class TaskService:
         # Perform the update
         try:
             updated_task_data = self.repo.update_task(task_id, update_data)
+            
+            # Notifications are now handled by the frontend to prevent duplicates
+            # self._trigger_update_notifications(existing_task_data, update_fields, task_id)
+            
             return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task_data}
         except Exception as e:
             return {"__status": 500, "Message": f"Failed to update task {task_id}: {str(e)}"}
@@ -145,6 +166,165 @@ class TaskService:
         if not task:
             raise ValueError(f"Task with ID {task_id} not found")
         return task
+
+    def _trigger_update_notifications(self, existing_task_data: Dict[str, Any], update_fields: Dict[str, Any], task_id: int):
+        """
+        Trigger consolidated notifications when specific task fields are updated.
+        """
+        try:
+            print(f"DEBUG: Triggering consolidated notifications for task {task_id} with fields: {list(update_fields.keys())}")
+            
+            # Create a cache key for this update to prevent duplicates
+            cache_key = f"{task_id}_{hash(str(sorted(update_fields.items())))}"
+            
+            # Check if we've already sent notifications for this exact update
+            if cache_key in self._notification_cache:
+                print(f"DEBUG: Notifications already sent for this update, skipping duplicate")
+                return
+            
+            # Get collaborators to notify
+            collaborators = existing_task_data.get("collaborators", [])
+            if not collaborators:
+                print(f"DEBUG: No collaborators found for task {task_id}")
+                return  # No collaborators to notify
+            
+            print(f"DEBUG: Notifying collaborators: {collaborators}")
+            
+            # Get updater name (not used in notifications anymore)
+            updater_name = "System"
+            
+            # Collect all changes for consolidated notification
+            changes = []
+            
+            # Check for status changes
+            if "status" in update_fields:
+                old_status = existing_task_data.get("status", "Unknown")
+                new_status = update_fields["status"]
+                if old_status != new_status:
+                    changes.append({
+                        "field": "status",
+                        "old_value": old_status,
+                        "new_value": new_status,
+                        "field_name": "Status"
+                    })
+            
+            # Check for due date changes
+            if "due_date" in update_fields:
+                old_due_date = existing_task_data.get("due_date", "No due date set")
+                new_due_date = update_fields["due_date"]
+                if old_due_date != new_due_date:
+                    changes.append({
+                        "field": "due_date",
+                        "old_value": old_due_date,
+                        "new_value": new_due_date,
+                        "field_name": "Due Date"
+                    })
+            
+            # Check for description changes
+            if "description" in update_fields:
+                old_description = existing_task_data.get("description", "")
+                new_description = update_fields["description"]
+                if old_description != new_description:
+                    changes.append({
+                        "field": "description",
+                        "old_value": old_description,
+                        "new_value": new_description,
+                        "field_name": "Description"
+                    })
+            
+            # Check for task name/title changes
+            if "task_name" in update_fields:
+                old_task_name = existing_task_data.get("task_name", "")
+                new_task_name = update_fields["task_name"]
+                if old_task_name != new_task_name:
+                    changes.append({
+                        "field": "task_name",
+                        "old_value": old_task_name,
+                        "new_value": new_task_name,
+                        "field_name": "Task Title"
+                    })
+            
+            # Check for priority changes
+            if "priority" in update_fields:
+                old_priority = existing_task_data.get("priority", "Not set")
+                new_priority = update_fields["priority"]
+                if old_priority != new_priority:
+                    changes.append({
+                        "field": "priority",
+                        "old_value": old_priority,
+                        "new_value": new_priority,
+                        "field_name": "Priority"
+                    })
+            
+            # Check for ownership changes (this is handled separately as it's a different type of notification)
+            if "owner_id" in update_fields:
+                old_owner_id = existing_task_data.get("owner_id")
+                new_owner_id = update_fields["owner_id"]
+                if old_owner_id != new_owner_id and new_owner_id:
+                    self._send_task_ownership_transfer_notification(task_id, new_owner_id, old_owner_id, updater_name)
+            
+            # Send consolidated notification if there are changes
+            if changes:
+                self._send_consolidated_task_update_notification(task_id, collaborators, changes, updater_name)
+                
+                # Cache this update to prevent duplicates (expire after 5 minutes)
+                self._notification_cache[cache_key] = {
+                    'timestamp': time.time(),
+                    'changes': [change['field'] for change in changes]
+                }
+                print(f"DEBUG: Cached consolidated notification for {cache_key}, changes: {[change['field'] for change in changes]}")
+                
+                # Clean up old cache entries (older than 5 minutes)
+                current_time = time.time()
+                self._notification_cache = {
+                    k: v for k, v in self._notification_cache.items() 
+                    if current_time - v['timestamp'] < 300
+                }
+                    
+        except Exception as e:
+            print(f"Warning: Failed to trigger update notifications for task {task_id}: {e}")
+    
+    # Individual notification methods removed - now using consolidated notifications only
+    
+    def _send_consolidated_task_update_notification(self, task_id: int, collaborators: list, changes: list, updater_name: str):
+        """Send consolidated notification for multiple task changes."""
+        try:
+            response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-consolidated-update",
+                                   json={
+                                       "task_id": task_id,
+                                       "user_ids": collaborators,
+                                       "changes": changes,
+                                       "updater_name": updater_name
+                                   })
+            if response.status_code not in [200, 201]:
+                print(f"Warning: Failed to send consolidated update notification: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send consolidated update notification: {e}")
+    
+    def _send_task_ownership_transfer_notification(self, task_id: int, new_owner_id: int, old_owner_id: int, updater_name: str):
+        """Send notification for task ownership transfer."""
+        try:
+            # Get old owner name for the notification
+            old_owner_name = "Previous Owner"
+            if old_owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{old_owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        old_owner_name = user_data.get("data", {}).get("name", "Previous Owner")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-ownership-transfer", 
+                                   json={
+                                       "task_id": task_id,
+                                       "new_owner_id": new_owner_id,
+                                       "previous_owner_name": old_owner_name
+                                   })
+            if response.status_code not in [200, 201]:
+                print(f"Warning: Failed to send ownership transfer notification: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send ownership transfer notification: {e}")
 
     def staff_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """

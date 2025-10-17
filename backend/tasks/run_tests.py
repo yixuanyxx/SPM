@@ -33,9 +33,13 @@ def run_model_tests():
     """Run task model tests (no environment variables needed)."""
     print("\nRunning Task Model Tests...")
     try:
+        # Add current directory (microservice root) to Python path and run tests
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.getcwd()
+        
         result = subprocess.run([sys.executable, "-m", "unittest", 
-                               "tests.test_task_model", "-v"],
-                              capture_output=True, text=True)
+                               "test_task_model", "-v"],
+                              cwd="tests", capture_output=True, text=True, env=env)
         
         print("Model Test Results:")
         print(result.stdout)
@@ -58,9 +62,13 @@ def run_controller_tests():
     """Run task controller integration tests."""
     print("\nRunning Task Controller Tests...")
     try:
+        # Add current directory (microservice root) to Python path and run tests
+        env = os.environ.copy()
+        env['PYTHONPATH'] = os.getcwd()
+        
         result = subprocess.run([sys.executable, "-m", "unittest", 
-                               "tests.test_task_controller_integration", "-v"],
-                              capture_output=True, text=True)
+                               "test_task_controller_integration", "-v"],
+                              cwd="tests", capture_output=True, text=True, env=env)
         
         print("Controller Test Results:")
         print(result.stdout)

@@ -1,5 +1,10 @@
 import unittest
+import sys
+import os
 from datetime import datetime, UTC
+
+# Add parent directory to path to find modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.task import Task
 
 
@@ -21,6 +26,7 @@ class TestTaskModel(unittest.TestCase):
         assert task.parent_task is None
         assert task.type == "parent"
         assert task.subtasks is None
+        assert task.completed_at is None
         assert task.attachments is None
         assert task.priority is None
         assert isinstance(task.created_at, str)
@@ -80,6 +86,7 @@ class TestTaskModel(unittest.TestCase):
             'collaborators': None,
             'subtasks': None,
             'created_at': task.created_at,
+            'completed_at': None,
             'attachments': None,
             'priority': 3,
             'due_date': None
@@ -379,3 +386,31 @@ class TestTaskModel(unittest.TestCase):
         assert reconstructed_task.priority == original_task.priority
         assert reconstructed_task.attachments == original_task.attachments
         assert reconstructed_task.created_at == original_task.created_at
+        assert reconstructed_task.completed_at == original_task.completed_at
+
+    def test_completed_at_field(self):
+        """Test completed_at field handling."""
+        # Test with None completed_at
+        task = Task(task_name="Test Task")
+        assert task.completed_at is None
+        
+        # Test with specific completed_at timestamp
+        completed_timestamp = "2024-12-31T23:59:59+00:00"
+        task_with_completed = Task(
+            task_name="Completed Task",
+            completed_at=completed_timestamp
+        )
+        assert task_with_completed.completed_at == completed_timestamp
+        
+        # Test to_dict includes completed_at
+        task_dict = task_with_completed.to_dict()
+        assert 'completed_at' in task_dict
+        assert task_dict['completed_at'] == completed_timestamp
+        
+        # Test from_dict with completed_at
+        data = {
+            'task_name': 'Test Task',
+            'completed_at': completed_timestamp
+        }
+        reconstructed_task = Task.from_dict(data)
+        assert reconstructed_task.completed_at == completed_timestamp

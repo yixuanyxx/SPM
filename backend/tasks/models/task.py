@@ -18,6 +18,7 @@ class Task:
     subtasks: Optional[List[int]] = field(default_factory=lambda: None)  # List of subtask IDs (JSONB in Supabase)
     attachments: Optional[List[Dict[str, str]]] = field(default_factory=lambda: None)
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+    completed_at: Optional[str] = None   # Timestamp when task was completed (ISO format)
     attachments: Optional[List[Dict[str, str]]] = field(default_factory=lambda: None)  # PDF attachments
     priority: Optional[int] = None       # Priority level (optional integer)
     
@@ -34,6 +35,7 @@ class Task:
             'collaborators': self.collaborators,
             'subtasks': self.subtasks,
             'created_at': self.created_at,
+            'completed_at': self.completed_at,
             'attachments': self.attachments,
             'priority': self.priority
         }
@@ -114,6 +116,7 @@ class Task:
             type=str(data.get('type', 'parent')),
             subtasks=subtasks,
             created_at=str(data.get('created_at', datetime.now(UTC).isoformat())),
+            completed_at=data.get('completed_at'),
             attachments=attachments,
             priority=priority
         )

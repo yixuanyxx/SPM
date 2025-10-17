@@ -1,0 +1,10 @@
+flask
+flask-cors
+python-dotenv
+supabase
+python-dateutil
+requests
+fpdf2
+openpyxl
+reportlab
+pandas

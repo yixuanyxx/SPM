@@ -5,7 +5,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../components/SideNavbar.vue'
-import NotificationDropdown from '../components/NotificationDropdown.vue'
 import { sessionState } from '../services/session'
 import { logout } from '../services/auth'
 import { notificationStore, userPreferencesService } from '../services/notifications'
@@ -13,24 +12,16 @@ import './taskview/taskview.css'
 
 const router = useRouter()
 const now = ref(new Date())
-const tasks = ref([])
 const loading = ref(false)
 const userId = localStorage.getItem('spm_userid')
 const API_TASKS = 'http://localhost:5002'
 const API_USERS = 'http://127.0.0.1:5003'
 const userName = ref('')
-const showNotificationDropdown = ref(false)
-const unreadCount = ref(0)
 const userPreferences = ref({ in_app: true, email: true })
-const inAppNotifications = ref([])
 
-const upcomingTasks = computed(() => {
-  const list = Array.isArray(tasks.value) ? tasks.value.slice() : []
-  return list
-    .filter(t => !!t?.due_date)
-    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
-    .slice(0, 5)
-})
+const notifications = computed(() => notificationStore.notifications)
+const recentNotifications = computed(() => notifications.value.slice(0, 5)) // Show up to 5 notifications
+const expandedNotifications = ref([])
 const greeting = computed(() => {
   const hour = now.value.getHours()
   if (hour < 12) return 'Good morning'
@@ -43,9 +34,10 @@ onMounted(async () => {
   // cleanup
   window.addEventListener('beforeunload', () => clearInterval(timer))
   if (userId) {
-    fetchTasks()
     fetchUserName()
     await initializeNotifications()
+    // Also load notifications immediately to ensure they're available
+    await loadNotifications()
   }
 })
 
@@ -54,11 +46,15 @@ async function onLogout() {
     console.log('Logging out...');
     await logout();
     console.log('Logout successful, redirecting to login...');
-    router.push({ name: 'Login' });
+    // Force navigation to login page
+    await router.push({ name: 'Login' });
+    // Force reload to ensure clean state
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout failed:', error);
     // Still redirect to login even if logout fails
-    router.push({ name: 'Login' });
+    await router.push({ name: 'Login' });
+    window.location.href = '/login';
   }
 }
 
@@ -89,29 +85,30 @@ async function fetchUserName() {
   }
 }
 
+async function loadNotifications() {
+  try {
+    loading.value = true
+    await notificationStore.refresh(userId)
+  } catch (error) {
+    console.error('Failed to load notifications:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
 async function initializeNotifications() {
   try {
     // Initialize notification store
     await notificationStore.init(userId)
-    unreadCount.value = notificationStore.unreadCount
     
     // Get user preferences
     const userData = await userPreferencesService.getUserData(userId)
     userPreferences.value = userData?.data?.notification_preferences || { in_app: true, email: true }
     
-    // Load in-app notifications if enabled
-    if (userPreferences.value.in_app) {
-      loadInAppNotifications()
-    }
-    
     // Set up periodic refresh for notifications (every 30 seconds)
     setInterval(async () => {
       try {
         await notificationStore.refresh(userId)
-        unreadCount.value = notificationStore.unreadCount
-        if (userPreferences.value.in_app) {
-          loadInAppNotifications()
-        }
       } catch (error) {
         console.error('Failed to refresh notifications:', error)
       }
@@ -122,29 +119,6 @@ async function initializeNotifications() {
   }
 }
 
-function loadInAppNotifications() {
-  // Show only recent unread notifications for in-app display
-  const unreadNotifications = notificationStore.notifications.filter(n => !n.is_read)
-  inAppNotifications.value = unreadNotifications.slice(0, 3) // Show max 3 recent notifications
-}
-
-function toggleNotificationDropdown() {
-  showNotificationDropdown.value = !showNotificationDropdown.value
-}
-
-function closeNotificationDropdown() {
-  showNotificationDropdown.value = false
-}
-
-async function dismissInAppNotification(notificationId) {
-  try {
-    await notificationStore.markAsRead(notificationId)
-    loadInAppNotifications() // Refresh in-app notifications
-    unreadCount.value = notificationStore.unreadCount
-  } catch (error) {
-    console.error('Failed to dismiss notification:', error)
-  }
-}
 
 // Utility functions for notifications
 function formatTime(timestamp) {
@@ -183,6 +157,58 @@ function getNotificationColor(type) {
   }
   return colorMap[type] || '#3b82f6'
 }
+
+function truncateText(text, maxLength = 100) {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
+
+async function markAsRead(notification) {
+  try {
+    await notificationStore.markAsRead(notification.id)
+  } catch (error) {
+    console.error('Failed to mark notification as read:', error)
+  }
+}
+
+function toggleNotificationDetails(notification) {
+  const index = expandedNotifications.value.indexOf(notification.id)
+  if (index > -1) {
+    expandedNotifications.value.splice(index, 1)
+  } else {
+    expandedNotifications.value.push(notification.id)
+    // Auto-mark as read when banner is opened
+    if (!notification.is_read) {
+      markAsRead(notification)
+    }
+  }
+}
+
+function formatNotificationText(text) {
+  // Convert markdown-style bold (**text**) to HTML bold
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+}
+
+function getNotificationTitle(notification) {
+  // Extract title from notification content
+  const content = notification.notification
+  if (content.includes('Task Update Summary')) {
+    return 'Task Updated'
+  } else if (content.includes('assigned')) {
+    return 'Task Assigned'
+  } else if (content.includes('transferred')) {
+    return 'Task Ownership Transferred'
+  }
+  return 'Notification'
+}
+
+function viewAllNotifications() {
+  // Navigate to a dedicated notifications page or show all notifications
+  // For now, we'll just show all notifications in the current view
+  console.log('View all notifications clicked')
+  // You can implement navigation to a dedicated notifications page here
+  // this.$router.push('/notifications')
+}
 </script>
 
 <template>
@@ -195,12 +221,6 @@ function getNotificationColor(type) {
           <div class="header-left">
             <h1 class="page-title">Welcome</h1>
             <p class="page-subtitle">Your hub for tasks, schedule, and projects</p>
-          </div>
-          <div class="header-right">
-            <button class="notification-bell" @click="toggleNotificationDropdown">
-              <i class="bi bi-bell"></i>
-              <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
-            </button>
           </div>
         </div>
       </div>
@@ -268,85 +288,51 @@ function getNotificationColor(type) {
           </div>
         </div>
 
-        <!-- In-app notifications (if enabled) -->
-        <div v-if="userPreferences.in_app" class="tasks-container" style="margin-top: 1rem;">
-          <div class="in-app-notifications">
-            <div class="notifications-header">
-              <h4 class="notifications-title">
-                <i class="bi bi-bell-fill me-2"></i>
-                New Notifications
-              </h4>
-            </div>
-            
-            <!-- Show notifications if they exist -->
-            <div v-if="inAppNotifications.length > 0" class="notifications-list">
-              <div 
-                v-for="notification in inAppNotifications" 
-                :key="notification.id"
-                class="in-app-notification-item"
-              >
-                <div class="notification-icon">
-                  <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
-                </div>
-                <div class="notification-content">
-                  <div class="notification-message">{{ notification.notification }}</div>
-                  <div class="notification-time">{{ formatTime(notification.created_at) }}</div>
-                </div>
-                <button @click="dismissInAppNotification(notification.id)" class="dismiss-btn">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Show "no new notifications" message if no notifications -->
-            <div v-else class="no-notifications">
-              <div class="no-notifications-content">
-                <i class="bi bi-bell-slash"></i>
-                <span>No new notifications</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- Upcoming tasks summary -->
+        <!-- Latest Notifications -->
         <div class="tasks-container" style="margin-top: 1rem;">
-          <h3 class="page-subtitle" style="color:#374151; margin-bottom: 0.5rem;">Upcoming Tasks</h3>
+          <div class="notifications-header">
+            <h3 class="notifications-heading">Latest Notifications</h3>
+            <button v-if="notifications.length > 5" class="view-all-btn" @click="viewAllNotifications">
+              <i class="bi bi-list-ul"></i> View All Notifications
+            </button>
+          </div>
           <div v-if="loading" class="empty-state" style="padding: 1rem;">
-            <p class="empty-subtitle">Loading tasks…</p>
+            <p class="empty-subtitle">Loading notifications…</p>
           </div>
           <div v-else>
-            <div v-if="upcomingTasks.length === 0" class="empty-state" style="padding: 1rem;">
-              <p class="empty-subtitle">No upcoming tasks.</p>
+            <div v-if="notifications.length === 0" class="empty-state" style="padding: 1rem;">
+              <p class="empty-subtitle">No notifications yet.</p>
             </div>
             <div v-else>
               <div 
-                v-for="(task, index) in upcomingTasks" 
-                :key="task.id" 
-                class="task-card" 
-                :style="{ animationDelay: `${index * 0.05}s` }"
+                v-for="notification in recentNotifications" 
+                :key="notification.id"
+                class="notification-banner"
+                :class="{ 'unread': !notification.is_read, 'expanded': expandedNotifications.includes(notification.id) }"
+                @click="toggleNotificationDetails(notification)"
               >
-                <div class="task-main" @click="router.push(`/tasks/${task.id}`)">
-                  <div class="task-content">
-                    <div class="task-header">
-                      <div class="task-title-section">
-                        <h3 class="task-title">{{ task.task_name }}</h3>
-                        <div class="task-status" :class="{ ongoing: task.status==='Ongoing', completed: task.status==='Completed', 'under-review': task.status==='Under Review' }">
-                          <i class="bi" :class="{ 'bi-play-circle': task.status==='Ongoing', 'bi-check-circle-fill': task.status==='Completed', 'bi-eye': task.status==='Under Review' }"></i>
-                          <span>{{ task.status }}</span>
-                        </div>
-                      </div>
-                      <div class="task-meta">
-                        <div class="task-date">
-                          <i class="bi bi-calendar3"></i>
-                          <span>{{ new Date(task.due_date).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', month: 'short', day: 'numeric' }) }}</span>
-                        </div>
-                      </div>
+                <div class="notification-header">
+                  <div class="notification-icon">
+                    <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
+                  </div>
+                  
+                  <div class="notification-summary">
+                    <div class="notification-title">{{ getNotificationTitle(notification) }}</div>
+                    <div class="notification-time">{{ formatTime(notification.created_at) }}</div>
+                  </div>
+
+                  <div class="notification-actions">
+                    <div v-if="!notification.is_read" class="unread-dot"></div>
+                    <div class="expand-icon">
+                      <i :class="expandedNotifications.includes(notification.id) ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
                     </div>
                   </div>
-                  <div class="task-actions">
-                    <div class="click-hint">
-                      <i class="bi bi-arrow-right"></i>
-                    </div>
+                </div>
+
+                <div v-if="expandedNotifications.includes(notification.id)" class="notification-details">
+                  <div class="notification-content">
+                    <div class="notification-text" v-html="formatNotificationText(notification.notification)"></div>
                   </div>
                 </div>
               </div>
@@ -356,13 +342,6 @@ function getNotificationColor(type) {
 
       </div>
     </div>
-
-    <!-- Notification Dropdown -->
-    <NotificationDropdown 
-      :show="showNotificationDropdown" 
-      :userId="userId" 
-      @close="closeNotificationDropdown" 
-    />
   </div>
 </template>
 
@@ -385,91 +364,73 @@ function getNotificationColor(type) {
   margin-top: 0.5rem;
 }
 
-/* Notification Bell */
-.notification-bell {
-  position: relative;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
+/* Notifications Header */
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.notifications-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.view-all-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.view-all-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.view-all-btn i {
+  font-size: 0.8rem;
+}
+.notification-banner {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 1.2rem;
-  color: #6b7280;
-}
-
-.notification-bell:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-}
-
-.notification-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #ef4444;
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-/* In-app Notifications */
-.in-app-notifications {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
   overflow: hidden;
+}
+
+.notification-banner.unread:hover {
+  border-color: #3b82f6;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
-.notifications-header {
-  padding: 1rem 1.25rem;
-  background: rgba(59, 130, 246, 0.05);
-  border-bottom: 1px solid #bae6fd;
+.notification-banner.unread {
+  background: #f8fafc;
+  border-left: 4px solid #3b82f6;
 }
 
-.notifications-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e40af;
+.notification-banner.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.notification-header {
   display: flex;
   align-items: center;
-}
-
-.notifications-list {
-  padding: 0.5rem 0;
-}
-
-.in-app-notification-item {
-  display: flex;
-  align-items: flex-start;
+  padding: 1rem;
   gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  transition: background-color 0.2s ease;
-  position: relative;
-}
-
-.in-app-notification-item:hover {
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.in-app-notification-item:not(:last-child) {
-  border-bottom: 1px solid rgba(186, 230, 253, 0.5);
 }
 
 .notification-icon {
@@ -485,74 +446,74 @@ function getNotificationColor(type) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.notification-content {
+.notification-summary {
   flex: 1;
   min-width: 0;
 }
 
-.notification-message {
+.notification-title {
   font-size: 0.9rem;
-  line-height: 1.4;
-  color: #1e40af;
+  font-weight: 600;
+  color: #374151;
   margin-bottom: 0.25rem;
-  font-weight: 500;
 }
 
 .notification-time {
   font-size: 0.8rem;
-  color: #64748b;
+  color: #6b7280;
 }
 
-.dismiss-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+.notification-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.in-app-notification-item:hover .dismiss-btn {
-  opacity: 1;
-}
-
-.dismiss-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-/* No notifications message */
-.no-notifications {
-  padding: 1.5rem;
-  text-align: center;
-}
-
-.no-notifications-content {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #9ca3af;
 }
 
-.no-notifications-content i {
-  font-size: 2rem;
-  opacity: 0.6;
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
 }
 
-.no-notifications-content span {
+.expand-icon {
+  color: #6b7280;
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.notification-banner.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.notification-details {
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 1rem;
+}
+
+.notification-content {
+  margin-bottom: 0;
+}
+
+.notification-text {
+  font-family: inherit;
   font-size: 0.9rem;
-  font-weight: 500;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  margin: 0;
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
+
+.notification-text strong {
+  color: #1f2937;
+  font-weight: 700;
+}
+
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
@@ -562,39 +523,16 @@ function getNotificationColor(type) {
     gap: 1rem;
   }
   
-  .header-right {
-    align-self: flex-end;
-    margin-top: 0;
+  .notification-banner {
+    margin-bottom: 0.5rem;
   }
   
-  .notification-bell {
-    width: 44px;
-    height: 44px;
-    font-size: 1.1rem;
+  .notification-header {
+    padding: 0.75rem;
   }
   
-  .in-app-notification-item {
-    padding: 0.75rem 1rem;
-  }
-  
-  .dismiss-btn {
-    opacity: 1; /* Always show on mobile */
-  }
-}
-
-@media (max-width: 640px) {
-  .notification-bell {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
-  }
-  
-  .notifications-header {
-    padding: 0.75rem 1rem;
-  }
-  
-  .notifications-title {
-    font-size: 0.9rem;
+  .notification-details {
+    padding: 0.75rem;
   }
 }
 </style>

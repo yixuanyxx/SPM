@@ -11,7 +11,7 @@ from models.notification import Notification
 from repo.supa_notification_repo import SupabaseNotificationRepo
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv('/Users/yixli/Documents/GitHub/SPM/backend/.env')
 
 # Fix SSL certificate verification issues on macOS
 import urllib3
@@ -134,38 +134,53 @@ class NotificationService:
         Send email notification using SendGrid API with proper integration.
         """
         try:
+            print(f"DEBUG: Attempting to send email to {user_email}")
+            print(f"DEBUG: Subject: {subject}")
+            
             # Get SendGrid API key from environment
             sendgrid_api_key = os.environ.get("SENDGRID_API_KEY")
             if not sendgrid_api_key:
+                print("DEBUG: SendGrid API key not configured")
                 return {"status": 500, "message": "SendGrid API key not configured"}
-            
-            # Create SendGrid client
-            sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
             
             # Get sender email from environment
             from_email = os.environ.get("SENDGRID_FROM_EMAIL")
             if not from_email:
+                print("DEBUG: SendGrid from email not configured")
                 return {"status": 500, "message": "SendGrid from email not configured"}
             
-            # Create email components using proper SendGrid format
+            print(f"DEBUG: Using from email: {from_email}")
+            print(f"DEBUG: API key (first 10 chars): {sendgrid_api_key[:10]}...")
+            
+            # Create SendGrid client
+            sg = sendgrid.SendGridAPIClient(api_key=sendgrid_api_key)
+            
+            # Create email components using the working format from your example
             from_email_obj = Email(from_email)
             to_email_obj = To(user_email)
             subject_obj = subject
             content_obj = Content("text/html", message)
             
-            # Create mail object
+            # Create mail object using the working format
             mail = Mail(from_email_obj, to_email_obj, subject_obj, content_obj)
             
             # Get mail as JSON
             mail_json = mail.get()
             
             # Send email
+            print("DEBUG: Sending email via SendGrid...")
             response = sg.client.mail.send.post(request_body=mail_json)
             
+            print(f"DEBUG: SendGrid response status: {response.status_code}")
+            print(f"DEBUG: SendGrid response headers: {response.headers}")
+            
             if response.status_code in [200, 201, 202]:
+                print("DEBUG: Email sent successfully")
                 return {"status": 200, "message": "Email notification sent successfully"}
             else:
+                print(f"DEBUG: SendGrid error response: {response.body}")
                 return {"status": 500, "message": f"Failed to send email: HTTP {response.status_code}"}
                 
         except Exception as e:
+            print(f"DEBUG: Exception in send_email_notification: {str(e)}")
             return {"status": 500, "message": f"Failed to send email notification: {str(e)}"}

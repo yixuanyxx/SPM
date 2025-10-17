@@ -593,4 +593,69 @@ class NotificationTriggerService:
             results.append({"user_id": collaborator_id, "result": result})
         
         return results
+    
+    def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
+        """
+        Send consolidated notification when multiple task fields are updated.
+        This creates one notification per user that includes all changes.
+        """
+        # Get task details from Supabase for better notification content
+        task_details = self._get_task_details_from_supabase(task_id)
+        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
+        
+        # Build change summary for email and in-app
+        changes_html = ""
+        changes_text = []
+        
+        for change in changes:
+            field_name = change.get("field_name", change.get("field", "Unknown"))
+            old_value = change.get("old_value", "Not set")
+            new_value = change.get("new_value", "Not set")
+            
+            # Format values for display
+            if field_name == "Due Date" and old_value != "Not set":
+                try:
+                    from datetime import datetime
+                    old_date = datetime.fromisoformat(old_value.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+                    new_date = datetime.fromisoformat(new_value.replace('Z', '+00:00')).strftime('%Y-%m-%d')
+                    old_value = old_date
+                    new_value = new_date
+                except:
+                    pass
+            
+            changes_html += f"""
+            <li><strong>{field_name}:</strong> {old_value} → {new_value}</li>
+            """
+            changes_text.append(f"{field_name}: {old_value} → {new_value}")
+        
+        # HTML content for email - using your specified format with bold heading
+        notification_content = f"""
+        <h2 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Update Summary</strong></h2>
+        <p style="color: #374151; margin-bottom: 12px;">Changes made to your task {task_id}:</p>
+        <ul style="color: #374151; margin-bottom: 16px;">
+            {changes_html}
+        </ul>
+        <p style="color: #6b7280; font-size: 14px;">Please review the updated task details and take any necessary actions.</p>
+        """
+        
+        # Plain text content for in-app notification - using your specified format with bold heading
+        changes_summary = "\n".join(changes_text)
+        plain_text = f"""**Task Update Summary**
+Changes made to your task {task_id}:
+{changes_summary}
+
+Please review the updated task details and take any necessary actions."""
+        
+        results = []
+        for user_id in user_ids:
+            result = self.send_notification_based_on_preferences(
+                user_id,
+                notification_content,
+                "task_updated",
+                None,  # Set to None to avoid foreign key constraint issues
+                plain_text
+            )
+            results.append({"user_id": user_id, "result": result})
+        
+        return results
 

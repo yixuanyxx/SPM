@@ -14,19 +14,43 @@
   box-sizing: border-box;
   flex: 1;
   margin-left: 250px; /* Account for sidebar width */
-}
+  transition: margin-left 0.3s ease; 
 
-
-.header-content{
-  width: 100%;
-  margin: 0 auto;
 }
 
 /* Header */
 .project-header-section {
   margin-bottom: 2rem;
+  display: flex;                 /* enable flexbox */
+  justify-content: space-between; /* push content to opposite ends */
+  align-items: center;            /* vertically center items */
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;               /* allow wrapping on small screens */
+  gap: 1rem;                    /* add gap between items when wrapping */
 }
 
+
+.header-content {
+  flex: 1;
+  min-width: 250px;             /* prevent squishing */
+}
+
+.project-header-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.project-header-right-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-left: auto;             /* push to right side */
+}
 .button-section {
   display: flex;
   justify-content: flex-end;
@@ -53,16 +77,18 @@
 }
 
 .project-view-page-title {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1e293b;
-  margin: 0 0 8px 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: -0.01em;
 }
 
 .project-view-page-subtitle {
-  color: #64748b;
-  font-size: 14px;
+  font-size: 0.95rem;
+  color: #6b7280;
   margin: 0;
+  font-weight: 400;
 }
 
 .project-main-content {
@@ -112,14 +138,22 @@
 
 .project-info {
   flex: 1;
+  margin-bottom: 0.5rem; /* Add spacing below the title */
 }
 
 .project-name {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: #111827;
-  margin: 0 0 0.25rem 0;
-  line-height: 1.3;
+  font-size: 1.5rem; /* Adjust font size */
+  font-weight: 700; /* Make it bold */
+  color: #1e293b; /* Darker color for better contrast */
+  margin: 0;
+  line-height: 1.2; /* Adjust line height for better spacing */
+  text-transform: capitalize; /* Capitalize the first letter of each word */
+  letter-spacing: -0.02em; /* Slightly tighten the letter spacing */
+  transition: color 0.2s ease; /* Add a hover effect */
+}
+
+.project-name:hover {
+  color: #3b82f6; /* Change color on hover to match the theme */
 }
 
 .project-id {
@@ -513,9 +547,81 @@
   cursor: grabbing;
 }
 
+/* Project Actions */
+.project-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 1rem;
+}
+
+.schedule-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: 0.5rem;
+}
+
+.schedule-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.schedule-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.schedule-btn i {
+  font-size: 1rem;
+}
+
+
+.workload-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.workload-btn:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.workload-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(59, 130, 246, 0.3);
+}
+
+.workload-btn i {
+  font-size: 1rem;
+}
+
 @keyframes fadeInUp {
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
+

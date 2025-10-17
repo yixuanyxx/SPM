@@ -31,6 +31,7 @@ export async function logout() {
   localStorage.removeItem('UID'); // fallback
   localStorage.removeItem('user_id'); // fallback
   
+  // Sign out from Supabase (this will trigger onAuthStateChange)
   return await supabase.auth.signOut();
 }
 
