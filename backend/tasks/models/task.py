@@ -21,6 +21,8 @@ class Task:
     completed_at: Optional[str] = None   # Timestamp when task was completed (ISO format)
     attachments: Optional[List[Dict[str, str]]] = field(default_factory=lambda: None)  # PDF attachments
     priority: Optional[int] = None       # Priority level (optional integer)
+    recurrence_type: Optional[str] = None       # none, daily, weekly, bi-weekly, monthly, yearly
+    recurrence_end_date: Optional[datetime] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Task object to dictionary"""
@@ -37,7 +39,12 @@ class Task:
             'created_at': self.created_at,
             'completed_at': self.completed_at,
             'attachments': self.attachments,
-            'priority': self.priority
+            'priority': self.priority,
+            'recurrence_type': self.recurrence_type, 
+            'recurrence_end_date': (
+                self.recurrence_end_date.isoformat() if isinstance(self.recurrence_end_date, datetime)
+                else self.recurrence_end_date
+            )
         }
         
         # Include ID if it exists
@@ -102,6 +109,19 @@ class Task:
                 priority = int(priority)
             except (ValueError, TypeError):
                 priority = None
+
+        # Handle recurrence fields
+        recurrence_type = data.get('recurrence_type')
+        valid_types = {'daily', 'weekly', 'bi-weekly', 'monthly', 'yearly'}
+        if recurrence_type not in valid_types:
+            recurrence_type = None
+
+        recurrence_end_date = data.get('recurrence_end_date')
+        if recurrence_end_date is not None and isinstance(recurrence_end_date, str):
+            try:
+                recurrence_end_date = dateparser.parse(recurrence_end_date)
+            except Exception:
+                recurrence_end_date = None
         
         # Create task instance
         task = cls(
@@ -118,7 +138,9 @@ class Task:
             created_at=str(data.get('created_at', datetime.now(UTC).isoformat())),
             completed_at=data.get('completed_at'),
             attachments=attachments,
-            priority=priority
+            priority=priority,
+            recurrence_type=recurrence_type,
+            recurrence_end_date=recurrence_end_date
         )
         
         # Set ID if provided (since it's init=False)

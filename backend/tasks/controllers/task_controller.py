@@ -54,6 +54,22 @@ def manager_create_task():
 
         result = service.manager_create(payload)
         status = result.pop("__status", 201)
+
+        recurrence_type = payload.get("recurrence_type")
+        recurrence_end_date = payload.get("recurrence_end_date")
+
+        if recurrence_type is not None:
+            try:
+                service.create_recurring_tasks(
+                    parent_task_id=result["data"]["task_id"],
+                    recurrence_type=recurrence_type,
+                    recurrence_end_date=recurrence_end_date
+                )
+            except Exception as e:
+                # Log but don’t fail the original task creation
+                print(f"Failed to create recurring tasks: {str(e)}")
+
+
         result["Code"] = status
         return jsonify(result), status
     except ValueError as ve:
@@ -111,6 +127,22 @@ def staff_create_task():
 
         result = service.staff_create(payload)
         status = result.pop("__status", 201)
+
+        recurrence_type = payload.get("recurrence_type")
+        recurrence_end_date = payload.get("recurrence_end_date")
+
+        if recurrence_type is not None:
+            try:
+                service.create_recurring_tasks(
+                    parent_task_id=result["data"]["task_id"],
+                    recurrence_type=recurrence_type,
+                    recurrence_end_date=recurrence_end_date
+                )
+            except Exception as e:
+                # Log but don’t fail the original task creation
+                print(f"Failed to create recurring tasks: {str(e)}")
+
+
         result["Code"] = status
         return jsonify(result), status
     except ValueError as ve:

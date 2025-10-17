@@ -1,9 +1,10 @@
 from typing import Dict, Any, Optional
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
 from models.task import Task
 from repo.supa_task_repo import SupabaseTaskRepo
 import requests
 import time
+import copy
 
 class TaskService:
     def __init__(self, repo: Optional[SupabaseTaskRepo] = None):
@@ -132,6 +133,10 @@ class TaskService:
             # If status is changing TO "Completed", set completed_at timestamp
             if new_status == 'Completed' and old_status != 'Completed':
                 update_fields['completed_at'] = datetime.now(UTC).isoformat()
+                try:
+                    self._generate_next_occurrence(existing_task_data)
+                except Exception as e:
+                    print(f"⚠️ Failed to generate recurring task for {task_id}: {e}")
             
             # If status is changing FROM "Completed" to something else, clear completed_at
             elif old_status == 'Completed' and new_status != 'Completed':
@@ -686,3 +691,65 @@ class TaskService:
                 "Message": f"Error retrieving department tasks: {str(e)}",
                 "data": []
             }
+        
+    def _generate_next_occurrence(self, completed_task: Dict[str, Any]):
+        """
+        Automatically generate the next task occurrence based on recurrence frequency.
+        """
+        recurrence_type = completed_task.get("recurrence_type")
+        recurrence_end_date = completed_task.get("recurrence_end_date")
+
+        if not recurrence_type or recurrence_type == "none":
+            return  # No recurrence rule, nothing to do
+
+        due_date_str = completed_task.get("due_date")
+
+        try:
+            from dateutil import parser as dateparser
+            due_date = dateparser.parse(due_date_str)
+        except Exception:
+            print(f"⚠️ Could not parse due date for task {completed_task.get('id')}")
+            return
+
+        # Calculate the next due date
+        if recurrence_type == "daily":
+            next_due_date = due_date + timedelta(days=1)
+        elif recurrence_type == "weekly":
+            next_due_date = due_date + timedelta(weeks=1)
+        elif recurrence_type == "bi-weekly":
+            next_due_date = due_date + timedelta(weeks=2)
+        elif recurrence_type == "monthly":
+            next_due_date = due_date + timedelta(days=30)
+        elif recurrence_type == "yearly":
+            next_due_date = due_date + timedelta(days=365)
+        else:
+            return  # Unsupported type, just skip
+        
+        if recurrence_end_date:
+            try:
+                recurrence_end = dateparser.parse(recurrence_end_date)
+                if next_due_date > recurrence_end:
+                    print(f"ℹ️ Recurrence ended for task {completed_task.get('id')} (end date reached)")
+                    return None
+            except Exception:
+                print(f"⚠️ Could not parse recurrence_end_date '{recurrence_end_date}'")
+
+        # Prepare the new task payload (clone without id/status/completion)
+        task_payload = copy.deepcopy(completed_task)
+        task_payload.pop("id", None)
+        task_payload["status"] = "Ongoing"
+        task_payload["completed_at"] = None
+        task_payload["created_at"] = datetime.now(UTC).isoformat()
+        task_payload["due_date"] = next_due_date.isoformat()
+        task_payload["type"] = completed_task.get("type", "parent")
+        task_payload["recurrence_type"] = recurrence_type
+        task_payload["recurrence_end_date"] = recurrence_end_date
+
+        # Insert into database
+        try:
+            created = self.repo.insert_task(task_payload)
+            print(f"✅ Created recurring task {created.get('id')} for recurrence '{recurrence_type}'")
+            return created
+        except Exception as e:
+            print(f"❌ Failed to create recurring task: {e}")
+            return None

@@ -156,6 +156,30 @@
             <span class="file-hint">Only PDF files allowed</span>
           </div>
 
+          <!-- Recurrence -->
+          <div class="form-group">
+            <label for="recurrence_type">Recurrence</label>
+            <select id="recurrence_type" v-model="newTask.recurrence_type" :disabled="isLoading" class="form-select">
+              <option :value="null">-- None --</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="bi-weekly">Bi-Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+
+          <div v-if="newTask.recurrence_type !== null" class="form-group">
+            <label for="recurrenceEnd">Recurrence End Date</label>
+            <input
+              type="datetime-local"
+              id="recurrenceEnd"
+              v-model="newTask.recurrence_end_date"
+              :disabled="isLoading"
+              :min="getTodayDateTime()"
+            />
+          </div>
+
           <!-- Actions -->
           <div class="form-actions">
             <button 
@@ -228,7 +252,9 @@ export default {
         project_id: "",
         collaborators: "",
         parent_task: "",
-        subtasks: []
+        subtasks: [], 
+        recurrence_type: null,      
+        recurrence_end_date: null
       },
       newAttachmentFile: null,
       isLoading: false,
@@ -357,6 +383,16 @@ export default {
         return;
       }
 
+      // Validate recurrence end date if set
+      if (this.newTask.recurrence_type && this.newTask.recurrence_end_date) {
+        const endDate = new Date(this.newTask.recurrence_end_date);
+        const startDate = new Date(this.newTask.due_date);
+        if (endDate < startDate) {
+          this.errorMessage = "Recurrence end date cannot be before the task's due date.";
+          return;
+        }
+      }
+
       this.isLoading = true;
       this.errorMessage = "";
       this.successMessage = "";
@@ -392,6 +428,21 @@ export default {
         }
         if (collaboratorIds.length > 0) {
           formData.append("collaborators", collaboratorIds.join(","));
+        }
+
+        // Recurrence
+        if (this.newTask.recurrence_type) {
+          formData.append("recurrence_type", this.newTask.recurrence_type);
+
+          if (this.newTask.recurrence_end_date) {
+            const endUTC = new Date(this.newTask.recurrence_end_date).toISOString();
+            formData.append("recurrence_end_date", endUTC);
+          } else {
+            formData.append("recurrence_end_date", ""); // explicitly send null
+          }
+        } else {
+          formData.append("recurrence_type", "None");
+          formData.append("recurrence_end_date", "");
         }
 
         // Role-based endpoint for PARENT task
@@ -504,7 +555,9 @@ export default {
         project_id: "",
         collaborators: "",
         parent_task: "",
-        subtasks: []
+        subtasks: [], 
+        recurrence_type: null, 
+        recurrence_end_date: null
       };
       this.selectedCollaborators = [];
       this.newAttachmentFile = null;
