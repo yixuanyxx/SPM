@@ -154,10 +154,8 @@ class TaskService:
         except Exception as e:
             return {"__status": 500, "Message": f"Failed to update task {task_id}: {str(e)}"}
 
-    def get_task(self, task_id: int) -> Dict[str, Any]:
+    def get_task(self, task_id: int) -> Optional[Dict[str, Any]]:
         task = self.repo.get_task(task_id)
-        if not task:
-            raise ValueError(f"Task with ID {task_id} not found")
         return task
 
     def staff_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -168,6 +166,12 @@ class TaskService:
         owner_id = payload.get("owner_id")
         if not owner_id:
             raise ValueError("owner_id is required")
+        
+        # Check for existing task with same name for this owner
+        existing = self.repo.find_by_owner_and_name(payload["owner_id"], payload["task_name"])
+        if existing:
+            # Return 200 with existing task data (same as manager_create)
+            return {"__status": 200, "Message": f"Task '{payload['task_name']}' already exists for this user.", "data": existing}
         
         # Get existing collaborators or initialize empty list
         collaborators = payload.get("collaborators") or []

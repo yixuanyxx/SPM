@@ -23,8 +23,12 @@ class SupabaseTaskRepo:
         return res.data[0]
 
     def get_task(self, task_id: int) -> Optional[Dict[str, Any]]:
-        res = self.client.table(TABLE).select("*").eq("id", task_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*").eq("id", task_id).single().execute()
+            return res.data
+        except Exception:
+            # Task not found or other error
+            return None
 
     def find_by_user(self, user_id: int) -> list:
         """
@@ -139,6 +143,21 @@ class SupabaseTaskRepo:
     
     def update_attachments(self, task_id: int, attachments: List[Dict[str, str]]) -> Dict[str, Any]:
         return self.update_task(task_id, {"attachments": attachments})
+
+    def delete_task(self, task_id: int) -> bool:
+        """
+        Delete a task by its ID.
+        
+        Returns:
+            bool: True if task was deleted, False if task not found
+        """
+        try:
+            res = self.client.table(TABLE).delete().eq("id", task_id).execute()
+            # Check if any rows were affected
+            return res.data is not None and len(res.data) > 0
+        except Exception as e:
+            print(f"Delete error for task {task_id}: {e}")
+            return False
 
     def find_parent_tasks_by_team(self, team_id: int) -> List[Dict[str, Any]]:
         """
