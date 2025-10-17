@@ -3,20 +3,19 @@ from datetime import datetime, timedelta
 from dateutil import parser as dateparser
 import statistics
 
-from models.report import ReportData, TeamReportData, Report
-from repo.supa_report_repo import SupabaseReportRepo
+from models.report import ReportData, TeamReportData
+from repo.supa_report_repo import ReportRepo
 
 
 class ReportService:
-    def __init__(self, repo: Optional[SupabaseReportRepo] = None):
-        self.repo = repo or SupabaseReportRepo()
+    def __init__(self, repo: Optional[ReportRepo] = None):
+        self.repo = repo or ReportRepo()
 
-    def generate_personal_report(self, user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def generate_personal_report(self, user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Generate personal report for staff showing their own stats
         
         Args:
             user_id: ID of the user requesting the report
-            save_report: Whether to save the report to database
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -49,30 +48,16 @@ class ReportService:
                 "data": report_data.to_dict()
             }
 
-            # Save report if requested
-            if save_report:
-                saved_report = self._save_report(
-                    report_type="personal",
-                    generated_by=user_id,
-                    report_title=f"Personal Report - {user_info.get('name', 'User')}",
-                    report_data=report_data.to_dict(),
-                    team_id=user_info.get('team_id'),
-                    dept_id=user_info.get('dept_id')
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
-
             return result
 
         except Exception as e:
             return {"status": 500, "message": f"Error generating personal report: {str(e)}"}
 
-    def generate_team_report(self, manager_user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
-        """Generate team report for manager showing team performance and detailed workload analysis
+    def generate_team_report(self, manager_user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+        """Generate team report for managers showing their team members' stats
         
         Args:
-            manager_user_id: ID of the manager requesting the report
-            save_report: Whether to save the report to database
+            manager_user_id: ID of the manager requesting the report  
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -147,31 +132,16 @@ class ReportService:
                 }
             }
 
-            # Save report if requested
-            if save_report:
-                team_name = team_info.get('name', f'Team {team_id}') if team_info else f'Team {team_id}'
-                saved_report = self._save_report(
-                    report_type="team",
-                    generated_by=manager_user_id,
-                    report_title=f"Team Report - {team_name}",
-                    report_data=result["data"],
-                    team_id=team_id,
-                    dept_id=manager_info.get('dept_id')
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
-
             return result
 
         except Exception as e:
             return {"status": 500, "message": f"Error generating team report: {str(e)}"}
 
-    def generate_department_report(self, director_user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def generate_department_report(self, director_user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Generate department report for director showing department-wide performance and detailed workload analysis
         
         Args:
             director_user_id: ID of the director requesting the report
-            save_report: Whether to save the report to database
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -264,20 +234,6 @@ class ReportService:
                     "department_report": dept_report.to_dict()
                 }
             }
-
-            # Save report if requested
-            if save_report:
-                dept_name = dept_info.get('name', f'Department {dept_id}') if dept_info else f'Department {dept_id}'
-                saved_report = self._save_report(
-                    report_type="department",
-                    generated_by=director_user_id,
-                    report_title=f"Department Report - {dept_name}",
-                    report_data=result["data"],
-                    team_id=director_info.get('team_id'),
-                    dept_id=dept_id
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
 
             return result
 
@@ -871,25 +827,7 @@ class ReportService:
         
         return detailed_analysis
 
-    def _save_report(self, report_type: str, generated_by: int, report_title: str, 
-                    report_data: Dict[str, Any], team_id: Optional[int] = None, 
-                    dept_id: Optional[int] = None) -> Dict[str, Any]:
-        """Save a report to the database"""
-        report = Report(
-            report_type=report_type,
-            generated_by=generated_by,
-            report_title=report_title,
-            report_data=report_data,
-            team_id=team_id,
-            dept_id=dept_id
-        )
-        
-        # Convert to dictionary for database insertion (excludes id=None)
-        data = report.to_dict()
-        data.pop("id", None)
-        
-        # Save to database
-        return self.repo.save_report(data)
+    
 
     def get_saved_reports(self, user_id: int, report_type: Optional[str] = None) -> Dict[str, Any]:
         """Get all saved reports for a user"""
