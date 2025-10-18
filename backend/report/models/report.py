@@ -115,6 +115,29 @@ class ReportData:
             'team_id': self.team_id,
             'team_name': self.team_name
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'ReportData':
+        """Create ReportData object from dictionary"""
+        return cls(
+            user_id=int(data.get('user_id', 0)),
+            user_name=str(data.get('user_name', '')),
+            user_role=str(data.get('user_role', '')),
+            task_stats=data.get('task_stats', {}),
+            total_tasks=int(data.get('total_tasks', 0)),
+            completed_tasks=int(data.get('completed_tasks', 0)),
+            overdue_tasks=int(data.get('overdue_tasks', 0)),
+            task_details=data.get('task_details', []),
+            project_stats=data.get('project_stats', []),
+            projects_breakdown=data.get('projects_breakdown', []),
+            total_projects=int(data.get('total_projects', 0)),
+            average_task_duration=float(data['average_task_duration']) if data.get('average_task_duration') not in (None, '') else None,
+            projected_completion_dates=data.get('projected_completion_dates', []),
+            completion_percentage=float(data.get('completion_percentage', 0.0)),
+            overdue_percentage=float(data.get('overdue_percentage', 0.0)),
+            team_id=int(data['team_id']) if data.get('team_id') not in (None, '') else None,
+            team_name=str(data['team_name']) if data.get('team_name') not in (None, '') else None
+        )
 
 @dataclass
 class TeamReportData:
@@ -155,3 +178,30 @@ class TeamReportData:
             'team_task_details': self.team_task_details,
             'team_project_stats': self.team_project_stats
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'TeamReportData':
+        """Create TeamReportData object from dictionary"""
+        # Parse member reports
+        member_reports = []
+        for member_data in data.get('member_reports', []):
+            if isinstance(member_data, dict):
+                member_reports.append(ReportData.from_dict(member_data))
+            elif isinstance(member_data, ReportData):
+                member_reports.append(member_data)
+        
+        return cls(
+            team_id=int(data['team_id']) if data.get('team_id') not in (None, '') else None,
+            dept_id=int(data['dept_id']) if data.get('dept_id') not in (None, '') else None,
+            team_name=str(data['team_name']) if data.get('team_name') not in (None, '') else None,
+            dept_name=str(data['dept_name']) if data.get('dept_name') not in (None, '') else None,
+            member_reports=member_reports,
+            total_team_tasks=int(data.get('total_team_tasks', 0)),
+            total_team_projects=int(data.get('total_team_projects', 0)),
+            team_completion_percentage=float(data.get('team_completion_percentage', 0.0)),
+            team_overdue_percentage=float(data.get('team_overdue_percentage', 0.0)),
+            team_average_task_duration=float(data['team_average_task_duration']) if data.get('team_average_task_duration') not in (None, '') else None,
+            team_task_stats=data.get('team_task_stats', {}),
+            team_task_details=data.get('team_task_details', []),
+            team_project_stats=data.get('team_project_stats', [])
+        )
