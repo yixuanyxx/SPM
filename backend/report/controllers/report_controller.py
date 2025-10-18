@@ -173,6 +173,12 @@ def generate_team_report(manager_user_id: int):
                 team_average_task_duration=team_data.get("team_average_task_duration")
             )
             
+            # Add additional attributes that aren't in the constructor
+            team_report.team_project_stats = team_data.get("team_project_stats", [])
+            team_report.team_task_stats = team_data.get("team_task_stats", {})
+            team_report.team_task_details = team_data.get("team_task_details", [])
+            team_report.team_overdue_percentage = team_data.get("team_overdue_percentage", 0.0)
+            
             pdf_data = export_service.export_team_report_pdf(None, team_report, detailed_workload)
             
             return send_file(
@@ -198,6 +204,12 @@ def generate_team_report(manager_user_id: int):
                 team_completion_percentage=team_data.get("team_completion_percentage", 0.0),
                 team_average_task_duration=team_data.get("team_average_task_duration")
             )
+            
+            # Add additional attributes that aren't in the constructor
+            team_report.team_project_stats = team_data.get("team_project_stats", [])
+            team_report.team_task_stats = team_data.get("team_task_stats", {})
+            team_report.team_task_details = team_data.get("team_task_details", [])
+            team_report.team_overdue_percentage = team_data.get("team_overdue_percentage", 0.0)
             
             excel_data = export_service.export_team_report_excel(None, team_report, detailed_workload)
             
@@ -293,6 +305,12 @@ def generate_department_report(director_user_id: int):
                 team_average_task_duration=dept_data.get("team_average_task_duration")
             )
             
+            # Add additional attributes that aren't in the constructor
+            dept_report.team_project_stats = dept_data.get("team_project_stats", [])
+            dept_report.team_task_stats = dept_data.get("team_task_stats", {})
+            dept_report.team_task_details = dept_data.get("team_task_details", [])
+            dept_report.team_overdue_percentage = dept_data.get("team_overdue_percentage", 0.0)
+            
             pdf_data = export_service.export_team_report_pdf(None, dept_report, detailed_workload)
             
             return send_file(
@@ -318,6 +336,12 @@ def generate_department_report(director_user_id: int):
                 team_completion_percentage=dept_data.get("team_completion_percentage", 0.0),
                 team_average_task_duration=dept_data.get("team_average_task_duration")
             )
+            
+            # Add additional attributes that aren't in the constructor
+            dept_report.team_project_stats = dept_data.get("team_project_stats", [])
+            dept_report.team_task_stats = dept_data.get("team_task_stats", {})
+            dept_report.team_task_details = dept_data.get("team_task_details", [])
+            dept_report.team_overdue_percentage = dept_data.get("team_overdue_percentage", 0.0)
             
             excel_data = export_service.export_team_report_excel(None, dept_report, detailed_workload)
             

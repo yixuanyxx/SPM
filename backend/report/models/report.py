@@ -90,6 +90,10 @@ class ReportData:
     completion_percentage: float = 0.0
     overdue_percentage: float = 0.0
     
+    # Team/Department affiliation (for department reports)
+    team_id: Optional[int] = None
+    team_name: Optional[str] = None
+    
     def to_dict(self) -> Dict[str, Any]:
         """Convert ReportData object to dictionary"""
         return {
@@ -107,7 +111,9 @@ class ReportData:
             'average_task_duration': self.average_task_duration,
             'projected_completion_dates': self.projected_completion_dates,
             'completion_percentage': self.completion_percentage,
-            'overdue_percentage': self.overdue_percentage
+            'overdue_percentage': self.overdue_percentage,
+            'team_id': self.team_id,
+            'team_name': self.team_name
         }
 
 @dataclass
