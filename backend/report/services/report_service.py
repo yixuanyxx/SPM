@@ -3,20 +3,19 @@ from datetime import datetime, timedelta
 from dateutil import parser as dateparser
 import statistics
 
-from models.report import ReportData, TeamReportData, Report
-from repo.supa_report_repo import SupabaseReportRepo
+from models.report import ReportData, TeamReportData
+from repo.report_repo import ReportRepo
 
 
 class ReportService:
-    def __init__(self, repo: Optional[SupabaseReportRepo] = None):
-        self.repo = repo or SupabaseReportRepo()
+    def __init__(self, repo: Optional[ReportRepo] = None):
+        self.repo = repo or ReportRepo()
 
-    def generate_personal_report(self, user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def generate_personal_report(self, user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Generate personal report for staff showing their own stats
         
         Args:
             user_id: ID of the user requesting the report
-            save_report: Whether to save the report to database
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -38,8 +37,6 @@ class ReportService:
                 print(f"Warning: user_projects is None for user {user_id}")
                 user_projects = []
             
-            print(f"User {user_id}: Found {len(user_tasks)} tasks and {len(user_projects)} projects")
-
             # Generate report data
             report_data = self._generate_user_report_data(user_info, user_tasks, user_projects)
 
@@ -49,30 +46,16 @@ class ReportService:
                 "data": report_data.to_dict()
             }
 
-            # Save report if requested
-            if save_report:
-                saved_report = self._save_report(
-                    report_type="personal",
-                    generated_by=user_id,
-                    report_title=f"Personal Report - {user_info.get('name', 'User')}",
-                    report_data=report_data.to_dict(),
-                    team_id=user_info.get('team_id'),
-                    dept_id=user_info.get('dept_id')
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
-
             return result
 
         except Exception as e:
             return {"status": 500, "message": f"Error generating personal report: {str(e)}"}
 
-    def generate_team_report(self, manager_user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
-        """Generate team report for manager showing team performance and detailed workload analysis
+    def generate_team_report(self, manager_user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+        """Generate team report for managers showing their team members' stats
         
         Args:
-            manager_user_id: ID of the manager requesting the report
-            save_report: Whether to save the report to database
+            manager_user_id: ID of the manager requesting the report  
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -147,31 +130,16 @@ class ReportService:
                 }
             }
 
-            # Save report if requested
-            if save_report:
-                team_name = team_info.get('name', f'Team {team_id}') if team_info else f'Team {team_id}'
-                saved_report = self._save_report(
-                    report_type="team",
-                    generated_by=manager_user_id,
-                    report_title=f"Team Report - {team_name}",
-                    report_data=result["data"],
-                    team_id=team_id,
-                    dept_id=manager_info.get('dept_id')
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
-
             return result
 
         except Exception as e:
             return {"status": 500, "message": f"Error generating team report: {str(e)}"}
 
-    def generate_department_report(self, director_user_id: int, save_report: bool = False, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+    def generate_department_report(self, director_user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """Generate department report for director showing department-wide performance and detailed workload analysis
         
         Args:
             director_user_id: ID of the director requesting the report
-            save_report: Whether to save the report to database
             start_date: Start date for filtering (YYYY-MM-DD format)
             end_date: End date for filtering (YYYY-MM-DD format)
         """
@@ -209,21 +177,11 @@ class ReportService:
             if not dept_members:
                 print(f"Warning: No department members found for dept_id {dept_id}")
 
-            # Generate personal reports for all department members except directors and managers (compilation approach)
+            # Generate personal reports for all department members (including managers, excluding director)
             member_reports = []
             for member in dept_members:
-                # Skip directors and managers from the department report
-                member_role = member.get('role')
-                if member_role is None:
-                    member_role_str = ''
-                elif isinstance(member_role, int):
-                    role_map = {1: 'staff', 2: 'manager', 3: 'director'}
-                    member_role_str = role_map.get(member_role, '')
-                else:
-                    member_role_str = str(member_role).lower()
-                
-                # Skip directors and managers
-                if member_role_str in ['director', 'manager']:
+                # Skip only the requesting director
+                if member['userid'] == director_user_id:
                     continue
                     
                 member_tasks = self.repo.get_user_tasks(member['userid'], start_date, end_date)
@@ -239,11 +197,17 @@ class ReportService:
                 
                 # Add team information to member report for department view
                 member_report.team_id = member.get('team_id')
-                member_report.team_name = None
+                member_report.team_name = 'Unknown Team'  # Default fallback
+                
                 if member.get('team_id'):
                     team_info = self.repo.get_team_info(member.get('team_id'))
-                    if team_info:
-                        member_report.team_name = team_info.get('name', f'Team {member.get("team_id")}')
+                    if team_info and team_info.get('name'):
+                        member_report.team_name = team_info.get('name')
+                    else:
+                        # Fallback: Use team_id if name not available
+                        member_report.team_name = f'Team {member.get("team_id")}'
+                else:
+                    member_report.team_name = 'No Team Assigned'
                 
                 member_reports.append(member_report)
 
@@ -264,20 +228,6 @@ class ReportService:
                     "department_report": dept_report.to_dict()
                 }
             }
-
-            # Save report if requested
-            if save_report:
-                dept_name = dept_info.get('name', f'Department {dept_id}') if dept_info else f'Department {dept_id}'
-                saved_report = self._save_report(
-                    report_type="department",
-                    generated_by=director_user_id,
-                    report_title=f"Department Report - {dept_name}",
-                    report_data=result["data"],
-                    team_id=director_info.get('team_id'),
-                    dept_id=dept_id
-                )
-                result["saved_report_id"] = saved_report["id"]
-                result["message"] += f" (Saved as Report ID: {saved_report['id']})"
 
             return result
 
@@ -329,18 +279,16 @@ class ReportService:
             project_id = project.get('id')
             project_name = project.get('proj_name', 'Unknown Project')
             
-            print(f"Processing project {project_id}: {project_name} for user {user_info.get('name')}")
-            
             # Get all tasks for this project from the task service
             project_tasks = self.repo.get_project_tasks(project_id) if project_id else []
             if project_tasks is None:
                 project_tasks = []
             
-            print(f"Found {len(project_tasks)} total tasks in project {project_id}")
-            
             # Process each task in the project
             project_task_details = []
             project_completed_tasks = 0
+            project_ongoing_tasks = 0
+            project_under_review_tasks = 0
             project_overdue_tasks = 0
             project_task_durations = []
             
@@ -396,9 +344,19 @@ class ReportService:
                 # Calculate completion time for completed tasks
                 completion_days = None
                 was_completed_late = False
-                if status == 'Completed':
+                
+                # Normalize status and count tasks by status
+                normalized_status = status.lower()
+                
+                # Count tasks by status
+                if normalized_status == 'completed':
                     project_completed_tasks += 1
-                    
+                elif normalized_status == 'ongoing':
+                    project_ongoing_tasks += 1
+                elif normalized_status == 'under review':
+                    project_under_review_tasks += 1
+                
+                if normalized_status == 'completed':
                     if created_at and completed_at:
                         try:
                             created_date = dateparser.parse(created_at)
@@ -460,6 +418,8 @@ class ReportService:
                 'project_name': project_name,
                 'total_tasks': total_project_tasks,
                 'completed_tasks': project_completed_tasks,
+                'in_progress_tasks': project_ongoing_tasks,
+                'under_review_tasks': project_under_review_tasks,
                 'overdue_tasks': project_overdue_tasks,
                 'completion_percentage': project_completion_percentage,
                 'overdue_percentage': project_overdue_percentage,
@@ -507,12 +467,29 @@ class ReportService:
         
         # Create task_details list for backward compatibility
         all_task_details = []
+        task_stats = {}
         for project_breakdown in projects_breakdown:
             for task in project_breakdown['task_details']:
                 task_copy = task.copy()
                 task_copy['project_name'] = project_breakdown['project_name']
                 all_task_details.append(task_copy)
+                
+                # Count task statuses
+                task_status = task.get('status', 'unknown')
+                if isinstance(task_status, int):
+                    # Map integer status to string
+                    status_map = {1: 'ongoing', 2: 'ongoing', 3: 'completed', 4: 'under review'}
+                    task_status = status_map.get(task_status, 'unknown')
+                elif isinstance(task_status, str):
+                    task_status = task_status.lower()
+                    # Normalize legacy status names
+                    if task_status in ['pending', 'in progress']:
+                        task_status = 'ongoing'
+                
+                task_stats[task_status] = task_stats.get(task_status, 0) + 1
+        
         report_data.task_details = all_task_details
+        report_data.task_stats = task_stats
 
         return report_data
 
@@ -589,49 +566,190 @@ class ReportService:
             for status, count in task_stats.items():
                 team_task_stats[status] = team_task_stats.get(status, 0) + (count or 0)
 
-        # Aggregate all project details from team members
-        all_project_stats = []
-        for member_report in team_report.member_reports:
-            project_stats = getattr(member_report, 'project_stats', []) or []
-            for project in project_stats:
-                if not project:  # Skip None projects
+        # Aggregate all project details from team members (fixing double-counting)
+        # Use a dict to track which projects we've already processed to avoid double-counting tasks
+        all_projects_dict = {}
+        
+        for member_idx, member_report in enumerate(team_report.member_reports, 1):
+            projects_breakdown = getattr(member_report, 'projects_breakdown', []) or []
+            
+            for project_breakdown in projects_breakdown:
+                if not project_breakdown:
                     continue
                     
-                # Check if project already exists in team aggregation
-                project_id = project.get('project_id')
-                existing_project = next((p for p in all_project_stats if p.get('project_id') == project_id), None)
+                project_id = project_breakdown.get('project_id')
+                if not project_id:
+                    continue
                 
-                if existing_project:
-                    # Merge project data from multiple team members
-                    existing_project['total_tasks'] = (existing_project.get('total_tasks', 0) or 0) + (project.get('total_tasks', 0) or 0)
-                    existing_project['completed_tasks'] = (existing_project.get('completed_tasks', 0) or 0) + (project.get('completed_tasks', 0) or 0)
-                    existing_project['overdue_tasks'] = (existing_project.get('overdue_tasks', 0) or 0) + (project.get('overdue_tasks', 0) or 0)
-                    existing_project['late_completions'] = (existing_project.get('late_completions', 0) or 0) + (project.get('late_completions', 0) or 0)
+                # If we haven't seen this project yet, add it with full task details
+                if project_id not in all_projects_dict:
+                    # Get all tasks for this project from the repo (to avoid double-counting)
+                    project_tasks = self.repo.get_project_tasks(project_id) if project_id else []
+                    if project_tasks is None:
+                        project_tasks = []
                     
-                    # Merge task assignees safely
-                    project_assignees = project.get('task_assignees', {}) or {}
-                    for owner_id, assignee_info in project_assignees.items():
-                        if owner_id not in existing_project['task_assignees']:
-                            existing_project['task_assignees'][owner_id] = assignee_info
-                        else:
-                            existing_tasks = existing_project['task_assignees'][owner_id].get('tasks', []) or []
-                            new_tasks = assignee_info.get('tasks', []) or []
-                            existing_project['task_assignees'][owner_id]['tasks'] = existing_tasks + new_tasks
+                    # Build member involvement map for this project
+                    member_involvement = {}  # {member_id: {'name': name, 'role': role, 'involved_tasks': [task_ids]}}
                     
-                    # Recalculate percentages
-                    total_tasks_proj = existing_project.get('total_tasks', 0) or 0
-                    completed_tasks_proj = existing_project.get('completed_tasks', 0) or 0
-                    overdue_tasks_proj = existing_project.get('overdue_tasks', 0) or 0
+                    # FIRST: Add the current member as involved (since this project is in their breakdown)
+                    current_member_id = member_report.user_id
+                    member_involvement[current_member_id] = {
+                        'name': member_report.user_name,
+                        'role': member_report.user_role,
+                        'involved_tasks': []
+                    }
                     
-                    existing_project['completion_percentage'] = (completed_tasks_proj / total_tasks_proj * 100) if total_tasks_proj > 0 else 0
-                    existing_project['overdue_percentage'] = (overdue_tasks_proj / total_tasks_proj * 100) if total_tasks_proj > 0 else 0
+                    # THEN: Track task ownership and collaboration
+                    # Also enrich tasks with owner names, collaborator names, and completion days
+                    for task in project_tasks:
+                        owner_id = task.get('owner_id')
+                        collaborators = task.get('collaborators', []) or []
+                        
+                        # Enrich task with owner name if not present
+                        if owner_id and not task.get('owner_name'):
+                            owner_info = self.repo.get_user_info(owner_id)
+                            if owner_info:
+                                task['owner_name'] = owner_info.get('name', f'User {owner_id}')
+                            else:
+                                task['owner_name'] = f'User {owner_id}'
+                        
+                        # Enrich task with collaborator names
+                        collab_names = []
+                        if isinstance(collaborators, list):
+                            for collab_id in collaborators:
+                                collab_info = self.repo.get_user_info(collab_id)
+                                if collab_info:
+                                    collab_names.append(collab_info.get('name', f'User {collab_id}'))
+                                else:
+                                    collab_names.append(f'User {collab_id}')
+                        task['collaborator_names'] = collab_names  # Add to task data
+                        
+                        # Calculate and enrich task with completion_days if not present
+                        if not task.get('completion_days'):
+                            status = task.get('status', '').lower()
+                            if status == 'completed':
+                                created_at = task.get('created_at')
+                                completed_at = task.get('completed_at')
+                                if created_at and completed_at:
+                                    try:
+                                        created_date = dateparser.parse(created_at)
+                                        completed_date = dateparser.parse(completed_at)
+                                        duration_days = (completed_date - created_date).days
+                                        task['completion_days'] = max(duration_days, 1) if duration_days >= 0 else None
+                                    except:
+                                        pass
+                        
+                        # Track owner
+                        if owner_id:
+                            if owner_id not in member_involvement:
+                                owner_info = self.repo.get_user_info(owner_id)
+                                member_involvement[owner_id] = {
+                                    'name': owner_info.get('name', f'User {owner_id}') if owner_info else f'User {owner_id}',
+                                    'role': owner_info.get('role', 'Unknown') if owner_info else 'Unknown',
+                                    'involved_tasks': []
+                                }
+                            member_involvement[owner_id]['involved_tasks'].append(task.get('id'))
+                        
+                        # Track collaborators
+                        if isinstance(collaborators, list):
+                            for collab_id in collaborators:
+                                if collab_id not in member_involvement:
+                                    collab_info = self.repo.get_user_info(collab_id)
+                                    member_involvement[collab_id] = {
+                                        'name': collab_info.get('name', f'User {collab_id}') if collab_info else f'User {collab_id}',
+                                        'role': collab_info.get('role', 'Unknown') if collab_info else 'Unknown',
+                                        'involved_tasks': []
+                                    }
+                                member_involvement[collab_id]['involved_tasks'].append(task.get('id'))
+                    
+                    # Calculate project metrics based on actual tasks (not duplicated)
+                    total_project_tasks = len(project_tasks)
+                    completed_tasks_count = sum(1 for t in project_tasks if t.get('status', '').lower() == 'completed')
+                    ongoing_tasks = sum(1 for t in project_tasks if t.get('status', '').lower() == 'ongoing')
+                    under_review_tasks = sum(1 for t in project_tasks if t.get('status', '').lower() == 'under review')
+                    overdue_tasks = 0
+                    
+                    # Calculate average task duration from ALL completed tasks in project
+                    task_durations = []
+                    for task in project_tasks:
+                        status = task.get('status', 'Unknown')
+                        
+                        # For completed tasks, calculate duration
+                        if status.lower() == 'completed':
+                            created_at = task.get('created_at')
+                            completed_at = task.get('completed_at')
+                            if created_at and completed_at:
+                                try:
+                                    created_date = dateparser.parse(created_at)
+                                    completed_date = dateparser.parse(completed_at)
+                                    duration_days = (completed_date - created_date).days
+                                    if duration_days >= 0:
+                                        task_durations.append(max(duration_days, 1))
+                                except:
+                                    pass
+                    
+                    avg_task_duration = statistics.mean(task_durations) if task_durations else None
+                    
+                    # Calculate projected completion date
+                    projected_completion = None
+                    if avg_task_duration and total_project_tasks > completed_tasks_count:
+                        remaining_tasks = total_project_tasks - completed_tasks_count
+                        estimated_days = int(remaining_tasks * avg_task_duration)
+                        projected_completion = (datetime.now() + timedelta(days=estimated_days)).strftime('%Y-%m-%d')
+                    elif total_project_tasks == completed_tasks_count:
+                        projected_completion = "Completed"
+                    
+                    # Count overdue tasks
+                    for task in project_tasks:
+                        status = task.get('status', 'Unknown')
+                        due_date = task.get('due_date')
+                        if due_date and status not in ['Completed', 'completed']:
+                            try:
+                                due_date_parsed = dateparser.parse(due_date)
+                                if due_date_parsed and due_date_parsed.date() < datetime.now().date():
+                                    overdue_tasks += 1
+                            except:
+                                pass
+                    
+                    # Store enriched project data
+                    all_projects_dict[project_id] = {
+                        'project_id': project_id,
+                        'project_name': project_breakdown.get('project_name', 'Unknown Project'),
+                        'total_tasks': total_project_tasks,
+                        'completed_tasks': completed_tasks_count,
+                        'in_progress_tasks': ongoing_tasks,
+                        'under_review_tasks': under_review_tasks,
+                        'overdue_tasks': overdue_tasks,
+                        'completion_percentage': (completed_tasks_count / total_project_tasks * 100) if total_project_tasks > 0 else 0,
+                        'overdue_percentage': (overdue_tasks / total_project_tasks * 100) if total_project_tasks > 0 else 0,
+                        'average_task_duration': avg_task_duration,
+                        'projected_completion_date': projected_completion,
+                        'all_tasks': project_tasks,  # Store all tasks for this project
+                        'member_involvement': member_involvement  # Track which members are involved
+                    }
                 else:
-                    # Add new project to team aggregation
-                    project_copy = project.copy()
-                    # Ensure task_assignees exists
-                    if 'task_assignees' not in project_copy:
-                        project_copy['task_assignees'] = {}
-                    all_project_stats.append(project_copy)
+                    # Project already exists, just add this member to the involvement map
+                    current_member_id = member_report.user_id
+                    existing_involvement = all_projects_dict[project_id]['member_involvement']
+                    
+                    if current_member_id not in existing_involvement:
+                        # Add this member as involved
+                        existing_involvement[current_member_id] = {
+                            'name': member_report.user_name,
+                            'role': member_report.user_role,
+                            'involved_tasks': []
+                        }
+                        
+                        # Check if this member owns or collaborates on any tasks
+                        for task in all_projects_dict[project_id]['all_tasks']:
+                            owner_id = task.get('owner_id')
+                            collaborators = task.get('collaborators', []) or []
+                            
+                            if owner_id == current_member_id or current_member_id in collaborators:
+                                existing_involvement[current_member_id]['involved_tasks'].append(task.get('id'))
+        
+        # Convert dict to list for final output
+        all_project_stats = list(all_projects_dict.values())
 
         # Set aggregated data
         team_report.total_team_tasks = total_tasks
@@ -710,6 +828,7 @@ class ReportService:
                         'total_tasks': 0,
                         'completed_tasks': 0,
                         'in_progress_tasks': 0,
+                        'under_review_tasks': 0,
                         'overdue_tasks': 0,
                         'estimated_hours': 0,
                         'completion_percentage': 0
@@ -722,16 +841,16 @@ class ReportService:
                 status_raw = task.get('status')
                 if status_raw is None:
                     status = 'unknown'
-                elif isinstance(status_raw, int):
-                    # Handle case where status is stored as integer
-                    status_map = {1: 'pending', 2: 'in progress', 3: 'completed', 4: 'under review'}
-                    status = status_map.get(status_raw, 'unknown')
-                else:
-                    status = str(status_raw).lower()
-                if status == 'completed':
+                
+                
+                if status == 'Completed':
                     projects_tasks[project_id]['completed_tasks'] += 1
-                elif status == 'in progress':
+                elif status == 'Ongoing':
                     projects_tasks[project_id]['in_progress_tasks'] += 1
+                elif status == 'Under Review':
+                    if 'under_review_tasks' not in projects_tasks[project_id]:
+                        projects_tasks[project_id]['under_review_tasks'] = 0
+                    projects_tasks[project_id]['under_review_tasks'] += 1
                 
                 if task.get('is_overdue'):
                     projects_tasks[project_id]['overdue_tasks'] += 1
@@ -871,25 +990,7 @@ class ReportService:
         
         return detailed_analysis
 
-    def _save_report(self, report_type: str, generated_by: int, report_title: str, 
-                    report_data: Dict[str, Any], team_id: Optional[int] = None, 
-                    dept_id: Optional[int] = None) -> Dict[str, Any]:
-        """Save a report to the database"""
-        report = Report(
-            report_type=report_type,
-            generated_by=generated_by,
-            report_title=report_title,
-            report_data=report_data,
-            team_id=team_id,
-            dept_id=dept_id
-        )
-        
-        # Convert to dictionary for database insertion (excludes id=None)
-        data = report.to_dict()
-        data.pop("id", None)
-        
-        # Save to database
-        return self.repo.save_report(data)
+    
 
     def get_saved_reports(self, user_id: int, report_type: Optional[str] = None) -> Dict[str, Any]:
         """Get all saved reports for a user"""
