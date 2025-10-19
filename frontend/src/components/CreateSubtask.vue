@@ -1,5 +1,5 @@
 <template>
-  <div class="subtasks-section">
+  <div class="subtasks-section" ref="subtasksSectionRef">
     <!-- Toast Notification -->
     <transition name="toast">
       <div v-if="toast.show" :class="['toast-notification', toast.type]">
@@ -216,6 +216,7 @@ const collaboratorQuery = ref('')
 const selectedCollaborators = ref([])
 const collaboratorSuggestions = ref([])
 const userRole = ref('')
+const subtasksSectionRef = ref(null)
 
 // Get user role on component mount
 import { getCurrentUserData } from '../services/session.js'
@@ -241,10 +242,24 @@ const getDefaultStatus = () => {
   return 'Ongoing'
 }
 
+// Scroll to form function
+const scrollToForm = () => {
+  if (subtasksSectionRef.value) {
+    // Use nextTick to ensure DOM is updated before scrolling
+    setTimeout(() => {
+      const formElement = subtasksSectionRef.value.querySelector('.subtask-form')
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 0)
+  }
+}
+
 // Watch for autoOpen prop and automatically open the form
 watch(() => props.autoOpen, (newValue) => {
   if (newValue) {
     showSubtaskForm.value = true
+    scrollToForm()
   }
 }, { immediate: true })
 
@@ -333,7 +348,6 @@ const addSubtask = () => {
   // Validate for duplicate subtask name
   const taskNameLower = currentSubtask.value.task_name.trim().toLowerCase()
   const isDuplicate = props.modelValue.some((subtask, index) => {
-    // If editing, exclude the current subtask from duplication check
     if (editingIndex.value !== null && index === editingIndex.value) {
       return false
     }
@@ -345,7 +359,6 @@ const addSubtask = () => {
     return
   }
 
-  // Validate that due date is not in the past
   const selectedDate = new Date(currentSubtask.value.due_date)
   const now = new Date()
   
@@ -354,37 +367,41 @@ const addSubtask = () => {
     return
   }
 
-  // Create new subtask with proper data types
+  // Create new subtask - NO API CALLS IN THIS COMPONENT
   const newSubtask = { 
     task_name: currentSubtask.value.task_name,
     description: currentSubtask.value.description,
     due_date: currentSubtask.value.due_date,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
-    collaborators: selectedCollaborators.value.map(u => parseInt(u.userid)),
-    id: Date.now() // Temporary ID for frontend display
+    // Include collaborators with full user object data
+    collaborators: selectedCollaborators.value.map(u => ({
+      userid: parseInt(u.userid),
+      email: u.email
+    })),
+    id: Date.now()
   }
 
   if (editingIndex.value !== null) {
     // Update existing subtask
+    newSubtask.id = props.modelValue[editingIndex.value].id
     const updatedSubtasks = [...props.modelValue]
     updatedSubtasks[editingIndex.value] = newSubtask
     emit('update:modelValue', updatedSubtasks)
-    showToast('Subtask updated successfully!', 'success')
+    showToast('Subtask updated!', 'success')
     editingIndex.value = null
   } else {
-    // Add new subtask
+    // Add new subtask - just emit back to parent
     emit('update:modelValue', [...props.modelValue, newSubtask])
-    showToast('Subtask added successfully!', 'success')
+    showToast('Subtask added to form!', 'success')
   }
   
-  // Reset form and close
   resetForm()
   showSubtaskForm.value = false
   showErrors.value = false
 }
 
-const editSubtask = (sortedIndex) => {
+const editSubtask = async (sortedIndex) => {
   // Get the actual subtask from sorted list
   const subtaskToEdit = sortedSubtasks.value[sortedIndex]
   
@@ -399,9 +416,56 @@ const editSubtask = (sortedIndex) => {
     status: subtaskToEdit.status,
     collaborators: subtaskToEdit.collaborators || []
   }
+  
+  // Load existing collaborators
+  if (subtaskToEdit.collaborators && subtaskToEdit.collaborators.length > 0) {
+    try {
+      // Fetch user details for each collaborator ID
+      const collaboratorDetails = await Promise.all(
+        subtaskToEdit.collaborators.map(collaboratorId => {
+          // If it's already an object with userid and email, return it
+          if (typeof collaboratorId === 'object' && collaboratorId.userid) {
+            return Promise.resolve(collaboratorId);
+          }
+          
+          // Otherwise fetch the user details from backend
+          return fetch(`http://localhost:5003/users/${collaboratorId}`)
+            .then(res => {
+              if (!res.ok) throw new Error(`Failed to fetch user ${collaboratorId}`);
+              return res.json();
+            })
+            .then(data => ({
+              userid: data.data.id || collaboratorId,
+              email: data.data.email || `User ${collaboratorId}`
+            }))
+            .catch(err => {
+              console.error(`Error fetching user ${collaboratorId}:`, err);
+              // Fallback if user fetch fails
+              return {
+                userid: collaboratorId,
+                email: `User ${collaboratorId}`
+              };
+            });
+        })
+      );
+      
+      console.log('Loaded collaborators:', collaboratorDetails);
+      selectedCollaborators.value = collaboratorDetails;
+    } catch (err) {
+      console.error('Error loading collaborators:', err);
+      selectedCollaborators.value = [];
+    }
+  } else {
+    selectedCollaborators.value = [];
+  }
+  
   editingIndex.value = originalIndex
   showSubtaskForm.value = true
   showErrors.value = false
+
+  // Scroll to form after opening it
+  scrollToForm()
+
 }
 
 const resetForm = () => {
@@ -429,8 +493,11 @@ const toggleSubtaskForm = () => {
   if (showSubtaskForm.value) {
     resetForm()
     showErrors.value = false
+  } else {
+    // Scroll to form when opening
+    showSubtaskForm.value = true
+    scrollToForm()
   }
-  showSubtaskForm.value = !showSubtaskForm.value
 }
 
 const removeSubtask = (index) => {

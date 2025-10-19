@@ -484,6 +484,20 @@ export default {
 
           for (const [index, subtask] of this.newTask.subtasks.entries()) {
             try {
+              // Extract subtask's own collaborators (not parent's)
+              let subtaskCollaboratorIds = [];
+              if (subtask.collaborators && subtask.collaborators.length > 0) {
+                subtaskCollaboratorIds = subtask.collaborators.map(collab => {
+                  // Handle both formats: {userid, email} and just ID
+                  if (typeof collab === 'object' && collab.userid) {
+                    return parseInt(collab.userid);
+                  }
+                  return parseInt(collab);
+                });
+              }
+              
+              console.log(`Subtask ${index + 1} collaborators:`, subtaskCollaboratorIds);
+
               // Prepare subtask data
               const subtaskData = {
                 owner_id: this.newTask.owner_id,
@@ -494,7 +508,8 @@ export default {
                 status: subtask.status || 'Ongoing',
                 project_id: this.newTask.project_id || null,
                 parent_task: createdParentTask.id, // Link to parent
-                collaborators: collaboratorIds.length > 0 ? collaboratorIds.join(',') : ''
+                // Use subtask's own collaborators, not parent's
+                collaborators: subtaskCollaboratorIds.length > 0 ? subtaskCollaboratorIds.join(',') : ''
               };
 
               console.log(`Creating subtask ${index + 1}/${this.newTask.subtasks.length}:`, subtaskData);
