@@ -7,24 +7,28 @@ export const sessionState = reactive({
   user: null,
   userid: null,
   role: null,
+  email: null,
   loading: true,
 });
 
 // LocalStorage keys
 const USERID_KEY = 'spm_userid';
 const ROLE_KEY = 'spm_role';
+const EMAIL_KEY = 'spm_email';
 
 // Helper functions for localStorage
-function setUserData(userid, role) {
+function setUserData(userid, role, email) {
   if (userid) localStorage.setItem(USERID_KEY, userid.toString());
   if (role) localStorage.setItem(ROLE_KEY, role);
-  console.log('Stored in localStorage:', { userid, role });
+  if (email) localStorage.setItem(EMAIL_KEY, email);
+  console.log('Stored in localStorage:', { userid, role, email: email || 'not set' });
 }
 
 function getUserData() {
   const data = {
     userid: localStorage.getItem(USERID_KEY),
-    role: localStorage.getItem(ROLE_KEY)
+    role: localStorage.getItem(ROLE_KEY),
+    email: localStorage.getItem(EMAIL_KEY)
   };
   console.log('Retrieved from localStorage:', data);
   return data;
@@ -33,6 +37,7 @@ function getUserData() {
 function clearUserData() {
   localStorage.removeItem(USERID_KEY);
   localStorage.removeItem(ROLE_KEY);
+  localStorage.removeItem(EMAIL_KEY);
   console.log('Cleared localStorage');
 }
 
@@ -42,12 +47,12 @@ async function fetchUserData(userId) {
     console.log('🔍 Fetching user data for userId:', userId);
     const { data, error } = await supabase
       .from('user')
-      .select('userid, role')
+      .select('userid, role, email')
       .eq('id', userId)
       .single();
 
     if (error) {
-      console.error('Error fetching user data:', error);
+      console.error('Error fetching user data from user table:', error);
       return null;
     }
 
@@ -68,7 +73,8 @@ export async function initSession() {
   if (storedUserData.userid && storedUserData.role) {
     sessionState.userid = storedUserData.userid;
     sessionState.role = storedUserData.role;
-    console.log('Restored from localStorage:', { userid: storedUserData.userid, role: storedUserData.role });
+    sessionState.email = storedUserData.email;
+    console.log('Restored from localStorage:', { userid: storedUserData.userid, role: storedUserData.role, email: storedUserData.email });
   }
 
   const {
@@ -83,7 +89,8 @@ export async function initSession() {
     hasSession: !!session, 
     userId: session?.user?.id,
     currentUserid: sessionState.userid,
-    currentRole: sessionState.role 
+    currentRole: sessionState.role,
+    currentEmail: sessionState.email 
   });
 
   if (session?.user) {
@@ -93,17 +100,20 @@ export async function initSession() {
     
     // Fetch and store user data
     const userData = await fetchUserData(session.user.id);
+    
     if (userData) {
       sessionState.userid = userData.userid;
       sessionState.role = userData.role;
-      setUserData(userData.userid, userData.role);
-      console.log('Updated session state:', { userid: userData.userid, role: userData.role });
+      sessionState.email = userData.email;
+      setUserData(userData.userid, userData.role, userData.email);
+      console.log('Updated session state:', { userid: userData.userid, role: userData.role, email: sessionState.email });
     }
   } else {
     console.log('No user session, clearing data...');
     // Clear user data if no session
     sessionState.userid = null;
     sessionState.role = null;
+    sessionState.email = null;
     clearUserData();
   }
 
@@ -121,17 +131,20 @@ export async function initSession() {
       
       // Fetch and store user data
       const userData = await fetchUserData(newSession.user.id);
+      
       if (userData) {
         sessionState.userid = userData.userid;
         sessionState.role = userData.role;
-        setUserData(userData.userid, userData.role);
-        console.log('Updated session state from auth change:', { userid: userData.userid, role: userData.role });
+        sessionState.email = userData.email;
+        setUserData(userData.userid, userData.role, userData.email);
+        console.log('Updated session state from auth change:', { userid: userData.userid, role: userData.role, email: sessionState.email });
       }
     } else {
       console.log('User logged out, clearing data...');
       // Clear user data on logout
       sessionState.userid = null;
       sessionState.role = null;
+      sessionState.email = null;
       clearUserData();
     }
   });
@@ -142,6 +155,7 @@ export function getCurrentUserData() {
   return {
     userid: sessionState.userid,
     role: sessionState.role,
+    email: sessionState.email,
     isLoggedIn: !!sessionState.session
   };
 }

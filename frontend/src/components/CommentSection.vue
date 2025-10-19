@@ -106,15 +106,20 @@
     </div>
 
     <!-- No Comments State -->
-    <div v-if="comments.length === 0" class="no-comments">
+    <div v-if="comments.length === 0 && !isLoading" class="no-comments">
       <i class="bi bi-chat-left"></i>
       <p>No comments yet. Be the first to comment!</p>
+    </div>
+
+    <!-- Loading State -->
+    <div v-if="isLoading" class="loading-state">
+      <p>Loading comments...</p>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { getCurrentUserData } from '../services/session.js'
 
 const props = defineProps({
@@ -125,80 +130,233 @@ const props = defineProps({
   taskOwnerId: {
     type: [String, Number],
     required: true
-  },
-  comments: {
-    type: Array,
-    default: () => []
-  },
-  users: {
-    type: Object,
-    default: () => ({})
   }
 })
 
-const emit = defineEmits(['add-comment', 'edit-comment', 'delete-comment'])
+const emit = defineEmits(['comments-updated'])
 
+// Configuration
+const COMMENTS_API_URL = import.meta.env.VITE_COMMENTS_API_URL || 'http://localhost:5008'
+
+// User data
 const userData = getCurrentUserData()
 const currentUserId = ref(parseInt(userData.userid) || null)
 const currentUserRole = ref(userData.role?.toLowerCase() || '')
+const currentUserEmail = ref(userData.email || '')
 
+// State
+const comments = ref([])
+const users = ref({})
 const showCommentForm = ref(false)
 const isSubmitting = ref(false)
 const newComment = ref('')
+const isLoading = ref(false)
+const editingCommentId = ref(null)
 
+// Extract username from email
+const extractUsernameFromEmail = (email) => {
+  if (!email) return 'Unknown'
+  const atIndex = email.indexOf('@')
+  return atIndex > 0 ? email.substring(0, atIndex) : email
+}
+
+// Fetch comments for the current task
+const fetchComments = async () => {
+  if (!props.taskId) return
+  
+  isLoading.value = true
+  try {
+    const response = await fetch(`${COMMENTS_API_URL}/comments/task/${props.taskId}`)
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        comments.value = []
+        return
+      }
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    if (data && data.data) {
+      comments.value = data.data
+      emit('comments-updated', comments.value)
+    }
+  } catch (error) {
+    console.error('Error fetching comments:', error)
+    comments.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Submit new comment
 const submitComment = async () => {
-  if (!newComment.value.trim()) return
+  console.log('=== SUBMIT COMMENT CLICKED ===')
+  console.log('New comment value:', newComment.value)
+  console.log('Task ID:', props.taskId)
+  
+  if (!newComment.value.trim()) {
+    console.error('Comment is empty!')
+    alert('Please enter a comment')
+    return
+  }
+  
+  if (!props.taskId) {
+    console.error('No task ID provided!')
+    alert('Error: No task ID')
+    return
+  }
 
   isSubmitting.value = true
 
   try {
+    const username = extractUsernameFromEmail(currentUserEmail.value)
+    
+    console.log('Current user data:', {
+      userId: currentUserId.value,
+      email: currentUserEmail.value,
+      username: username,
+      role: currentUserRole.value
+    })
+    
     const commentData = {
-      task_id: props.taskId,
+      task_id: parseInt(props.taskId),
       user_id: currentUserId.value,
-      user_name: userData.username,
+      user_name: username,
       user_role: currentUserRole.value,
-      content: newComment.value,
-      created_at: new Date().toISOString()
+      content: newComment.value.trim()
     }
 
-    emit('add-comment', commentData)
+    console.log('Submitting comment data:', commentData)
+    console.log('API URL:', COMMENTS_API_URL)
+
+    // If editing existing comment
+    if (editingCommentId.value) {
+      const response = await fetch(
+        `${COMMENTS_API_URL}/comments/${editingCommentId.value}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ content: newComment.value.trim() })
+        }
+      )
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.Message || `HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      
+      if (data && data.data) {
+        // Update comment in local array
+        const index = comments.value.findIndex(c => c.id === editingCommentId.value)
+        if (index !== -1) {
+          comments.value[index] = data.data
+        }
+        emit('comments-updated', comments.value)
+      }
+      editingCommentId.value = null
+    } else {
+      // Create new comment
+      console.log('Creating comment with data:', commentData)
+      
+      const response = await fetch(
+        `${COMMENTS_API_URL}/comments/create`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(commentData)
+        }
+      )
+      
+      console.log('Response status:', response.status)
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        console.error('Error creating comment:', errorData)
+        throw new Error(errorData.Message || `HTTP error! status: ${response.status}`)
+      }
+      
+      const data = await response.json()
+      console.log('Comment created successfully:', data)
+      
+      if (data && data.data) {
+        // Add new comment to the beginning of the array
+        comments.value.unshift(data.data)
+        emit('comments-updated', comments.value)
+        console.log('Comment added to list. Total comments:', comments.value.length)
+      }
+    }
+
     newComment.value = ''
     showCommentForm.value = false
   } catch (error) {
     console.error('Error submitting comment:', error)
+    alert('Failed to post comment. Please try again.')
   } finally {
     isSubmitting.value = false
   }
 }
 
+// Cancel comment
 const cancelComment = () => {
   newComment.value = ''
   showCommentForm.value = false
+  editingCommentId.value = null
 }
 
+// Edit comment
 const editComment = (comment) => {
   newComment.value = comment.content
   showCommentForm.value = true
+  editingCommentId.value = comment.id
 }
 
-const deleteComment = (commentId) => {
-  if (confirm('Delete this comment?')) {
-    emit('delete-comment', commentId)
+// Delete comment
+const deleteComment = async (commentId) => {
+  if (!confirm('Delete this comment?')) return
+
+  try {
+    const response = await fetch(
+      `${COMMENTS_API_URL}/comments/${commentId}`,
+      {
+        method: 'DELETE'
+      }
+    )
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    // Remove comment from local array
+    comments.value = comments.value.filter(c => c.id !== commentId)
+    emit('comments-updated', comments.value)
+  } catch (error) {
+    console.error('Error deleting comment:', error)
+    alert('Failed to delete comment. Please try again.')
   }
 }
 
+// Get user avatar
 const getUserAvatar = (userId) => {
-  const user = props.users[userId]
-  if (user?.name) {
-    return `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random&size=32`
-  }
-  return 'https://ui-avatars.com/api/?name=Unknown&background=gray&size=32'
+  const user = users.value[userId]
+  const name = user?.name || user?.email || 'Unknown'
+  const displayName = name.includes('@') ? extractUsernameFromEmail(name) : name
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&size=32`
 }
 
+// Get current user name
 const getCurrentUserName = () => {
-  return userData.username || 'You'
+  return extractUsernameFromEmail(currentUserEmail.value)
 }
 
+// Format comment time
 const formatCommentTime = (timestamp) => {
   if (!timestamp) return ''
   const date = new Date(timestamp)
@@ -217,6 +375,7 @@ const formatCommentTime = (timestamp) => {
   return date.toLocaleDateString('en-SG', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+// Format comment text
 const formatCommentText = (text) => {
   return text.replace(
     /@(\w+)/g,
@@ -224,17 +383,32 @@ const formatCommentText = (text) => {
   )
 }
 
+// Check if user can edit comment
 const canEditComment = (userId) => {
   return currentUserId.value === userId
 }
 
+// Check if user can delete comment
 const canDeleteComment = (userId) => {
   return currentUserId.value === userId || currentUserRole.value === 'admin'
 }
 
+// Capitalize role
 const capitalizeRole = (role) => {
   return role.charAt(0).toUpperCase() + role.slice(1)
 }
+
+// Fetch comments when component mounts
+onMounted(() => {
+  fetchComments()
+})
+
+// Watch for taskId changes
+watch(() => props.taskId, (newTaskId) => {
+  if (newTaskId) {
+    fetchComments()
+  }
+})
 </script>
 
 <style scoped>
@@ -526,5 +700,12 @@ const capitalizeRole = (role) => {
   display: block;
   opacity: 0.6;
   color: #9ca3af;
+}
+
+.loading-state {
+  text-align: center;
+  padding: 2rem;
+  color: #606060;
+  font-size: 0.95rem;
 }
 </style>
