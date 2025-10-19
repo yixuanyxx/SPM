@@ -1,3 +1,4 @@
+
 name: CI
 
 on:
@@ -17,7 +18,65 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Discover and test each microservice
+      - name: Install all service dependencies
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        shell: bash
+        run: |
+          echo "==> Installing dependencies for all microservices..."
+          for svc in backend/*/ ; do
+            [[ -d "$svc" ]] || continue
+            if [[ -f "${svc}requirements.txt" ]]; then
+              echo "Installing requirements for ${svc%/} ..."
+              pip install -r "${svc}requirements.txt"
+            fi
+          done
+
+      - name: Start microservices in background
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          CORS_ORIGINS: "http://localhost:5173"
+          FLASK_DEBUG: "0"
+        shell: bash
+        run: |
+          echo "==> Starting all microservices in background..."
+          
+          cd backend/projects
+          python app.py > ../../projects.log 2>&1 &
+          echo "Started Projects service (port 5001) - PID: $!"
+          cd ../..
+          
+          cd backend/tasks
+          python app.py > ../../tasks.log 2>&1 &
+          echo "Started Tasks service (port 5002) - PID: $!"
+          cd ../..
+          
+          cd backend/users
+          python app.py > ../../users.log 2>&1 &
+          echo "Started Users service (port 5003) - PID: $!"
+          cd ../..
+          
+          cd backend/team
+          python app.py > ../../team.log 2>&1 &
+          echo "Started Team service (port 5004) - PID: $!"
+          cd ../..
+          
+          cd backend/dept
+          python app.py > ../../dept.log 2>&1 &
+          echo "Started Dept service (port 5005) - PID: $!"
+          cd ../..
+          
+          echo ""
+          echo "==> Waiting for services to initialize..."
+          sleep 10
+          
+          echo ""
+          echo "==> Python processes running:"
+          ps aux | grep "python app.py" | grep -v grep || echo "No app.py processes found"
+
+      - name: Run tests for each microservice
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -27,39 +86,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          echo "==> Installing dependencies and starting microservices..."
-          for svc in backend/*/ ; do
-            [[ -f "${svc}app.py" ]] || continue
-            echo "Preparing ${svc} ..."
-            
-            # Install requirements first
-            if [[ -f "${svc}requirements.txt" ]]; then
-              pip install -q -r "${svc}requirements.txt"
-            fi
-            
-            # Start service in background (disable Flask debug mode reloader)
-            cd "${svc}"
-            WERKZEUG_RUN_MAIN=true python app.py > service.log 2>&1 &
-            SERVICE_PID=$!
-            echo "  Started ${svc} (PID: $SERVICE_PID)"
-            cd - > /dev/null
-            
-            # Give this service a moment to bind to its port
-            sleep 2
-          done
-
-          echo "Waiting for all microservices to be ready..."
-          sleep 10
-          
-          # Verify services are running
-          echo "Checking service health..."
-          curl -s http://localhost:5003/health || echo "  Users service may not be ready"
-          curl -s http://localhost:5002/health || echo "  Tasks service may not be ready"
-          curl -s http://localhost:5001/health || echo "  Projects service may not be ready"
-          curl -s http://localhost:5004/health || echo "  Team service may not be ready"
-          curl -s http://localhost:5005/health || echo "  Dept service may not be ready"
-
-          echo "==> Scanning backend microservices..."
+          echo "==> Running tests for each microservice..."
           for svc in backend/*/ ; do
             [[ -d "$svc" ]] || continue
 
@@ -68,20 +95,6 @@ jobs:
             echo "Service: ${svc%/}"
             echo "=============================="
 
-            # 1) Create and activate virtual environment
-            echo "Creating virtual environment for ${svc%/} ..."
-            python -m venv "${svc}venv_ci"
-            source "${svc}venv_ci/bin/activate"
-
-            # 2) Install per-service requirements if present
-            if [[ -f "${svc}requirements.txt" ]]; then
-              echo "Installing requirements for ${svc%/} ..."
-              pip install -r "${svc}requirements.txt"
-            else
-              echo "No requirements.txt in ${svc%/} — skipping install."
-            fi
-
-            # 3) Run tests if run_tests.py exists
             if [[ -f "${svc}run_tests.py" ]]; then
               echo "Running tests for ${svc%/} ..."
               cd "${svc}"
@@ -90,9 +103,16 @@ jobs:
             else
               echo "No run_tests.py in ${svc%/} — nothing to run."
             fi
+          done
 
-            # 4) Deactivate and cleanup virtual environment
-            deactivate
-            rm -rf "${svc}venv_ci"
-            echo "Cleaned up virtual environment for ${svc%/}"
+      - name: Show service logs on failure
+        if: failure()
+        run: |
+          echo "==> Service logs:"
+          for log in *.log; do
+            if [[ -f "$log" ]]; then
+              echo ""
+              echo "====== ${log} ======"
+              tail -100 "$log"
+            fi
           done

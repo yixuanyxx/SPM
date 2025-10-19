@@ -19,4 +19,5 @@ if __name__ == "__main__":
     app = create_app()
     port = "5001"
     print(f"Projects microservice running on port {port}")
-    app.run(host="0.0.0.0", port=int(port), debug=True)
+    debug_mode = os.getenv("FLASK_DEBUG", "1") == "1"
+    app.run(host="0.0.0.0", port=port, debug=debug_mode)
