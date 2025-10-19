@@ -22,6 +22,21 @@
 
     <!-- Inline Subtask Form -->
     <div v-if="showSubtaskForm" class="subtask-form">
+      <!-- Existing Subtasks Preview (only show when creating new subtask, not editing) -->
+      <div v-if="editingIndex === null && sortedSubtasks.length > 0" class="existing-subtasks-preview">
+        <h4><i class="bi bi-list-check"></i> Existing Subtasks ({{ sortedSubtasks.length }})</h4>
+        <div class="preview-list">
+          <div v-for="(subtask, index) in sortedSubtasks" :key="subtask.id" class="preview-item">
+            <span class="preview-number">#{{ index + 1 }}</span>
+            <div class="preview-content">
+              <strong>{{ subtask.task_name }}</strong>
+              <span class="preview-badge" :class="getStatusClass(subtask.status)">{{ subtask.status }}</span>
+              <span class="preview-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="form-group">
         <label :class="{ 'error-label': showErrors && !currentSubtask.task_name.trim() }">
           Subtask Name<span class="required">*</span>
@@ -114,11 +129,13 @@
 
           <div class="selected-collaborators">
             <span 
-              v-for="user in selectedCollaborators" 
-              :key="user.id" 
-              class="selected-email"
+              v-for="(user, index) in selectedCollaborators" 
+              :key="index"
+              :class="['selected-email', { 'creator-locked': user.isCreator }]"
             >
-              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+              {{ user.email }} 
+              <i v-if="user.isCreator" class="bi bi-lock-fill" title="Subtask creator (cannot be removed)"></i>
+              <i v-else class="bi bi-x" @click="removeCollaborator(user)"></i>
             </span>
           </div>
         </div>
@@ -216,18 +233,30 @@ const collaboratorQuery = ref('')
 const selectedCollaborators = ref([])
 const collaboratorSuggestions = ref([])
 const userRole = ref('')
+const currentUserEmail = ref('')
+const currentUserId = ref(null)
 const subtasksSectionRef = ref(null)
 
-// Get user role on component mount
+// Get user role and email on component mount
 import { getCurrentUserData } from '../services/session.js'
 
 const initUserRole = () => {
   try {
     const userData = getCurrentUserData()
+    console.log('User data loaded:', userData)
     userRole.value = userData.role?.toLowerCase() || ''
+    currentUserEmail.value = userData.email || ''
+    currentUserId.value = userData.id || userData.userid || null
+    console.log('Initialized user:', { 
+      role: userRole.value, 
+      email: currentUserEmail.value, 
+      id: currentUserId.value 
+    })
   } catch (err) {
     console.error('Error getting user data:', err)
     userRole.value = ''
+    currentUserEmail.value = ''
+    currentUserId.value = null
   }
 }
 
@@ -245,7 +274,6 @@ const getDefaultStatus = () => {
 // Scroll to form function
 const scrollToForm = () => {
   if (subtasksSectionRef.value) {
-    // Use nextTick to ensure DOM is updated before scrolling
     setTimeout(() => {
       const formElement = subtasksSectionRef.value.querySelector('.subtask-form')
       if (formElement) {
@@ -332,6 +360,11 @@ const addCollaborator = (user) => {
 }
 
 const removeCollaborator = (user) => {
+  // Prevent removing creator
+  if (user.isCreator) {
+    showToast('Cannot remove subtask creator from collaborators', 'warning')
+    return
+  }
   selectedCollaborators.value = selectedCollaborators.value.filter(u => u.userid !== user.userid)
 }
 
@@ -367,17 +400,18 @@ const addSubtask = () => {
     return
   }
 
-  // Create new subtask - NO API CALLS IN THIS COMPONENT
+  // Create new subtask
   const newSubtask = { 
     task_name: currentSubtask.value.task_name,
     description: currentSubtask.value.description,
     due_date: currentSubtask.value.due_date,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
-    // Include collaborators with full user object data
+    // Include collaborators with full user object data, preserving isCreator flag
     collaborators: selectedCollaborators.value.map(u => ({
       userid: parseInt(u.userid),
-      email: u.email
+      email: u.email,
+      isCreator: u.isCreator || false
     })),
     id: Date.now()
   }
@@ -391,7 +425,7 @@ const addSubtask = () => {
     showToast('Subtask updated!', 'success')
     editingIndex.value = null
   } else {
-    // Add new subtask - just emit back to parent
+    // Add new subtask
     emit('update:modelValue', [...props.modelValue, newSubtask])
     showToast('Subtask added to form!', 'success')
   }
@@ -423,9 +457,13 @@ const editSubtask = async (sortedIndex) => {
       // Fetch user details for each collaborator ID
       const collaboratorDetails = await Promise.all(
         subtaskToEdit.collaborators.map(collaboratorId => {
-          // If it's already an object with userid and email, return it
+          // If it's already an object with userid and email, return it (preserve isCreator flag)
           if (typeof collaboratorId === 'object' && collaboratorId.userid) {
-            return Promise.resolve(collaboratorId);
+            return Promise.resolve({
+              userid: collaboratorId.userid,
+              email: collaboratorId.email,
+              isCreator: collaboratorId.isCreator || false
+            });
           }
           
           // Otherwise fetch the user details from backend
@@ -436,14 +474,15 @@ const editSubtask = async (sortedIndex) => {
             })
             .then(data => ({
               userid: data.data.id || collaboratorId,
-              email: data.data.email || `User ${collaboratorId}`
+              email: data.data.email || `User ${collaboratorId}`,
+              isCreator: false
             }))
             .catch(err => {
               console.error(`Error fetching user ${collaboratorId}:`, err);
-              // Fallback if user fetch fails
               return {
                 userid: collaboratorId,
-                email: `User ${collaboratorId}`
+                email: `User ${collaboratorId}`,
+                isCreator: false
               };
             });
         })
@@ -463,9 +502,7 @@ const editSubtask = async (sortedIndex) => {
   showSubtaskForm.value = true
   showErrors.value = false
 
-  // Scroll to form after opening it
   scrollToForm()
-
 }
 
 const resetForm = () => {
@@ -493,8 +530,20 @@ const toggleSubtaskForm = () => {
   if (showSubtaskForm.value) {
     resetForm()
     showErrors.value = false
+    showSubtaskForm.value = false
   } else {
-    // Scroll to form when opening
+    // Only add current user as locked collaborator for STAFF
+    if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
+      selectedCollaborators.value = [{
+        userid: currentUserId.value,
+        email: currentUserEmail.value,
+        isCreator: true
+      }]
+      console.log('Added creator to collaborators:', JSON.stringify(selectedCollaborators.value))
+      console.log('selectedCollaborators.value length:', selectedCollaborators.value.length)
+    } else {
+      console.log('Not adding creator - user role is:', userRole.value)
+    }
     showSubtaskForm.value = true
     scrollToForm()
   }
@@ -816,13 +865,28 @@ const getPriorityClass = (priority) => {
   font-size: 0.875rem;
 }
 
+.selected-email.creator-locked {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
 .selected-email i {
   cursor: pointer;
   font-weight: bold;
 }
 
+.selected-email.creator-locked i.bi-lock-fill {
+  cursor: not-allowed;
+  font-size: 0.75rem;
+}
+
 .selected-email i:hover {
   color: #1e3a8a;
+}
+
+.selected-email.creator-locked i.bi-lock-fill:hover {
+  color: #92400e;
 }
 
 .form-actions {
@@ -1179,5 +1243,84 @@ const getPriorityClass = (priority) => {
   margin-top: 4px;
   font-size: 0.875rem;
   color: #6b7280;
+}
+
+/* Existing Subtasks Preview Styles */
+.existing-subtasks-preview {
+  margin-bottom: 1.5rem;
+  padding: 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+}
+
+.existing-subtasks-preview h4 {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.existing-subtasks-preview h4 i {
+  color: #3b82f6;
+}
+
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.preview-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.preview-number {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 600;
+  background: #e5e7eb;
+  padding: 0.125rem 0.4rem;
+  border-radius: 0.25rem;
+  flex-shrink: 0;
+}
+
+.preview-content {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-content strong {
+  color: #1f2937;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.preview-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  flex-shrink: 0;
 }
 </style>

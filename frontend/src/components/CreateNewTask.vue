@@ -126,21 +126,20 @@
 
               <div class="selected-collaborators">
                 <span 
-                  v-for="user in selectedCollaborators" 
-                  :key="user.userid" 
-                  class="selected-email"
-                  :class="{ 'locked': user.isLockedOwner }"
+                  v-for="(user, index) in selectedCollaborators" 
+                  :key="index"
+                  :class="['selected-email', { 'creator-locked': user.isCreator }]"
                 >
                   {{ user.email }}
                   <i 
-                    v-if="!user.isLockedOwner"
-                    class="bi bi-x" 
-                    @click="removeCollaborator(user)"
+                    v-if="user.isCreator"
+                    class="bi bi-lock-fill"
+                    title="Task creator (cannot be removed)"
                   ></i>
                   <i 
                     v-else
-                    class="bi bi-lock-fill"
-                    title="You are automatically added as a collaborator"
+                    class="bi bi-x" 
+                    @click="removeCollaborator(user)"
                   ></i>
                 </span>
               </div>
@@ -307,19 +306,24 @@ export default {
     this.newTask.owner_id = this.userId;
     this.userEmail = userData.email || '';
 
+    console.log('User data loaded:', { 
+      role: this.userRole, 
+      email: this.userEmail, 
+      id: this.userId 
+    });
+
     // Set default status based on user role
     this.newTask.status = (this.userRole === 'manager' || this.userRole === 'director') ? 'Unassigned' : 'Ongoing';
 
-    // If staff, add current user as locked collaborator
-    if (this.userRole === 'staff' && this.userEmail) {
-      this.selectedCollaborators.push({
+    // Only add current user as locked creator for STAFF
+    if (this.userRole === 'staff' && this.userEmail && this.userId) {
+      this.selectedCollaborators = [{
         userid: this.userId,
         email: this.userEmail,
-        isLockedOwner: true // Mark as locked
-      });
+        isCreator: true
+      }];
+      console.log('Added creator to collaborators:', this.selectedCollaborators);
     }
-
-    console.log('CreateNewTaskForm mounted with userId:', this.userId);
 
     // Fetch projects owned by user
     if (this.userId) {
@@ -376,8 +380,12 @@ export default {
       this.collaboratorSuggestions = [];
     },
     removeCollaborator(user) {
-      // Prevent removal if locked
-      if (user.isLockedOwner) {
+      // Prevent removal if creator
+      if (user.isCreator) {
+        this.errorMessage = "Cannot remove task creator from collaborators";
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 2000);
         return;
       }
       this.selectedCollaborators = this.selectedCollaborators.filter(u => u.userid !== user.userid);
@@ -447,9 +455,10 @@ export default {
           formData.append("attachment", this.newAttachmentFile);
         }
 
-        // Collaborators
+        // Collaborators - always include creator
         const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
-        if (this.userRole === "staff" && !collaboratorIds.includes(this.newTask.owner_id)) {
+        // Ensure creator is always included
+        if (!collaboratorIds.includes(this.newTask.owner_id)) {
           collaboratorIds.push(this.newTask.owner_id);
         }
         if (collaboratorIds.length > 0) {
@@ -464,7 +473,7 @@ export default {
             const endUTC = new Date(this.newTask.recurrence_end_date).toISOString();
             formData.append("recurrence_end_date", endUTC);
           } else {
-            formData.append("recurrence_end_date", ""); // explicitly send null
+            formData.append("recurrence_end_date", "");
           }
         } else {
           formData.append("recurrence_type", "None");
@@ -533,8 +542,7 @@ export default {
                 priority: subtask.priority.toString(),
                 status: subtask.status || 'Ongoing',
                 project_id: this.newTask.project_id || null,
-                parent_task: createdParentTask.id, // Link to parent
-                // Use subtask's own collaborators, not parent's
+                parent_task: createdParentTask.id,
                 collaborators: subtaskCollaboratorIds.length > 0 ? subtaskCollaboratorIds.join(',') : ''
               };
 
@@ -600,7 +608,18 @@ export default {
         recurrence_type: null, 
         recurrence_end_date: null
       };
-      this.selectedCollaborators = [];
+      
+      // Reset collaborators - only add creator for STAFF
+      if (this.userRole === 'staff' && this.userEmail && this.userId) {
+        this.selectedCollaborators = [{
+          userid: this.userId,
+          email: this.userEmail,
+          isCreator: true
+        }];
+      } else {
+        this.selectedCollaborators = [];
+      }
+      
       this.newAttachmentFile = null;
       this.collaboratorQuery = '';
       this.collaboratorSuggestions = [];
@@ -869,6 +888,7 @@ textarea:focus {
   padding: 0.75rem;
   cursor: pointer;
   border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
 }
 
 .suggestion-item:hover {
@@ -897,13 +917,28 @@ textarea:focus {
   font-size: 0.875rem;
 }
 
+.selected-email.creator-locked {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
 .selected-email i {
   cursor: pointer;
   font-weight: bold;
 }
 
+.selected-email.creator-locked i.bi-lock-fill {
+  cursor: not-allowed;
+  font-size: 0.75rem;
+}
+
 .selected-email i:hover {
   color: #1e3a8a;
+}
+
+.selected-email.creator-locked i.bi-lock-fill:hover {
+  color: #92400e;
 }
 
 .file-input {
@@ -1061,25 +1096,5 @@ textarea.input-error:focus {
 
 .mt-4 {
   margin-top: 1.5rem;
-}
-
-.selected-email.locked {
-  background-color: #f3f4f6;
-  color: #6b7280;
-  border: 1px solid #d1d5db;
-}
-
-.selected-email.locked i {
-  color: #6b7280;
-  cursor: not-allowed;
-}
-
-.selected-email i {
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.selected-email i:hover:not(.locked i) {
-  color: #1e3a8a;
 }
 </style>
