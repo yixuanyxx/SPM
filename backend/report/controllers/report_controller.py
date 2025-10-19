@@ -358,7 +358,7 @@ def generate_department_report(director_user_id: int):
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
 
-@report_bp.route("/reports/health", methods=["GET"])
+@report_bp.route("/health", methods=["GET"])
 def health_check():
     """
     Health check endpoint for the report service.

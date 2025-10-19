@@ -211,3 +211,7 @@ def add_task_to_project(project_id: int, task_id: int):
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+    
+@project_bp.route('/health')
+def health_check():
+    return jsonify({"status": "ok"}), 200

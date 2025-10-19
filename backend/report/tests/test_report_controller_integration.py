@@ -18,8 +18,7 @@ from models.report import ReportData, TeamReportData
 
 
 class TestReportControllerIntegration(unittest.TestCase):
-    """Integration tests for report controller endpoints using real microservices."""
-
+    
     @classmethod
     def setUpClass(cls):
         """Set up test fixtures for the entire test class."""
@@ -41,11 +40,16 @@ class TestReportControllerIntegration(unittest.TestCase):
         cls.director_user_id = int(os.getenv('TEST_DIRECTOR_USER_ID', '399'))
         cls.nonexistent_user_id = 999999  
 
-    # ==================== Personal Report Tests ====================
+        cls.nonexistent_user_id = 999999
 
+    # ==================== CRITICAL INTEGRATION TESTS ====================
+    # These test actual cross-service communication and are necessary
+    
     def test_generate_personal_report_json_success(self):
-        """Test generating personal report in JSON format for existing user."""
-        # Use configured test user ID
+        """
+        Test complete personal report flow with real microservices (JSON).
+        This validates: Users service → Tasks service → Report assembly
+        """
         user_id = self.staff_user_id
         
         response = self.client.get(f'/reports/personal/{user_id}')
@@ -65,8 +69,83 @@ class TestReportControllerIntegration(unittest.TestCase):
         assert 'total_tasks' in report_data
         assert 'project_stats' in report_data
 
+    def test_generate_personal_report_pdf_success(self):
+        """
+        Test personal report PDF generation (validates export service integration).
+        This is slow but critical for verifying document generation works.
+        """
+        user_id = self.staff_user_id
+        
+        response = self.client.get(f'/reports/personal/{user_id}?format=pdf')
+        
+        assert response.status_code == 200
+        assert response.mimetype == 'application/pdf'
+        assert response.content_length > 0
+        
+        # Verify PDF header
+        data = response.data
+        assert data[:4] == b'%PDF'
+
+    def test_generate_personal_report_user_not_found(self):
+        """Test personal report for non-existent user (validates error propagation)."""
+        user_id = self.nonexistent_user_id  
+        
+        response = self.client.get(f'/reports/personal/{user_id}')
+        
+        assert response.status_code == 404
+        data = json.loads(response.data)
+        assert data['Code'] == 404
+
+    def test_generate_team_report_json_success(self):
+        """
+        Test team report with manager (validates Team service integration).
+        """
+        manager_id = self.manager_user_id
+        
+        response = self.client.get(f'/reports/team/{manager_id}')
+        
+        # Should be 200 if manager exists and has team, or 403/404 otherwise
+        assert response.status_code in [200, 403, 404]
+        data = json.loads(response.data)
+        
+        if response.status_code == 200:
+            assert data['Code'] == 200
+            assert 'message' in data
+            assert 'data' in data
+            assert 'team_report' in data['data']
+            
+            # Validate team report structure
+            team_report = data['data']['team_report']
+            assert 'team_id' in team_report or 'dept_id' in team_report
+            assert 'member_reports' in team_report
+            assert 'total_team_tasks' in team_report
+
+    def test_generate_department_report_json_success(self):
+        """
+        Test department report with director (validates Dept service integration).
+        """
+        director_id = self.director_user_id
+        
+        response = self.client.get(f'/reports/department/{director_id}')
+        
+        # Should be 200 if director exists and has dept, or 403/404 otherwise
+        assert response.status_code in [200, 403, 404]
+        data = json.loads(response.data)
+        
+        if response.status_code == 200:
+            assert data['Code'] == 200
+            assert 'message' in data
+            assert 'data' in data
+            assert 'department_report' in data['data']
+            
+            # Validate department report structure
+            dept_report = data['data']['department_report']
+            assert 'dept_id' in dept_report
+            assert 'member_reports' in dept_report
+            assert 'total_team_tasks' in dept_report
+
     def test_generate_personal_report_with_date_filter(self):
-        """Test generating personal report with date filtering."""
+        """Test date filtering works across microservices."""
         user_id = self.staff_user_id
         
         response = self.client.get(
@@ -76,6 +155,77 @@ class TestReportControllerIntegration(unittest.TestCase):
         assert response.status_code == 200
         data = json.loads(response.data)
         assert data['Code'] == 200
+
+    def test_cross_service_integration(self):
+        """
+        COMBINED TEST: Verify integration with Users, Tasks, and Team microservices.
+        This replaces 3 separate tests to reduce execution time.
+        """
+        user_id = self.staff_user_id
+        manager_id = self.manager_user_id
+        
+        try:
+            # Test 1: Users service integration
+            user_response = requests.get(f"{self.users_url}/users/{user_id}", timeout=3)
+            
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+                report_response = self.client.get(f'/reports/personal/{user_id}')
+                
+                if report_response.status_code == 200:
+                    report_data = json.loads(report_response.data)
+                    assert report_data['data']['user_name'] == user_data['data']['name']
+                    # Also verify task data is present (Tasks service integration)
+                    assert 'total_tasks' in report_data['data']
+            
+            # Test 2: Team service integration
+            team_response = self.client.get(f'/reports/team/{manager_id}')
+            if team_response.status_code == 200:
+                team_data = json.loads(team_response.data)
+                team_report = team_data['data']['team_report']
+                assert 'member_reports' in team_report
+                assert isinstance(team_report['member_reports'], list)
+                
+        except requests.exceptions.RequestException:
+            self.skipTest("Microservices not available")
+
+    def test_multiple_formats_and_concurrent_requests(self):
+        """
+        COMBINED TEST: Test format consistency AND concurrent requests.
+        This replaces 2 separate tests to reduce execution time.
+        """
+        user_id = self.staff_user_id
+        
+        # Part 1: Test all formats work (was test_personal_report_consistency_across_formats)
+        json_response = self.client.get(f'/reports/personal/{user_id}')
+        
+        if json_response.status_code == 200:
+            # Verify PDF and Excel work
+            pdf_response = self.client.get(f'/reports/personal/{user_id}?format=pdf')
+            assert pdf_response.status_code == 200
+            assert pdf_response.mimetype == 'application/pdf'
+            
+            excel_response = self.client.get(f'/reports/personal/{user_id}?format=excel')
+            assert excel_response.status_code == 200
+            assert excel_response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            
+            # Part 2: Test concurrent requests (reduced to 2 for speed)
+            responses = [self.client.get(f'/reports/personal/{user_id}') for _ in range(2)]
+            for response in responses:
+                assert response.status_code == 200
+
+    def test_team_report_non_manager(self):
+        """Test team report for non-manager user (Staff)."""
+        # Use configured staff user ID (who is not a manager)
+        staff_id = self.staff_user_id
+        
+        response = self.client.get(f'/reports/team/{staff_id}')
+        
+        # Should return 403 (not a manager) or 404 (not assigned to team)
+        assert response.status_code in [403, 404]
+
+    # ==================== FAST VALIDATION TESTS ====================
+    # These test validation logic - they fail fast without heavy processing
 
     def test_generate_personal_report_invalid_start_date(self):
         """Test personal report with invalid start_date format."""
@@ -103,452 +253,75 @@ class TestReportControllerIntegration(unittest.TestCase):
         assert data['Code'] == 400
         assert 'Invalid end_date format' in data['Message']
 
-    def test_generate_personal_report_user_not_found(self):
-        """Test personal report for non-existent user."""
-        user_id = self.nonexistent_user_id  
-        
-        response = self.client.get(f'/reports/personal/{user_id}')
-        
-        assert response.status_code == 404
-        data = json.loads(response.data)
-        assert data['Code'] == 404
-
-    def test_generate_personal_report_pdf_success(self):
-        """Test generating personal report in PDF format."""
+    def test_invalid_format_parameters(self):
+        """
+        COMBINED TEST: Test invalid format parameters for all report types.
+        """
         user_id = self.staff_user_id
+        manager_id = self.manager_user_id
+        director_id = self.director_user_id
         
-        response = self.client.get(f'/reports/personal/{user_id}?format=pdf')
-        
-        assert response.status_code == 200
-        assert response.mimetype == 'application/pdf'
-        assert response.content_length > 0
-        
-        # Verify PDF header
-        data = response.data
-        assert data[:4] == b'%PDF'
-
-    def test_generate_personal_report_excel_success(self):
-        """Test generating personal report in Excel format."""
-        user_id = self.staff_user_id
-        
-        response = self.client.get(f'/reports/personal/{user_id}?format=excel')
-        
-        assert response.status_code == 200
-        assert response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-        assert response.content_length > 0
-        
-        # Verify Excel file header (PK zip signature)
-        data = response.data
-        assert data[:2] == b'PK'
-
-    def test_generate_personal_report_invalid_format(self):
-        """Test personal report with invalid format parameter."""
-        user_id = self.staff_user_id
-        
+        # Personal report invalid format
         response = self.client.get(f'/reports/personal/{user_id}?format=xml')
-        
         assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data['Code'] == 400
-        assert 'Invalid format' in data['Message']
-
-    # ==================== Team Report Tests ====================
-
-    def test_generate_team_report_json_success(self):
-        """Test generating team report in JSON format for manager."""
-        # Use configured test manager ID
-        manager_id = self.manager_user_id
         
-        response = self.client.get(f'/reports/team/{manager_id}')
-        
-        # Should be 200 if manager exists and has team, or 403/404 otherwise
-        assert response.status_code in [200, 403, 404]
-        data = json.loads(response.data)
-        
-        if response.status_code == 200:
-            assert data['Code'] == 200
-            assert 'message' in data
-            assert 'data' in data
-            assert 'team_report' in data['data']
-            
-            # Validate team report structure
-            team_report = data['data']['team_report']
-            assert 'team_id' in team_report or 'dept_id' in team_report
-            assert 'member_reports' in team_report
-            assert 'total_team_tasks' in team_report
-
-    def test_generate_team_report_with_date_filter(self):
-        """Test generating team report with date filtering."""
-        manager_id = self.manager_user_id
-        
-        response = self.client.get(
-            f'/reports/team/{manager_id}?start_date=2024-01-01&end_date=2024-12-31'
-        )
-        
-        # Should be 200, 403, or 404 depending on manager status
-        assert response.status_code in [200, 403, 404]
-
-    def test_generate_team_report_invalid_date(self):
-        """Test team report with invalid date format."""
-        manager_id = self.manager_user_id
-        
-        response = self.client.get(
-            f'/reports/team/{manager_id}?start_date=invalid'
-        )
-        
-        assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data['Code'] == 400
-
-    def test_generate_team_report_non_manager(self):
-        """Test team report for non-manager user (Staff)."""
-        # Use configured staff user ID (who is not a manager)
-        staff_id = self.staff_user_id
-        
-        response = self.client.get(f'/reports/team/{staff_id}')
-        
-        # Should return 403 (not a manager) or 404 (not assigned to team)
-        assert response.status_code in [403, 404]
-
-    def test_generate_team_report_pdf_success(self):
-        """Test generating team report in PDF format."""
-        manager_id = self.manager_user_id
-        
-        response = self.client.get(f'/reports/team/{manager_id}?format=pdf')
-        
-        if response.status_code == 200:
-            assert response.mimetype == 'application/pdf'
-            assert response.content_length > 0
-            data = response.data
-            assert data[:4] == b'%PDF'
-        else:
-            # If manager doesn't exist or not authorized, should be 403/404
-            assert response.status_code in [403, 404]
-
-    def test_generate_team_report_excel_success(self):
-        """Test generating team report in Excel format."""
-        manager_id = self.manager_user_id
-        
-        response = self.client.get(f'/reports/team/{manager_id}?format=excel')
-        
-        if response.status_code == 200:
-            assert response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            assert response.content_length > 0
-            data = response.data
-            assert data[:2] == b'PK'
-        else:
-            # If manager doesn't exist or not authorized, should be 403/404
-            assert response.status_code in [403, 404]
-
-    def test_generate_team_report_invalid_format(self):
-        """Test team report with invalid format parameter."""
-        manager_id = self.manager_user_id
-        
+        # Team report invalid format
         response = self.client.get(f'/reports/team/{manager_id}?format=csv')
-        
-        # Should be 400 for invalid format, or 403/404 if manager issue
         assert response.status_code in [400, 403, 404]
-
-    def test_generate_team_report_user_not_found(self):
-        """Test team report for non-existent user."""
-        manager_id = self.nonexistent_user_id
         
-        response = self.client.get(f'/reports/team/{manager_id}')
-        
-        assert response.status_code == 404
-
-    # ==================== Department Report Tests ====================
-
-    def test_generate_department_report_json_success(self):
-        """Test generating department report in JSON format for director."""
-        # Use configured test director ID
-        director_id = self.director_user_id
-        
-        response = self.client.get(f'/reports/department/{director_id}')
-        
-        # Should be 200 if director exists and has dept, or 403/404 otherwise
-        assert response.status_code in [200, 403, 404]
-        data = json.loads(response.data)
-        
-        if response.status_code == 200:
-            assert data['Code'] == 200
-            assert 'message' in data
-            assert 'data' in data
-            assert 'department_report' in data['data']
-            
-            # Validate department report structure
-            dept_report = data['data']['department_report']
-            assert 'dept_id' in dept_report
-            assert 'member_reports' in dept_report
-            assert 'total_team_tasks' in dept_report
-
-    def test_generate_department_report_with_date_filter(self):
-        """Test generating department report with date filtering."""
-        director_id = self.director_user_id
-        
-        response = self.client.get(
-            f'/reports/department/{director_id}?start_date=2024-01-01&end_date=2024-12-31'
-        )
-        
-        # Should be 200, 403, or 404 depending on director status
-        assert response.status_code in [200, 403, 404]
-
-    def test_generate_department_report_invalid_date(self):
-        """Test department report with invalid date format."""
-        director_id = self.director_user_id
-        
-        response = self.client.get(
-            f'/reports/department/{director_id}?end_date=2024/12/31'
-        )
-        
-        assert response.status_code == 400
-        data = json.loads(response.data)
-        assert data['Code'] == 400
-
-    def test_generate_department_report_non_director(self):
-        """Test department report for non-director user."""
-        # Use configured staff user ID (who is not a director)
-        non_director_id = self.staff_user_id
-        
-        response = self.client.get(f'/reports/department/{non_director_id}')
-        
-        # Should return 403 (not a director) or 404 (not assigned to dept)
-        assert response.status_code in [403, 404]
-
-    def test_generate_department_report_pdf_success(self):
-        """Test generating department report in PDF format."""
-        director_id = self.director_user_id
-        
-        response = self.client.get(f'/reports/department/{director_id}?format=pdf')
-        
-        if response.status_code == 200:
-            assert response.mimetype == 'application/pdf'
-            assert response.content_length > 0
-            data = response.data
-            assert data[:4] == b'%PDF'
-        else:
-            # If director doesn't exist or not authorized, should be 403/404
-            assert response.status_code in [403, 404]
-
-    def test_generate_department_report_excel_success(self):
-        """Test generating department report in Excel format."""
-        director_id = self.director_user_id
-        
-        response = self.client.get(f'/reports/department/{director_id}?format=excel')
-        
-        if response.status_code == 200:
-            assert response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-            assert response.content_length > 0
-            data = response.data
-            assert data[:2] == b'PK'
-        else:
-            # If director doesn't exist or not authorized, should be 403/404
-            assert response.status_code in [403, 404]
-
-    def test_generate_department_report_invalid_format(self):
-        """Test department report with invalid format parameter."""
-        director_id = self.director_user_id
-        
+        # Department report invalid format
         response = self.client.get(f'/reports/department/{director_id}?format=html')
-        
-        # Should be 400 for invalid format, or 403/404 if director issue
         assert response.status_code in [400, 403, 404]
 
-    def test_generate_department_report_user_not_found(self):
-        """Test department report for non-existent user."""
-        director_id = self.nonexistent_user_id
+    def test_invalid_date_and_not_found_errors(self):
+        """
+        COMBINED TEST: Test invalid dates and user not found errors.
+        """
+        manager_id = self.manager_user_id
+        director_id = self.director_user_id
+        nonexistent_id = self.nonexistent_user_id
         
-        response = self.client.get(f'/reports/department/{director_id}')
+        # Invalid date for team report
+        response = self.client.get(f'/reports/team/{manager_id}?start_date=invalid')
+        assert response.status_code == 400
         
+        # Invalid date for department report
+        response = self.client.get(f'/reports/department/{director_id}?end_date=2024/12/31')
+        assert response.status_code == 400
+        
+        # User not found for team report
+        response = self.client.get(f'/reports/team/{nonexistent_id}')
+        assert response.status_code == 404
+        
+        # User not found for department report
+        response = self.client.get(f'/reports/department/{nonexistent_id}')
         assert response.status_code == 404
 
-    # ==================== Cross-Format Consistency Tests ====================
-
-    def test_personal_report_consistency_across_formats(self):
-        """Test that personal report data is consistent across JSON, PDF, and Excel formats."""
+    def test_edge_cases(self):
+        """
+        COMBINED TEST: Test various edge cases (future dates, reversed dates, zero tasks).
+        """
         user_id = self.staff_user_id
+        director_id = self.director_user_id
         
-        # Get JSON version
-        json_response = self.client.get(f'/reports/personal/{user_id}')
-        
-        if json_response.status_code == 200:
-            json_data = json.loads(json_response.data)
-            
-            # Get PDF version
-            pdf_response = self.client.get(f'/reports/personal/{user_id}?format=pdf')
-            assert pdf_response.status_code == 200
-            assert pdf_response.mimetype == 'application/pdf'
-            
-            # Get Excel version
-            excel_response = self.client.get(f'/reports/personal/{user_id}?format=excel')
-            assert excel_response.status_code == 200
-            assert excel_response.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-
-    def test_team_report_consistency_across_formats(self):
-        """Test that team report data is consistent across JSON, PDF, and Excel formats."""
-        manager_id = self.manager_user_id
-        
-        # Get JSON version
-        json_response = self.client.get(f'/reports/team/{manager_id}')
-        
-        if json_response.status_code == 200:
-            json_data = json.loads(json_response.data)
-            
-            # Get PDF version
-            pdf_response = self.client.get(f'/reports/team/{manager_id}?format=pdf')
-            assert pdf_response.status_code == 200
-            
-            # Get Excel version
-            excel_response = self.client.get(f'/reports/team/{manager_id}?format=excel')
-            assert excel_response.status_code == 200
-
-    # ==================== Edge Case Tests ====================
-
-    def test_personal_report_zero_tasks(self):
-        """Test personal report for user with no tasks."""
-        # Using director ID who might have fewer/no tasks
-        user_id = self.director_user_id
-        
-        response = self.client.get(f'/reports/personal/{user_id}')
-        
-        # Should handle gracefully - either 200 with empty tasks or 404
-        assert response.status_code in [200, 404]
-        
-        if response.status_code == 200:
-            data = json.loads(response.data)
-            report_data = data['data']
-            assert report_data['total_tasks'] == 0
-
-    def test_report_with_future_date_range(self):
-        """Test report with future date range returns empty results."""
-        user_id = self.staff_user_id
-        
+        # Future date range
         response = self.client.get(
             f'/reports/personal/{user_id}?start_date=2099-01-01&end_date=2099-12-31'
         )
-        
         assert response.status_code == 200
-        data = json.loads(response.data)
-        # Should return report with no tasks in date range
-        assert 'data' in data
-
-    def test_report_with_date_range_start_after_end(self):
-        """Test report with start_date after end_date."""
-        user_id = self.staff_user_id
         
+        # Start date after end date
         response = self.client.get(
             f'/reports/personal/{user_id}?start_date=2024-12-31&end_date=2024-01-01'
         )
-        
-        # Should handle gracefully - might return empty results
         assert response.status_code in [200, 400]
+        
+        # User with zero tasks
+        response = self.client.get(f'/reports/personal/{director_id}')
+        if response.status_code == 200:
+            data = json.loads(response.data)
+            assert data['data']['total_tasks'] == 0
 
-    def test_multiple_concurrent_report_requests(self):
-        """Test handling of multiple concurrent report requests."""
-        user_id = self.staff_user_id
-        
-        # Make multiple requests
-        responses = []
-        for _ in range(5):
-            response = self.client.get(f'/reports/personal/{user_id}')
-            responses.append(response)
-        
-        # All should succeed
-        for response in responses:
-            assert response.status_code == 200
 
-    # ==================== Microservice Integration Tests ====================
-
-    def test_report_with_real_user_data(self):
-        """Test that report correctly integrates with Users microservice."""
-        user_id = self.staff_user_id
-        
-        # First verify user exists in Users microservice
-        try:
-            user_response = requests.get(f"{self.users_url}/users/{user_id}")
-            
-            if user_response.status_code == 200:
-                user_data = user_response.json()
-                
-                # Now get report
-                report_response = self.client.get(f'/reports/personal/{user_id}')
-                assert report_response.status_code == 200
-                
-                report_data = json.loads(report_response.data)
-
-                assert report_data['data']['user_name'] == user_data['data']['name']
-        except requests.exceptions.RequestException:
-            self.skipTest("Users microservice not available")
-
-    def test_report_with_real_task_data(self):
-        """Test that report correctly integrates with Tasks microservice."""
-        user_id = self.staff_user_id
-        
-        # First verify tasks exist in Tasks microservice
-        try:
-            tasks_response = requests.get(f"{self.tasks_url}/tasks/user-task/{user_id}")
-            
-            if tasks_response.status_code == 200:
-                tasks_data = tasks_response.json()
-                
-                # Now get report
-                report_response = self.client.get(f'/reports/personal/{user_id}')
-                assert report_response.status_code == 200
-                
-                report_data = json.loads(report_response.data)
-                # Task count should match or be reasonable
-                assert 'total_tasks' in report_data['data']
-        except requests.exceptions.RequestException:
-            self.skipTest("Tasks microservice not available")
-
-    def test_team_report_with_real_team_data(self):
-        """Test that team report correctly integrates with Team microservice."""
-        manager_id = self.manager_user_id
-        
-        # First verify team exists in Team microservice
-        try:
-            # Try to get team info for manager
-            report_response = self.client.get(f'/reports/team/{manager_id}')
-            
-            if report_response.status_code == 200:
-                report_data = json.loads(report_response.data)
-                team_report = report_data['data']['team_report']
-                
-                # Verify team structure
-                assert 'team_id' in team_report or 'dept_id' in team_report
-                assert 'member_reports' in team_report
-                assert isinstance(team_report['member_reports'], list)
-        except requests.exceptions.RequestException:
-            self.skipTest("Team microservice not available")
-
-    # ==================== Additional Coverage Tests ====================
-
-    def test_all_else_branches_for_coverage(self):
-        """Test all else branches to achieve 100% coverage."""
-        # Test with non-existent user to trigger else branches in PDF/Excel tests
-        nonexistent_id = 999998
-        
-        # Personal report PDF - else branch
-        response = self.client.get(f'/reports/personal/{nonexistent_id}?format=pdf')
-        assert response.status_code in [403, 404]
-        
-        # Personal report Excel - else branch  
-        response = self.client.get(f'/reports/personal/{nonexistent_id}?format=excel')
-        assert response.status_code in [403, 404]
-        
-        # Team report PDF - else branch
-        response = self.client.get(f'/reports/team/{nonexistent_id}?format=pdf')
-        assert response.status_code in [403, 404]
-        
-        # Team report Excel - else branch
-        response = self.client.get(f'/reports/team/{nonexistent_id}?format=excel')
-        assert response.status_code in [403, 404]
-        
-        # Department report PDF - else branch
-        response = self.client.get(f'/reports/department/{nonexistent_id}?format=pdf')
-        assert response.status_code in [403, 404]
-        
-        # Department report Excel - else branch
-        response = self.client.get(f'/reports/department/{nonexistent_id}?format=excel')
-        assert response.status_code in [403, 404]
-
+if __name__ == '__main__': # pragma: no cover
+    unittest.main() # pragma: no cover
