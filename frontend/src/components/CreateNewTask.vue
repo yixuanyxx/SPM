@@ -127,10 +127,21 @@
               <div class="selected-collaborators">
                 <span 
                   v-for="user in selectedCollaborators" 
-                  :key="user.id" 
+                  :key="user.userid" 
                   class="selected-email"
+                  :class="{ 'locked': user.isLockedOwner }"
                 >
-                  {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+                  {{ user.email }}
+                  <i 
+                    v-if="!user.isLockedOwner"
+                    class="bi bi-x" 
+                    @click="removeCollaborator(user)"
+                  ></i>
+                  <i 
+                    v-else
+                    class="bi bi-lock-fill"
+                    title="You are automatically added as a collaborator"
+                  ></i>
                 </span>
               </div>
             </div>
@@ -237,6 +248,7 @@ export default {
     return {
       userRole: '',
       userId: null,
+      userEmail: '',
       userProjects: [],
       collaboratorQuery: '',
       selectedCollaborators: [],
@@ -293,9 +305,19 @@ export default {
     this.userRole = userData.role?.toLowerCase() || '';
     this.userId = parseInt(userData.userid) || null;
     this.newTask.owner_id = this.userId;
+    this.userEmail = userData.email || '';
 
     // Set default status based on user role
     this.newTask.status = (this.userRole === 'manager' || this.userRole === 'director') ? 'Unassigned' : 'Ongoing';
+
+    // If staff, add current user as locked collaborator
+    if (this.userRole === 'staff' && this.userEmail) {
+      this.selectedCollaborators.push({
+        userid: this.userId,
+        email: this.userEmail,
+        isLockedOwner: true // Mark as locked
+      });
+    }
 
     console.log('CreateNewTaskForm mounted with userId:', this.userId);
 
@@ -354,6 +376,10 @@ export default {
       this.collaboratorSuggestions = [];
     },
     removeCollaborator(user) {
+      // Prevent removal if locked
+      if (user.isLockedOwner) {
+        return;
+      }
       this.selectedCollaborators = this.selectedCollaborators.filter(u => u.userid !== user.userid);
     },
     async handleCreate() {
@@ -1035,5 +1061,25 @@ textarea.input-error:focus {
 
 .mt-4 {
   margin-top: 1.5rem;
+}
+
+.selected-email.locked {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+}
+
+.selected-email.locked i {
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.selected-email i {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.selected-email i:hover:not(.locked i) {
+  color: #1e3a8a;
 }
 </style>
