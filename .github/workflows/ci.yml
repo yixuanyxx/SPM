@@ -37,15 +37,27 @@ jobs:
               pip install -q -r "${svc}requirements.txt"
             fi
             
-            # Start service in background
+            # Start service in background (disable Flask debug mode reloader)
             cd "${svc}"
-            nohup python app.py > service.log 2>&1 &
-            echo "  Started ${svc} (PID: $!)"
+            WERKZEUG_RUN_MAIN=true python app.py > service.log 2>&1 &
+            SERVICE_PID=$!
+            echo "  Started ${svc} (PID: $SERVICE_PID)"
             cd - > /dev/null
+            
+            # Give this service a moment to bind to its port
+            sleep 2
           done
 
-          echo "Waiting for microservices to boot..."
-          sleep 15
+          echo "Waiting for all microservices to be ready..."
+          sleep 10
+          
+          # Verify services are running
+          echo "Checking service health..."
+          curl -s http://localhost:5003/health || echo "  Users service may not be ready"
+          curl -s http://localhost:5002/health || echo "  Tasks service may not be ready"
+          curl -s http://localhost:5001/health || echo "  Projects service may not be ready"
+          curl -s http://localhost:5004/health || echo "  Team service may not be ready"
+          curl -s http://localhost:5005/health || echo "  Dept service may not be ready"
 
           echo "==> Scanning backend microservices..."
           for svc in backend/*/ ; do
