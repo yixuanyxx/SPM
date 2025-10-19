@@ -11,50 +11,50 @@ import os
 import sys
 import subprocess
 
-def check_microservices():
-    """Check if required microservices are running for integration tests."""
-    try:
-        import requests
-    except ImportError:
-        print("Warning: 'requests' library not found. Skipping microservice check.")
-        print("Assuming services are running in CI/CD environment.")
-        return True  # Assume services are running in CI
+# def check_microservices():
+#     """Check if required microservices are running for integration tests."""
+#     try:
+#         import requests
+#     except ImportError:
+#         print("Warning: 'requests' library not found. Skipping microservice check.")
+#         print("Assuming services are running in CI/CD environment.")
+#         return True  # Assume services are running in CI
     
-    services = {
-        "Users Service": "http://localhost:5003/health",
-        "Tasks Service": "http://localhost:5002/health", 
-        "Projects Service": "http://localhost:5001/health",
-        "Team Service": "http://localhost:5004/health",
-        "Dept Service": "http://localhost:5005/health"
-    }
+#     services = {
+#         "Users Service": "http://localhost:5003/health",
+#         "Tasks Service": "http://localhost:5002/health", 
+#         "Projects Service": "http://localhost:5001/health",
+#         "Team Service": "http://localhost:5004/health",
+#         "Dept Service": "http://localhost:5005/health"
+#     }
 
     
-    all_running = True
-    print("Checking microservices availability:")
+#     all_running = True
+#     print("Checking microservices availability:")
     
-    for name, url in services.items():
-        try:
-            response = requests.get(url, timeout=5)
-            # Accept 200 (OK) or any response that shows the service is running
-            status = "✓ Running" if response.status_code < 500 else "✗ Down"
-            print(f"   {name}: {status}")
-            if response.status_code >= 500:
-                all_running = False
-        except requests.exceptions.RequestException as e:
-            print(f"   {name}: ✗ Not available ({type(e).__name__})")
-            all_running = False
+#     for name, url in services.items():
+#         try:
+#             response = requests.get(url, timeout=5)
+#             # Accept 200 (OK) or any response that shows the service is running
+#             status = "✓ Running" if response.status_code < 500 else "✗ Down"
+#             print(f"   {name}: {status}")
+#             if response.status_code >= 500:
+#                 all_running = False
+#         except requests.exceptions.RequestException as e:
+#             print(f"   {name}: ✗ Not available ({type(e).__name__})")
+#             all_running = False
     
-    if not all_running:
-        print("\nWarning: Not all microservices are running")
-        print("Integration tests may fail or be skipped")
-        print("\nTo run all services:")
-        print("  - Users: cd backend/users && python app.py")
-        print("  - Tasks: cd backend/tasks && python app.py")
-        print("  - Projects: cd backend/projects && python app.py")
-        print("  - Team: cd backend/team && python app.py")
-        print("  - Dept: cd backend/dept && python app.py")
+#     if not all_running:
+#         print("\nWarning: Not all microservices are running")
+#         print("Integration tests may fail or be skipped")
+#         print("\nTo run all services:")
+#         print("  - Users: cd backend/users && python app.py")
+#         print("  - Tasks: cd backend/tasks && python app.py")
+#         print("  - Projects: cd backend/projects && python app.py")
+#         print("  - Team: cd backend/team && python app.py")
+#         print("  - Dept: cd backend/dept && python app.py")
     
-    return all_running
+#     return all_running
 
 def run_model_tests():
     """Run report model/unit tests (no microservices needed)."""
@@ -138,9 +138,8 @@ def main():
     # Always run model/unit tests (no microservices needed)
     model_success = run_model_tests()
     
-    # Check if microservices are available
-    print()
-    has_services = check_microservices()
+
+    has_services = True
     
     if has_services:
         controller_success = run_controller_tests()
