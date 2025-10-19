@@ -27,6 +27,10 @@ class TaskService:
         data.pop("id", None)
 
         created = self.repo.insert_task(data)
+        
+        # Trigger collaborator notifications after successful task creation
+        self._trigger_collaborator_notifications(created.get('id'), payload)
+        
         return {"__status": 201, "Message": f"Task created! Task ID: {created.get('id')}", "data": created}
 
     # get tasks by user_id (in owner_id or collaborators) with nested subtasks
@@ -158,6 +162,9 @@ class TaskService:
         # Perform the update
         try:
             updated_task_data = self.repo.update_task(task_id, update_data)
+            
+            # Check for collaborator additions and trigger notifications
+            self._trigger_collaborator_addition_notifications(existing_task_data, update_fields, task_id)
             
             # Notifications are now handled by the frontend to prevent duplicates
             # self._trigger_update_notifications(existing_task_data, update_fields, task_id)
@@ -328,6 +335,91 @@ class TaskService:
                 print(f"Warning: Failed to send ownership transfer notification: {response.status_code}")
         except Exception as e:
             print(f"Warning: Failed to send ownership transfer notification: {e}")
+
+    def _trigger_collaborator_notifications(self, task_id: int, payload: Dict[str, Any]):
+        """
+        Trigger notifications for collaborators when a new task is created.
+        """
+        try:
+            # Get collaborators from payload
+            collaborators = payload.get("collaborators", [])
+            owner_id = payload.get("owner_id")
+            
+            # Get creator name
+            creator_name = "System"
+            if owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        creator_name = user_data.get("data", {}).get("name", "System")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            # Send notifications to all collaborators except the owner
+            collaborator_ids = [collab_id for collab_id in collaborators if collab_id != owner_id]
+            
+            if collaborator_ids:
+                response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-collaborator-addition", 
+                                       json={
+                                           "task_id": task_id,
+                                           "collaborator_ids": collaborator_ids,
+                                           "creator_name": creator_name
+                                       })
+                if response.status_code not in [200, 201]:
+                    print(f"Warning: Failed to send collaborator notifications: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send collaborator notifications: {e}")
+
+    def _trigger_collaborator_addition_notifications(self, existing_task_data: Dict[str, Any], update_fields: Dict[str, Any], task_id: int):
+        """
+        Trigger notifications for newly added collaborators when updating an existing task.
+        """
+        try:
+            # Check if collaborators field was updated
+            if 'collaborators' not in update_fields:
+                return
+            
+            # Get existing and new collaborators
+            existing_collaborators = set(existing_task_data.get("collaborators", []) or [])
+            new_collaborators = set(update_fields.get("collaborators", []) or [])
+            
+            # Find newly added collaborators (excluding the owner)
+            owner_id = existing_task_data.get("owner_id")
+            newly_added_collaborators = new_collaborators - existing_collaborators
+            
+            # Remove owner from newly added collaborators (they shouldn't get notifications)
+            if owner_id:
+                newly_added_collaborators.discard(owner_id)
+            
+            if not newly_added_collaborators:
+                return
+            
+            # Get updater name
+            updater_name = "System"
+            # Try to get updater from request context or use owner as fallback
+            if owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        updater_name = user_data.get("data", {}).get("name", "System")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            # Send notifications to newly added collaborators
+            collaborator_ids = list(newly_added_collaborators)
+            if collaborator_ids:
+                response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-collaborator-addition", 
+                                       json={
+                                           "task_id": task_id,
+                                           "collaborator_ids": collaborator_ids,
+                                           "creator_name": updater_name
+                                       })
+                if response.status_code not in [200, 201]:
+                    print(f"Warning: Failed to send collaborator addition notifications: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send collaborator addition notifications: {e}")
 
     def staff_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """

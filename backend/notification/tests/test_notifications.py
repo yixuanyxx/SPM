@@ -112,7 +112,7 @@ def test_email_notification_direct():
     # Test direct email sending
     test_data = {
         "user_email": user_email,
-        "subject": "Test Notification - SPM",
+        "subject": "Test Notification",
         "message": "<p>This is a test email notification.</p>"
     }
     

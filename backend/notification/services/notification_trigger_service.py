@@ -96,10 +96,10 @@ class NotificationTriggerService:
         """
         # Create subject based on notification type
         subject_map = {
-            "task_assigned": "New Task Assignment - SPM",
-            "task_ownership_transferred": "Task Ownership Transfer - SPM",
-            "task_updated": "Task Update Notification - SPM",
-            "project_collaborator_added": "Project Collaborator Addition - SPM",
+            "task_assigned": "New Task Assignmen",
+            "task_ownership_transferred": "Task Ownership Transfer",
+            "task_updated": "Task Update Notification",
+            "project_collaborator_added": "Project Collaborator Addition",
             "general": "SPM Notification",
             "system": "SPM System Notification"
         }
@@ -244,34 +244,70 @@ class NotificationTriggerService:
             due_date = task_details.get("due_date", "No due date set")
             status = task_details.get("status", "Unknown")
             
-            # HTML content for email
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # Get all collaborators for the task
+            collaborators = task_details.get("collaborators", [])
+            collaborators_info = []
+            if collaborators:
+                for collab_id in collaborators:
+                    collab_details = self.get_user_details(collab_id)
+                    if collab_details:
+                        collaborators_info.append(collab_details.get("name", f"User {collab_id}"))
+            
+            collaborators_text = ", ".join(collaborators_info) if collaborators_info else "None"
+            
+            # HTML content for email - following the new format
             notification_content = f"""
-            <p><strong>Task Assignment Notification</strong></p>
-            <p>You have been assigned as a collaborator to:</p>
-            <ul>
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Assignment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been added as a collaborator to:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
                 <li><strong>Task:</strong> {task_name}</li>
                 <li><strong>Task ID:</strong> {task_id}</li>
                 <li><strong>Description:</strong> {description}</li>
                 <li><strong>Status:</strong> {status}</li>
                 <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Assigned by:</strong> {owner_name}</li>
-                <li><strong>Role:</strong> Collaborator</li>
+                <li><strong>Added by:</strong> {owner_name}</li>
+                <li><strong>Your Role:</strong> Collaborator</li>
+                <li><strong>All Collaborators:</strong> {collaborators_text}</li>
             </ul>
-            <p>You can now view and collaborate on this task in your SPM dashboard.</p>
+            <p style="color: #6b7280; font-size: 14px;">You can now view and collaborate on this task in your SPM dashboard.</p>
             """
             
-            # Plain text content for in-app notification
-            plain_text = f"You have been assigned a new task '{task_name}' by {owner_name}. Due date: {due_date}"
+            # Plain text content for in-app notification - following the new format
+            plain_text = f"""**Task Assignment Summary**
+You have been added as a collaborator to:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Added by: {owner_name}
+Your Role: Collaborator
+All Collaborators: {collaborators_text}
+
+You can now view and collaborate on this task in your SPM dashboard."""
         else:
             # HTML content for email
             notification_content = f"""
-            <p><strong>Task Assignment Notification</strong></p>
-            <p>You have been assigned to task (ID: {task_id}) as a collaborator by {owner_name}.</p>
-            <p>You can now view and collaborate on this task in your SPM dashboard.</p>
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Assignment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been added as a collaborator to task (ID: {task_id}) by {owner_name}.</p>
+            <p style="color: #6b7280; font-size: 14px;">You can now view and collaborate on this task in your SPM dashboard.</p>
             """
             
             # Plain text content for in-app notification
-            plain_text = f"You have been assigned to task (ID: {task_id}) by {owner_name}"
+            plain_text = f"""**Task Assignment Summary**
+You have been added as a collaborator to task (ID: {task_id}) by {owner_name}.
+
+You can now view and collaborate on this task in your SPM dashboard."""
         
         return self.send_notification_based_on_preferences(
             assigned_user_id, 
@@ -294,39 +330,63 @@ class NotificationTriggerService:
             due_date = task_details.get("due_date", "No due date set")
             status = task_details.get("status", "Unknown")
             
-            # HTML content for email
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - using the same format as task update notifications
             notification_content = f"""
-            <p><strong>Task Ownership Transfer Notification</strong></p>
-            <p>You have been assigned as the new owner of:</p>
-            <ul>
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Assignment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been assigned as the new owner of:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
                 <li><strong>Task:</strong> {task_name}</li>
                 <li><strong>Task ID:</strong> {task_id}</li>
                 <li><strong>Description:</strong> {description}</li>
                 <li><strong>Status:</strong> {status}</li>
                 <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Previous Owner:</strong> {previous_owner_name}</li>
+                <li><strong>Assigned by:</strong> {previous_owner_name}</li>
                 <li><strong>Your Role:</strong> Owner</li>
             </ul>
-            <p>As the new owner, you are responsible for managing this task and can edit its details.</p>
+            <p style="color: #6b7280; font-size: 14px;">As the new owner, you are responsible for managing this task and can edit its details.</p>
             """
             
-            # Plain text content for in-app notification
-            plain_text = f"You are now the owner of task '{task_name}'. Previous owner: {previous_owner_name}"
+            # Plain text content for in-app notification - using the same format as task update notifications
+            plain_text = f"""**Task Assignment Summary**
+You have been assigned as the new owner of:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Assigned by: {previous_owner_name}
+Your Role: Owner
+
+As the new owner, you are responsible for managing this task and can edit its details."""
         else:
             # HTML content for email
             notification_content = f"""
-            <p><strong>Task Ownership Transfer Notification</strong></p>
-            <p>You have been assigned as the new owner of task (ID: {task_id}) by {previous_owner_name}.</p>
-            <p>As the new owner, you are responsible for managing this task and can edit its details.</p>
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Assignment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been assigned as the new owner of task (ID: {task_id}) by {previous_owner_name}.</p>
+            <p style="color: #6b7280; font-size: 14px;">As the new owner, you are responsible for managing this task and can edit its details.</p>
             """
             
             # Plain text content for in-app notification
-            plain_text = f"You are now the owner of task (ID: {task_id}). Previous owner: {previous_owner_name}"
+            plain_text = f"""
+**Task Assignment Summary**
+You have been assigned as the new owner of task (ID: {task_id}) by {previous_owner_name}.
+
+As the new owner, you are responsible for managing this task and can edit its details."""
         
         return self.send_notification_based_on_preferences(
             new_owner_id, 
             notification_content, 
-            "task_ownership_transferred", 
+            "task_assigned", 
             None,  # Set to None to avoid foreign key constraint
             plain_text
         )
@@ -392,151 +452,6 @@ class NotificationTriggerService:
             plain_text
         )
     
-    def notify_task_status_change(self, task_id: int, user_ids: List[int], old_status: str, new_status: str, updater_name: str = "System") -> List[Dict[str, Any]]:
-        """
-        Send notification when task status changes to all collaborators.
-        """
-        # Get task details from Supabase for better notification content
-        task_details = self._get_task_details_from_supabase(task_id)
-        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
-        description = task_details.get("description", "No description available") if task_details else "No description available"
-        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
-        
-        # HTML content for email
-        notification_content = f"""
-        <p><strong>Task Status Update</strong></p>
-        <p>The status of your assigned task has been updated:</p>
-        <ul>
-            <li><strong>Task:</strong> {task_name}</li>
-            <li><strong>Task ID:</strong> {task_id}</li>
-            <li><strong>Description:</strong> {description}</li>
-            <li><strong>Due Date:</strong> {due_date}</li>
-            <li><strong>Previous Status:</strong> {old_status}</li>
-            <li><strong>New Status:</strong> {new_status}</li>
-            <li><strong>Updated by:</strong> {updater_name}</li>
-        </ul>
-        <p>Please review the task and take any necessary actions based on the status change.</p>
-        """
-        
-        # Plain text content for in-app notification
-        plain_text = f"Task '{task_name}' status changed from {old_status} to {new_status} by {updater_name}"
-        
-        results = []
-        for user_id in user_ids:
-            result = self.send_notification_based_on_preferences(
-                user_id, 
-                notification_content, 
-                "task_updated", 
-                None,  # Set to None to avoid foreign key constraint
-                plain_text
-            )
-            results.append({"user_id": user_id, "result": result})
-        
-        return results
-    
-    def notify_task_due_date_change(self, task_id: int, user_ids: List[int], old_due_date: str, new_due_date: str, updater_name: str = "System") -> List[Dict[str, Any]]:
-        """
-        Send notification when task due date changes to all collaborators.
-        """
-        # Get task details from Supabase for better notification content
-        task_details = self._get_task_details_from_supabase(task_id)
-        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
-        description = task_details.get("description", "No description available") if task_details else "No description available"
-        status = task_details.get("status", "Unknown") if task_details else "Unknown"
-        
-        # HTML content for email
-        notification_content = f"""
-        <p><strong>Task Due Date Update</strong></p>
-        <p>The due date of your assigned task has been updated:</p>
-        <ul>
-            <li><strong>Task:</strong> {task_name}</li>
-            <li><strong>Task ID:</strong> {task_id}</li>
-            <li><strong>Description:</strong> {description}</li>
-            <li><strong>Current Status:</strong> {status}</li>
-            <li><strong>Previous Due Date:</strong> {old_due_date}</li>
-            <li><strong>New Due Date:</strong> {new_due_date}</li>
-            <li><strong>Updated by:</strong> {updater_name}</li>
-        </ul>
-        <p>Please adjust your schedule accordingly to meet the new deadline.</p>
-        """
-        
-        # Plain text content for in-app notification
-        plain_text = f"Task '{task_name}' due date changed from {old_due_date} to {new_due_date} by {updater_name}"
-        
-        results = []
-        for user_id in user_ids:
-            result = self.send_notification_based_on_preferences(
-                user_id, 
-                notification_content, 
-                "task_updated", 
-                None,  # Set to None to avoid foreign key constraint
-                plain_text
-            )
-            results.append({"user_id": user_id, "result": result})
-        
-        return results
-    
-    def notify_task_description_change(self, task_id: int, user_ids: List[int], old_description: str = None, new_description: str = None, updater_name: str = "System") -> List[Dict[str, Any]]:
-        """
-        Send notification when task description changes to all collaborators.
-        """
-        # Get task details from Supabase for better notification content
-        task_details = self._get_task_details_from_supabase(task_id)
-        task_name = task_details.get("task_name", f"Task {task_id}") if task_details else f"Task {task_id}"
-        current_description = new_description or task_details.get("description", "No description available") if task_details else "No description available"
-        due_date = task_details.get("due_date", "No due date set") if task_details else "No due date set"
-        status = task_details.get("status", "Unknown") if task_details else "Unknown"
-        
-        if old_description and new_description:
-            # HTML content for email
-            notification_content = f"""
-            <p><strong>Task Description Update</strong></p>
-            <p>The description of your assigned task has been updated:</p>
-            <ul>
-                <li><strong>Task:</strong> {task_name}</li>
-                <li><strong>Task ID:</strong> {task_id}</li>
-                <li><strong>Current Status:</strong> {status}</li>
-                <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Previous Description:</strong> {old_description[:100]}{'...' if len(old_description) > 100 else ''}</li>
-                <li><strong>New Description:</strong> {new_description[:100]}{'...' if len(new_description) > 100 else ''}</li>
-                <li><strong>Updated by:</strong> {updater_name}</li>
-            </ul>
-            <p>Please review the updated task description for any changes that may affect your work.</p>
-            """
-            
-            # Plain text content for in-app notification
-            plain_text = f"Task '{task_name}' description was updated by {updater_name}"
-        else:
-            # HTML content for email
-            notification_content = f"""
-            <p><strong>Task Description Update</strong></p>
-            <p>The description of your assigned task has been updated:</p>
-            <ul>
-                <li><strong>Task:</strong> {task_name}</li>
-                <li><strong>Task ID:</strong> {task_id}</li>
-                <li><strong>Current Status:</strong> {status}</li>
-                <li><strong>Due Date:</strong> {due_date}</li>
-                <li><strong>Updated Description:</strong> {current_description[:100]}{'...' if len(current_description) > 100 else ''}</li>
-                <li><strong>Updated by:</strong> {updater_name}</li>
-            </ul>
-            <p>Please review the updated task description for any changes that may affect your work.</p>
-            """
-            
-            # Plain text content for in-app notification
-            plain_text = f"Task '{task_name}' description was updated by {updater_name}"
-        
-        results = []
-        for user_id in user_ids:
-            result = self.send_notification_based_on_preferences(
-                user_id, 
-                notification_content, 
-                "task_updated", 
-                None,  # Set to None to avoid foreign key constraint
-                plain_text
-            )
-            results.append({"user_id": user_id, "result": result})
-        
-        return results
     
     def notify_bulk_task_assignment(self, task_assignments: List[Dict[str, Any]], assigner_name: str = "System") -> List[Dict[str, Any]]:
         """
@@ -566,22 +481,53 @@ class NotificationTriggerService:
         """
         results = []
         
+        # Get project details to get all collaborators
+        try:
+            response = requests.get(f"http://127.0.0.1:5001/projects/{project_id}")
+            if response.status_code == 200:
+                project_data = response.json().get("data", {})
+                all_collaborators = project_data.get("collaborators", [])
+                
+                # Get collaborator names
+                collaborators_info = []
+                if all_collaborators:
+                    for collab_id in all_collaborators:
+                        collab_details = self.get_user_details(collab_id)
+                        if collab_details:
+                            collaborators_info.append(collab_details.get("name", f"User {collab_id}"))
+                
+                collaborators_text = ", ".join(collaborators_info) if collaborators_info else "None"
+            else:
+                collaborators_text = "Unable to fetch"
+        except:
+            collaborators_text = "Unable to fetch"
+        
         for collaborator_id in collaborator_ids:
-            # HTML content for email
+            # HTML content for email - following the new format
             notification_content = f"""
-            <p><strong>Project Collaborator Addition</strong></p>
-            <p>You have been added as a collaborator to the project:</p>
-            <ul>
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Project Assignment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been added as a collaborator to:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
                 <li><strong>Project:</strong> {project_name}</li>
                 <li><strong>Project ID:</strong> {project_id}</li>
-                <li><strong>Added By:</strong> {adder_name}</li>
+                <li><strong>Added by:</strong> {adder_name}</li>
                 <li><strong>Your Role:</strong> Collaborator</li>
+                <li><strong>All Collaborators:</strong> {collaborators_text}</li>
             </ul>
-            <p>You can now view and contribute to this project.</p>
+            <p style="color: #6b7280; font-size: 14px;">You can now view and contribute to this project.</p>
             """
             
-            # Plain text content for in-app notification
-            plain_text = f"You have been added as a collaborator to project '{project_name}' by {adder_name}"
+            # Plain text content for in-app notification - following the new format
+            plain_text = f"""**Project Assignment Summary**
+You have been added as a collaborator to:
+
+Project: {project_name}
+Project ID: {project_id}
+Added by: {adder_name}
+Your Role: Collaborator
+All Collaborators: {collaborators_text}
+
+You can now view and contribute to this project."""
             
             result = self.send_notification_based_on_preferences(
                 collaborator_id,
@@ -630,7 +576,7 @@ class NotificationTriggerService:
         
         # HTML content for email - using your specified format with bold heading
         notification_content = f"""
-        <h2 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Update Summary</strong></h2>
+        <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Task Update Summary</strong></h3>
         <p style="color: #374151; margin-bottom: 12px;">Changes made to your task {task_id}:</p>
         <ul style="color: #374151; margin-bottom: 16px;">
             {changes_html}

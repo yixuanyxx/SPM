@@ -402,16 +402,40 @@ export default {
     async triggerAssignmentNotification(assigneeData) {
       try {
         // Get current user info
-        const currentUserName = localStorage.getItem('spm_username') || 'System';
+        const currentUserId = localStorage.getItem('spm_userid');
+        let currentUserName = localStorage.getItem('spm_username') || 'System';
         
-        // Trigger assignment notification
-        await enhancedNotificationService.triggerTaskAssignmentNotification(
+        // Try to get the actual user name from the user service
+        if (currentUserId) {
+          try {
+            const userResponse = await fetch(`http://localhost:5003/users/${currentUserId}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              currentUserName = userData.data?.name || currentUserName;
+            }
+          } catch (error) {
+            console.warn('Failed to fetch user name, using stored name:', error);
+          }
+        }
+        
+        // Get current task owner for ownership transfer notification
+        const currentTaskResponse = await fetch(`http://localhost:5002/tasks/${this.taskId}`)
+        if (!currentTaskResponse.ok) {
+          throw new Error('Failed to fetch current task data')
+        }
+        
+        const currentTaskData = await currentTaskResponse.json()
+        const currentTask = currentTaskData.task || currentTaskData
+        const currentOwnerId = currentTask.owner_id
+        
+        // Trigger ownership transfer notification (since we're assigning as owner, not collaborator)
+        await enhancedNotificationService.triggerTaskOwnershipTransferNotification(
           this.taskId,
           assigneeData.userid,
           currentUserName
         );
         
-        console.log('Task assignment notification sent successfully');
+        console.log('Task ownership transfer notification sent successfully');
       } catch (error) {
         console.error('Failed to send task assignment notification:', error);
         // Don't throw error to avoid breaking the main assignment flow

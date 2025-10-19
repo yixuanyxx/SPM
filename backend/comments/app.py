@@ -17,6 +17,6 @@ def create_app():
 
 if __name__ == "__main__":
     app = create_app()
-    port = "5004"
+    port = "5008"
     print(f"Comments microservice running on port {port}")
     app.run(host="0.0.0.0", port=int(port), debug=True)
