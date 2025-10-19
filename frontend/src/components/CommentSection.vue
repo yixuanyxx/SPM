@@ -42,12 +42,6 @@
       </div>
     </div>
 
-    <!-- Sort Options -->
-    <div class="sort-container">
-      <button class="sort-btn active">Top comments</button>
-      <button class="sort-btn">Newest first</button>
-    </div>
-
     <!-- Comments List -->
     <div class="comments-list">
       <div 
@@ -70,6 +64,9 @@
                 {{ capitalizeRole(comment.user_role) }}
               </span>
               <span class="comment-timestamp">{{ formatCommentTime(comment.created_at) }}</span>
+              <span class="comment-edited" v-if="isCommentEdited(comment)">
+                (edited)
+              </span>
             </div>
 
             <div class="comment-text-container">
@@ -77,17 +74,12 @@
             </div>
 
             <div class="comment-actions">
-              <button class="action-btn like-btn" title="Like">
-                <i class="bi bi-hand-thumbs-up"></i>
-              </button>
-              <button class="action-btn dislike-btn" title="Dislike">
-                <i class="bi bi-hand-thumbs-down"></i>
-              </button>
               <div class="action-menu">
                 <button 
                   v-if="canEditComment(comment.user_id)"
                   @click="editComment(comment)"
                   class="menu-btn"
+                  title="Edit"
                 >
                   <i class="bi bi-pencil"></i>
                 </button>
@@ -95,6 +87,7 @@
                   v-if="canDeleteComment(comment.user_id)"
                   @click="deleteComment(comment.id)"
                   class="menu-btn delete"
+                  title="Delete"
                 >
                   <i class="bi bi-trash"></i>
                 </button>
@@ -114,6 +107,11 @@
     <!-- Loading State -->
     <div v-if="isLoading" class="loading-state">
       <p>Loading comments...</p>
+    </div>
+
+    <!-- Toast Notification -->
+    <div v-if="toast.show" class="toast" :class="toast.type">
+      {{ toast.message }}
     </div>
   </div>
 </template>
@@ -152,6 +150,21 @@ const isSubmitting = ref(false)
 const newComment = ref('')
 const isLoading = ref(false)
 const editingCommentId = ref(null)
+
+// Toast state
+const toast = ref({
+  show: false,
+  message: '',
+  type: 'success' // 'success' or 'error'
+})
+
+// Show toast notification
+const showToast = (message, type = 'success', duration = 3000) => {
+  toast.value = { show: true, message, type }
+  setTimeout(() => {
+    toast.value.show = false
+  }, duration)
+}
 
 // Extract username from email
 const extractUsernameFromEmail = (email) => {
@@ -192,19 +205,13 @@ const fetchComments = async () => {
 
 // Submit new comment
 const submitComment = async () => {
-  console.log('=== SUBMIT COMMENT CLICKED ===')
-  console.log('New comment value:', newComment.value)
-  console.log('Task ID:', props.taskId)
-  
   if (!newComment.value.trim()) {
-    console.error('Comment is empty!')
-    alert('Please enter a comment')
+    showToast('Please enter a comment', 'error')
     return
   }
   
   if (!props.taskId) {
-    console.error('No task ID provided!')
-    alert('Error: No task ID')
+    showToast('Error: No task ID', 'error')
     return
   }
 
@@ -213,13 +220,6 @@ const submitComment = async () => {
   try {
     const username = extractUsernameFromEmail(currentUserEmail.value)
     
-    console.log('Current user data:', {
-      userId: currentUserId.value,
-      email: currentUserEmail.value,
-      username: username,
-      role: currentUserRole.value
-    })
-    
     const commentData = {
       task_id: parseInt(props.taskId),
       user_id: currentUserId.value,
@@ -227,9 +227,6 @@ const submitComment = async () => {
       user_role: currentUserRole.value,
       content: newComment.value.trim()
     }
-
-    console.log('Submitting comment data:', commentData)
-    console.log('API URL:', COMMENTS_API_URL)
 
     // If editing existing comment
     if (editingCommentId.value) {
@@ -252,18 +249,16 @@ const submitComment = async () => {
       const data = await response.json()
       
       if (data && data.data) {
-        // Update comment in local array
         const index = comments.value.findIndex(c => c.id === editingCommentId.value)
         if (index !== -1) {
           comments.value[index] = data.data
         }
         emit('comments-updated', comments.value)
+        showToast('Comment updated successfully', 'success')
       }
       editingCommentId.value = null
     } else {
       // Create new comment
-      console.log('Creating comment with data:', commentData)
-      
       const response = await fetch(
         `${COMMENTS_API_URL}/comments/create`,
         {
@@ -275,8 +270,6 @@ const submitComment = async () => {
         }
       )
       
-      console.log('Response status:', response.status)
-      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         console.error('Error creating comment:', errorData)
@@ -284,13 +277,11 @@ const submitComment = async () => {
       }
       
       const data = await response.json()
-      console.log('Comment created successfully:', data)
       
       if (data && data.data) {
-        // Add new comment to the beginning of the array
         comments.value.unshift(data.data)
         emit('comments-updated', comments.value)
-        console.log('Comment added to list. Total comments:', comments.value.length)
+        showToast('Comment posted successfully', 'success')
       }
     }
 
@@ -298,7 +289,7 @@ const submitComment = async () => {
     showCommentForm.value = false
   } catch (error) {
     console.error('Error submitting comment:', error)
-    alert('Failed to post comment. Please try again.')
+    showToast('Failed to post comment. Please try again.', 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -334,21 +325,38 @@ const deleteComment = async (commentId) => {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
-    // Remove comment from local array
     comments.value = comments.value.filter(c => c.id !== commentId)
     emit('comments-updated', comments.value)
+    showToast('Comment deleted successfully', 'success')
   } catch (error) {
     console.error('Error deleting comment:', error)
-    alert('Failed to delete comment. Please try again.')
+    showToast('Failed to delete comment. Please try again.', 'error')
   }
+}
+
+// Check if comment has been edited
+const isCommentEdited = (comment) => {
+  if (!comment.created_at || !comment.updated_at) return false
+  const createdTime = new Date(comment.created_at).getTime()
+  const updatedTime = new Date(comment.updated_at).getTime()
+  return updatedTime - createdTime > 1000 // More than 1 second difference
 }
 
 // Get user avatar
 const getUserAvatar = (userId) => {
+  if (userId === currentUserId.value && currentUserEmail.value) {
+    const username = extractUsernameFromEmail(currentUserEmail.value)
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&size=36`
+  }
+  
   const user = users.value[userId]
-  const name = user?.name || user?.email || 'Unknown'
-  const displayName = name.includes('@') ? extractUsernameFromEmail(name) : name
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&size=32`
+  const name = user?.name || user?.email
+  
+  const displayName = name 
+    ? (name.includes('@') ? extractUsernameFromEmail(name) : name)
+    : `User ${userId}`
+  
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=random&size=36`
 }
 
 // Get current user name
@@ -416,6 +424,7 @@ watch(() => props.taskId, (newTaskId) => {
   margin-top: 2rem;
   padding: 1.5rem 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  position: relative;
 }
 
 .comments-header {
@@ -524,34 +533,6 @@ watch(() => props.taskId, (newTaskId) => {
   cursor: not-allowed;
 }
 
-.sort-container {
-  display: flex;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  padding: 1rem 0;
-  border-bottom: 1px solid #e5e5e5;
-}
-
-.sort-btn {
-  padding: 0.5rem 0;
-  border: none;
-  background: transparent;
-  color: #030303;
-  font-size: 0.9rem;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-}
-
-.sort-btn.active {
-  border-bottom-color: #030303;
-  font-weight: 500;
-}
-
-.sort-btn:hover {
-  color: #606060;
-}
-
 .comments-list {
   display: flex;
   flex-direction: column;
@@ -610,6 +591,12 @@ watch(() => props.taskId, (newTaskId) => {
   color: #606060;
 }
 
+.comment-edited {
+  font-size: 0.85rem;
+  color: #999;
+  font-style: italic;
+}
+
 .comment-text-container {
   margin-bottom: 0.5rem;
 }
@@ -634,39 +621,10 @@ watch(() => props.taskId, (newTaskId) => {
   margin-top: 0.5rem;
 }
 
-.action-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: #606060;
-  font-size: 0.9rem;
-  padding: 0.25rem 0.5rem;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.action-btn:hover {
-  color: #030303;
-}
-
-.action-btn i {
-  font-size: 0.9rem;
-}
-
-.like-btn:hover {
-  color: #065fd4;
-}
-
-.dislike-btn:hover {
-  color: #ff4444;
-}
-
 .action-menu {
-  margin-left: auto;
   display: flex;
   gap: 0.25rem;
+  margin-left: 0;
 }
 
 .menu-btn {
@@ -707,5 +665,36 @@ watch(() => props.taskId, (newTaskId) => {
   padding: 2rem;
   color: #606060;
   font-size: 0.95rem;
+}
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  padding: 1rem 1.5rem;
+  border-radius: 0.5rem;
+  color: white;
+  font-size: 0.9rem;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+.toast.success {
+  background-color: #10b981;
+}
+
+.toast.error {
+  background-color: #ef4444;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 </style>
