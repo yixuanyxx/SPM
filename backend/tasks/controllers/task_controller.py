@@ -542,3 +542,7 @@ def get_tasks_by_department(dept_id: int):
         return jsonify(result), status
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
+    
+@task_bp.route("/health")
+def health_check():
+    return jsonify({"status": "ok"}), 200
