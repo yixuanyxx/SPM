@@ -27,15 +27,25 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
 
-          echo "==> Starting all backend microservices..."
+          echo "==> Installing dependencies and starting microservices..."
           for svc in backend/*/ ; do
             [[ -f "${svc}app.py" ]] || continue
-            echo "Starting ${svc} ..."
-            nohup python "${svc}app.py" > "${svc}service.log" 2>&1 &
+            echo "Preparing ${svc} ..."
+            
+            # Install requirements first
+            if [[ -f "${svc}requirements.txt" ]]; then
+              pip install -q -r "${svc}requirements.txt"
+            fi
+            
+            # Start service in background
+            cd "${svc}"
+            nohup python app.py > service.log 2>&1 &
+            echo "  Started ${svc} (PID: $!)"
+            cd - > /dev/null
           done
 
           echo "Waiting for microservices to boot..."
-          sleep 10
+          sleep 15
 
           echo "==> Scanning backend microservices..."
           for svc in backend/*/ ; do

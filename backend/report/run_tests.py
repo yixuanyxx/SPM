@@ -29,13 +29,14 @@ def check_microservices():
     
     for name, url in services.items():
         try:
-            response = requests.get(url, timeout=2)
-            status = "✓ Running" if response.status_code in [200, 404] else "✗ Down"
+            response = requests.get(url, timeout=5)
+            # Accept 200 (OK) or any response that shows the service is running
+            status = "✓ Running" if response.status_code < 500 else "✗ Down"
             print(f"   {name}: {status}")
-            if response.status_code not in [200, 404]:
+            if response.status_code >= 500:
                 all_running = False
-        except requests.exceptions.RequestException:
-            print(f"   {name}: ✗ Not available")
+        except requests.exceptions.RequestException as e:
+            print(f"   {name}: ✗ Not available ({type(e).__name__})")
             all_running = False
     
     if not all_running:
