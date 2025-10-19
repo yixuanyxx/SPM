@@ -13,7 +13,25 @@
           <p><strong>Your Role:</strong> {{ userRole.charAt(0).toUpperCase() + userRole.slice(1) }}</p>
         </div>
 
-        <form @submit.prevent="handleAssignment">
+        <!-- Loading indicator -->
+        <div v-if="isLoading" class="loading-message">
+          <p>Loading team members...</p>
+        </div>
+
+        <!-- No eligible members message -->
+        <div v-else-if="eligibleMembers.length === 0" class="no-members-message">
+          <p>
+            <strong>No team members available to assign to.</strong>
+          </p>
+          <p v-if="userRole === 'manager'">
+            There are no staff members in your team to assign this task to.
+          </p>
+          <p v-else-if="userRole === 'director'">
+            There are no managers in your department to assign this task to.
+          </p>
+        </div>
+
+        <form v-else @submit.prevent="handleAssignment">
           <div class="form-group">
             <label for="assignee">Assign to:</label>
             <select 
@@ -405,8 +423,11 @@ export default {
     isVisible(newVal) {
       if (newVal) {
         this.clearMessages()
+        this.isLoading = true
         // Fetch eligible users when popup opens
-        this.fetchEligibleUsers()
+        this.fetchEligibleUsers().finally(() => {
+          this.isLoading = false
+        })
       }
     },
     selectedAssignee() {
@@ -501,6 +522,53 @@ export default {
   font-size: 0.85rem;
   color: #374151;
   line-height: 1.4;
+}
+
+/* No Members Message */
+.no-members-message {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.no-members-message p {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.no-members-message p:first-child {
+  margin-top: 0;
+}
+
+.no-members-message p:last-child {
+  margin-bottom: 0;
+}
+
+.no-members-message strong {
+  color: #78350f;
+  font-weight: 600;
+}
+
+/* Loading Message */
+.loading-message {
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.loading-message p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #075985;
+  line-height: 1.5;
 }
 
 .task-info p:first-child {
@@ -667,6 +735,22 @@ export default {
     font-size: 0.8rem;
   }
 
+  .no-members-message {
+    padding: 1rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.8rem;
+  }
+
+  .loading-message {
+    padding: 1rem;
+  }
+
+  .loading-message p {
+    font-size: 0.8rem;
+  }
+
   .form-group {
     margin-bottom: 1.25rem;
   }
@@ -721,6 +805,22 @@ export default {
     margin: 0.125rem 0;
   }
 
+  .no-members-message {
+    padding: 0.875rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.75rem;
+  }
+
+  .loading-message {
+    padding: 0.875rem;
+  }
+
+  .loading-message p {
+    font-size: 0.75rem;
+  }
+
   .form-group {
     margin-bottom: 1rem;
   }
@@ -757,6 +857,22 @@ export default {
     padding: 0.625rem;
   }
 
+  .no-members-message {
+    padding: 0.75rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.7rem;
+  }
+
+  .loading-message {
+    padding: 0.75rem;
+  }
+
+  .loading-message p {
+    font-size: 0.7rem;
+  }
+
   .form-actions button {
     padding: 0.625rem 1rem;
     font-size: 0.8rem;
@@ -773,6 +889,16 @@ export default {
 
   .task-info p {
     font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
+  .no-members-message p {
+    font-size: 0.65rem;
+    line-height: 1.3;
+  }
+
+  .loading-message p {
+    font-size: 0.65rem;
     line-height: 1.3;
   }
 
