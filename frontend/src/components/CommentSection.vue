@@ -52,46 +52,46 @@
         <!-- Main Comment -->
         <div class="comment">
           <img 
-            :src="getUserAvatar(comment.user_id)" 
+            :src="getUserAvatar(comment.user_id, comment.user_name)" 
             :alt="comment.user_name"
             class="comment-avatar"
           />
           
           <div class="comment-body">
-            <div class="comment-header">
-              <span class="comment-author">{{ comment.user_name }}</span>
-              <span class="comment-role" v-if="comment.user_role">
-                {{ capitalizeRole(comment.user_role) }}
-              </span>
-              <span class="comment-timestamp">{{ formatCommentTime(comment.created_at) }}</span>
-              <span class="comment-edited" v-if="isCommentEdited(comment)">
-                (edited)
-              </span>
-            </div>
-
-            <div class="comment-text-container">
-              <p class="comment-text" v-html="formatCommentText(comment.content)"></p>
-            </div>
-
-            <div class="comment-actions">
-              <div class="action-menu">
-                <button 
-                  v-if="canEditComment(comment.user_id)"
-                  @click="editComment(comment)"
-                  class="menu-btn"
-                  title="Edit"
-                >
-                  <i class="bi bi-pencil"></i>
-                </button>
-                <button 
-                  v-if="canDeleteComment(comment.user_id)"
-                  @click="deleteComment(comment.id)"
-                  class="menu-btn delete"
-                  title="Delete"
-                >
-                  <i class="bi bi-trash"></i>
-                </button>
+            <div class="comment-content">
+              <div class="comment-header">
+                <span class="comment-author">{{ comment.user_name }}</span>
+                <span class="comment-role" v-if="comment.user_role">
+                  {{ capitalizeRole(comment.user_role) }}
+                </span>
+                <span class="comment-timestamp">{{ formatCommentTime(comment.created_at) }}</span>
+                <span class="comment-edited" v-if="isCommentEdited(comment)">
+                  (edited)
+                </span>
               </div>
+
+              <div class="comment-text-container">
+                <p class="comment-text" v-html="formatCommentText(comment.content)"></p>
+              </div>
+            </div>
+
+            <div class="action-menu">
+              <button 
+                v-if="canEditComment(comment.user_id)"
+                @click="editComment(comment)"
+                class="menu-btn"
+                title="Edit"
+              >
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button 
+                v-if="canDeleteComment(comment.user_id)"
+                @click="deleteComment(comment.id)"
+                class="menu-btn delete"
+                title="Delete"
+              >
+                <i class="bi bi-trash"></i>
+              </button>
             </div>
           </div>
         </div>
@@ -112,6 +112,33 @@
     <!-- Toast Notification -->
     <div v-if="toast.show" class="toast" :class="toast.type">
       {{ toast.message }}
+    </div>
+
+    <!-- Delete Confirmation Dialog -->
+    <div v-if="showDeleteConfirm" class="dialog-overlay">
+      <div class="dialog-container">
+        <div class="dialog-content">
+          <div class="dialog-header">
+            <i class="bi bi-exclamation-triangle-fill warning-icon"></i>
+            <h4>Delete Comment</h4>
+          </div>
+          <p>Are you sure you want to delete this comment? This action cannot be undone.</p>
+          <div class="dialog-actions">
+            <button 
+              class="btn-secondary"
+              @click="cancelDelete"
+            >
+              Cancel
+            </button>
+            <button 
+              class="btn-danger"
+              @click="confirmDelete"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -150,6 +177,8 @@ const isSubmitting = ref(false)
 const newComment = ref('')
 const isLoading = ref(false)
 const editingCommentId = ref(null)
+const deleteConfirmationId = ref(null)
+const showDeleteConfirm = ref(false)
 
 // Toast state
 const toast = ref({
@@ -311,11 +340,18 @@ const editComment = (comment) => {
 
 // Delete comment
 const deleteComment = async (commentId) => {
-  if (!confirm('Delete this comment?')) return
+  // Open confirmation dialog
+  deleteConfirmationId.value = commentId
+  showDeleteConfirm.value = true
+}
+
+// Confirm delete
+const confirmDelete = async () => {
+  if (!deleteConfirmationId.value) return
 
   try {
     const response = await fetch(
-      `${COMMENTS_API_URL}/comments/${commentId}`,
+      `${COMMENTS_API_URL}/comments/${deleteConfirmationId.value}`,
       {
         method: 'DELETE'
       }
@@ -325,13 +361,22 @@ const deleteComment = async (commentId) => {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
-    comments.value = comments.value.filter(c => c.id !== commentId)
+    comments.value = comments.value.filter(c => c.id !== deleteConfirmationId.value)
     emit('comments-updated', comments.value)
     showToast('Comment deleted successfully', 'success')
   } catch (error) {
     console.error('Error deleting comment:', error)
     showToast('Failed to delete comment. Please try again.', 'error')
+  } finally {
+    showDeleteConfirm.value = false
+    deleteConfirmationId.value = null
   }
+}
+
+// Cancel delete
+const cancelDelete = () => {
+  showDeleteConfirm.value = false
+  deleteConfirmationId.value = null
 }
 
 // Check if comment has been edited
@@ -343,10 +388,15 @@ const isCommentEdited = (comment) => {
 }
 
 // Get user avatar
-const getUserAvatar = (userId) => {
+const getUserAvatar = (userId, userName) => {
   if (userId === currentUserId.value && currentUserEmail.value) {
     const username = extractUsernameFromEmail(currentUserEmail.value)
     return `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&size=36`
+  }
+  
+  // For other users, use the userName parameter if provided
+  if (userName) {
+    return `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random&size=36`
   }
   
   const user = users.value[userId]
@@ -549,6 +599,7 @@ watch(() => props.taskId, (newTaskId) => {
   display: flex;
   gap: 1rem;
   padding: 1rem 0;
+  align-items: center;
 }
 
 .comment-avatar {
@@ -561,6 +612,13 @@ watch(() => props.taskId, (newTaskId) => {
 }
 
 .comment-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.comment-content {
   flex: 1;
 }
 
@@ -624,7 +682,7 @@ watch(() => props.taskId, (newTaskId) => {
 .action-menu {
   display: flex;
   gap: 0.25rem;
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .menu-btn {
@@ -694,6 +752,119 @@ watch(() => props.taskId, (newTaskId) => {
   }
   to {
     transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Delete Confirmation Dialog Styles */
+.dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1100;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.dialog-container {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  animation: slideInDialog 0.3s ease-out;
+}
+
+.dialog-content {
+  text-align: center;
+}
+
+.dialog-header {
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.dialog-header h4 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.warning-icon {
+  font-size: 2rem;
+  color: #f59e0b;
+}
+
+.dialog-content p {
+  color: #4b5563;
+  margin-bottom: 1.5rem;
+  font-size: 0.975rem;
+  line-height: 1.5;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.btn-secondary {
+  background-color: white;
+  color: #4b5563;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  border: 1px solid #e5e7eb;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #f3f4f6;
+}
+
+.btn-danger {
+  background-color: #ef4444;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-danger:hover {
+  background-color: #dc2626;
+}
+
+@keyframes slideInDialog {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
     opacity: 1;
   }
 }
