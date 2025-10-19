@@ -17,15 +17,6 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Start all microservices in background
-        run: |
-          for svc in backend/*/ ; do
-            [[ -f "${svc}app.py" ]] || continue
-            echo "Starting ${svc} ..."
-            nohup python "${svc}app.py" > "${svc}service.log" 2>&1 &
-          done
-          sleep 10  # wait for them to boot up
-
       - name: Discover and test each microservice
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
@@ -35,6 +26,16 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
+
+          echo "==> Starting all backend microservices..."
+          for svc in backend/*/ ; do
+            [[ -f "${svc}app.py" ]] || continue
+            echo "Starting ${svc} ..."
+            nohup python "${svc}app.py" > "${svc}service.log" 2>&1 &
+          done
+
+          echo "Waiting for microservices to boot..."
+          sleep 10
 
           echo "==> Scanning backend microservices..."
           for svc in backend/*/ ; do
