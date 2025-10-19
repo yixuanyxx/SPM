@@ -333,7 +333,7 @@ def test_email_notification():
         data = request.get_json(silent=True) or {}
         
         user_email = data.get("user_email")
-        subject = data.get("subject", "Test Notification - SPM")
+        subject = data.get("subject", "Test Notification")
         message = data.get("message", "<p>This is a test email notification.</p>")
         
         if not user_email:
@@ -379,6 +379,79 @@ def trigger_task_consolidated_update_notification():
         results = trigger_service.notify_task_consolidated_update(task_id, user_ids, changes, updater_name)
         
         return jsonify({"message": "Consolidated notifications sent to all collaborators", "results": results, "status": 200}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/task-collaborator-addition", methods=["POST"])
+def trigger_task_collaborator_addition_notification():
+    """
+    Trigger notifications for collaborators when a new task is created.
+    
+    Required fields in JSON body:
+    - task_id: ID of the created task
+    - collaborator_ids: List of user IDs who are collaborators
+    - creator_name: Name of the person who created the task (optional, defaults to "System")
+    
+    Returns:
+    {
+        "message": "Collaborator notifications sent based on user preferences",
+        "results": [ ... notification results ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        task_id = data.get("task_id")
+        collaborator_ids = data.get("collaborator_ids", [])
+        creator_name = data.get("creator_name", "System")
+        
+        if not task_id or not collaborator_ids:
+            return jsonify({"error": "task_id and collaborator_ids are required", "status": 400}), 400
+        
+        results = []
+        for collaborator_id in collaborator_ids:
+            result = trigger_service.notify_task_assignment(task_id, collaborator_id, creator_name)
+            results.append({"user_id": collaborator_id, "result": result})
+        
+        return jsonify({"message": "Collaborator notifications sent", "results": results, "status": 200}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/project-collaborator-addition", methods=["POST"])
+def trigger_project_collaborator_addition_notification():
+    """
+    Trigger notifications for collaborators when a new project is created.
+    
+    Required fields in JSON body:
+    - project_id: ID of the created project
+    - collaborator_ids: List of user IDs who are collaborators
+    - project_name: Name of the project
+    - creator_name: Name of the person who created the project (optional, defaults to "System")
+    
+    Returns:
+    {
+        "message": "Project collaborator notifications sent based on user preferences",
+        "results": [ ... notification results ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        project_id = data.get("project_id")
+        collaborator_ids = data.get("collaborator_ids", [])
+        project_name = data.get("project_name")
+        creator_name = data.get("creator_name", "System")
+        
+        if not project_id or not collaborator_ids or not project_name:
+            return jsonify({"error": "project_id, collaborator_ids, and project_name are required", "status": 400}), 400
+        
+        results = trigger_service.notify_project_collaborator_addition(project_id, collaborator_ids, project_name, creator_name)
+        
+        return jsonify({"message": "Project collaborator notifications sent", "results": results, "status": 200}), 200
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
