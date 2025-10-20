@@ -392,43 +392,84 @@ const handleDragStart = (event, task) => {
 const handleDrop = async (event, project) => {
   const taskId = event.dataTransfer.getData('taskId')
   isDraggingOver.value = null // Reset drag state
-  
+
   try {
-    // Update task with new project_id
-    const response = await fetch(`http://localhost:5002/tasks/update`, {
+    // Fetch the task details to get its collaborators
+    const taskResponse = await fetch(`http://localhost:5002/tasks/${taskId}`)
+    if (!taskResponse.ok) {
+      throw new Error('Failed to fetch task details')
+    }
+    const taskData = await taskResponse.json()
+    const task = taskData.data || taskData
+
+    // Update the task's project_id
+    const updateResponse = await fetch(`http://localhost:5002/tasks/update`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         task_id: parseInt(taskId),
-        project_id: project.id,
-        collaborators: [parseInt(userId)] // Ensure current user is a collaborator
+        project_id: project.id
       })
     })
 
-    if (!response.ok) {
+    if (!updateResponse.ok) {
       throw new Error('Failed to update task')
     }
 
-    // Fetch updated task details
-    const taskResponse = await fetch(`http://localhost:5002/tasks/${taskId}`)
-    const taskData = await taskResponse.json()
-    const updatedTask = taskData.data || taskData
-
-    // Update the project's tasks array
-    if (!project.tasks) {
-      project.tasks = []
+    // Fetch all tasks for the project to get all collaborators and owners
+    const tasksResponse = await fetch(`http://localhost:5002/tasks/project/${project.id}`)
+    if (!tasksResponse.ok) {
+      throw new Error('Failed to fetch tasks for the project')
     }
-    project.tasks.push(updatedTask)
+    const tasksData = await tasksResponse.json()
+    const projectTasks = tasksData.data || tasksData.tasks || []
 
-    // Refresh lists
-    await Promise.all([
-      fetchProjects(),
-      fetchUnassignedTasks()
-    ])
+    // Collect all unique collaborators and owners from the tasks
+    const allCollaborators = new Set()
+    projectTasks.forEach((task) => {
+      if (task.collaborators) {
+        task.collaborators.forEach((collab) => allCollaborators.add(parseInt(collab)))
+      }
+      if (task.owner_id) {
+        allCollaborators.add(parseInt(task.owner_id))
+      }
+    })
+
+    // Ensure the project owner is not duplicated
+    const projectOwnerId = parseInt(project.owner_id)
+    allCollaborators.delete(projectOwnerId)
+
+    // Add the new collaborators to the project
+    const projectCollaborators = project.collaborators || []
+    const projectCollaboratorsSet = new Set(projectCollaborators.map((collab) => parseInt(collab)))
+
+    const newCollaborators = Array.from(allCollaborators).filter(
+      (collab) => !projectCollaboratorsSet.has(collab)
+    )
+
+    if (newCollaborators.length > 0) {
+      const updateProjectResponse = await fetch(`http://localhost:5001/projects/update`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: project.id,
+          collaborators: [...projectCollaborators, ...newCollaborators]
+        })
+      })
+
+      if (!updateProjectResponse.ok) {
+        throw new Error('Failed to update project collaborators')
+      }
+    }
+
+    // Refresh the project and unassigned tasks lists
+    await Promise.all([fetchProjects(), fetchUnassignedTasks()])
   } catch (error) {
-    console.error('Error updating task:', error)
+    console.error('Error handling task drop:', error)
     alert('Failed to assign task to project')
   }
 }
