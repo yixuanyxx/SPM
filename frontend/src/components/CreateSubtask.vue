@@ -22,21 +22,6 @@
 
     <!-- Inline Subtask Form -->
     <div v-if="showSubtaskForm" class="subtask-form">
-      <!-- Existing Subtasks Preview (only show when creating new subtask, not editing) -->
-      <div v-if="editingIndex === null && sortedSubtasks.length > 0" class="existing-subtasks-preview">
-        <h4><i class="bi bi-list-check"></i> Existing Subtasks ({{ sortedSubtasks.length }})</h4>
-        <div class="preview-list">
-          <div v-for="(subtask, index) in sortedSubtasks" :key="subtask.id" class="preview-item">
-            <span class="preview-number">#{{ index + 1 }}</span>
-            <div class="preview-content">
-              <strong>{{ subtask.task_name }}</strong>
-              <span class="preview-badge" :class="getStatusClass(subtask.status)">{{ subtask.status }}</span>
-              <span class="preview-badge" :class="getPriorityClass(subtask.priority)">P{{ subtask.priority }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div class="form-group">
         <label :class="{ 'error-label': showErrors && !currentSubtask.task_name.trim() }">
           Subtask Name<span class="required">*</span>
@@ -1245,84 +1230,5 @@ const getPriorityClass = (priority) => {
   margin-top: 4px;
   font-size: 0.875rem;
   color: #6b7280;
-}
-
-/* Existing Subtasks Preview Styles */
-.existing-subtasks-preview {
-  margin-bottom: 1.5rem;
-  padding: 1rem;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.5rem;
-}
-
-.existing-subtasks-preview h4 {
-  margin: 0 0 0.75rem 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.existing-subtasks-preview h4 i {
-  color: #3b82f6;
-}
-
-.preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.preview-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-}
-
-.preview-number {
-  font-size: 0.75rem;
-  color: #6b7280;
-  font-weight: 600;
-  background: #e5e7eb;
-  padding: 0.125rem 0.4rem;
-  border-radius: 0.25rem;
-  flex-shrink: 0;
-}
-
-.preview-content {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.preview-content strong {
-  color: #1f2937;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-  min-width: 0;
-}
-
-.preview-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  flex-shrink: 0;
 }
 </style>
