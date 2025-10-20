@@ -286,8 +286,7 @@ const scrollToForm = () => {
 // Watch for autoOpen prop and automatically open the form
 watch(() => props.autoOpen, (newValue) => {
   if (newValue) {
-    showSubtaskForm.value = true
-    scrollToForm()
+    openFormWithCreator()
   }
 }, { immediate: true })
 
@@ -407,7 +406,6 @@ const addSubtask = () => {
     due_date: currentSubtask.value.due_date,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
-    // Include collaborators with full user object data, preserving isCreator flag
     collaborators: selectedCollaborators.value.map(u => ({
       userid: parseInt(u.userid),
       email: u.email,
@@ -454,10 +452,8 @@ const editSubtask = async (sortedIndex) => {
   // Load existing collaborators
   if (subtaskToEdit.collaborators && subtaskToEdit.collaborators.length > 0) {
     try {
-      // Fetch user details for each collaborator ID
       const collaboratorDetails = await Promise.all(
         subtaskToEdit.collaborators.map(collaboratorId => {
-          // If it's already an object with userid and email, return it (preserve isCreator flag)
           if (typeof collaboratorId === 'object' && collaboratorId.userid) {
             return Promise.resolve({
               userid: collaboratorId.userid,
@@ -466,7 +462,6 @@ const editSubtask = async (sortedIndex) => {
             });
           }
           
-          // Otherwise fetch the user details from backend
           return fetch(`http://localhost:5003/users/${collaboratorId}`)
             .then(res => {
               if (!res.ok) throw new Error(`Failed to fetch user ${collaboratorId}`);
@@ -526,26 +521,33 @@ const cancelForm = () => {
   showErrors.value = false
 }
 
+// Extracted function to open form with creator
+const openFormWithCreator = () => {
+  console.log('Opening form with creator check - role:', userRole.value)
+  
+  if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
+    selectedCollaborators.value = [{
+      userid: currentUserId.value,
+      email: currentUserEmail.value,
+      isCreator: true
+    }]
+    console.log('Creator added:', selectedCollaborators.value)
+  } else {
+    selectedCollaborators.value = []
+    console.log('No creator added - role is:', userRole.value)
+  }
+  
+  showSubtaskForm.value = true
+  scrollToForm()
+}
+
 const toggleSubtaskForm = () => {
   if (showSubtaskForm.value) {
     resetForm()
     showErrors.value = false
     showSubtaskForm.value = false
   } else {
-    // Only add current user as locked collaborator for STAFF
-    if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
-      selectedCollaborators.value = [{
-        userid: currentUserId.value,
-        email: currentUserEmail.value,
-        isCreator: true
-      }]
-      console.log('Added creator to collaborators:', JSON.stringify(selectedCollaborators.value))
-      console.log('selectedCollaborators.value length:', selectedCollaborators.value.length)
-    } else {
-      console.log('Not adding creator - user role is:', userRole.value)
-    }
-    showSubtaskForm.value = true
-    scrollToForm()
+    openFormWithCreator()
   }
 }
 
