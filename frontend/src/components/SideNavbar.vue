@@ -86,6 +86,16 @@
           </router-link>
         </div>
 
+        <!-- Reports -->
+        <div class="nav-item">
+          <router-link to="/reports" class="nav-link" @click="handleNavItemClick"> 
+            <div class="nav-icon">
+              <i class="bi bi-bar-chart-line"></i>
+            </div>
+            <span class="nav-text">Reports</span>
+          </router-link>
+        </div>
+
         <!-- Profile with dropdown -->
         <div class="nav-item" :class="{ expanded: expandedMenus.includes('profile') }">
           <div class="nav-link" @click="toggleMenu('profile')">
