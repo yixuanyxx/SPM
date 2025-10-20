@@ -126,6 +126,29 @@
         </div>
       </div>
 
+      <div class="form-group">
+        <label for="recurrence_type">Recurrence</label>
+        <select id="recurrence_type" v-model="currentSubtask.recurrence_type" :disabled="isLoading" class="form-select">
+          <option :value="null">-- None --</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="bi-weekly">Bi-Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
+
+      <div v-if="currentSubtask.recurrence_type !== null" class="form-group">
+        <label for="recurrenceEnd">Recurrence End Date</label>
+        <input
+          type="datetime-local"
+          id="recurrenceEnd"
+          v-model="currentSubtask.recurrence_end_date"
+          :disabled="isLoading"
+          :min="getTodayDateTime()"
+        />
+      </div>
+
       <div class="form-actions">
         <button type="button" @click="addSubtask" class="btn-primary">
           <i class="bi bi-plus-circle"></i>
@@ -299,7 +322,9 @@ const currentSubtask = ref({
   due_date: '',
   priority: 5,
   status: getDefaultStatus(),
-  collaborators: []
+  collaborators: [],
+  recurrence_type: null,
+  recurrence_end_date: null
 })
 
 const toast = ref({
@@ -396,6 +421,8 @@ const addSubtask = () => {
       email: u.email,
       isCreator: u.isCreator || false
     })),
+    recurrence_type: currentSubtask.value.recurrence_type,
+    recurrence_end_date: currentSubtask.value.recurrence_end_date,
     id: Date.now()
   }
 
@@ -416,6 +443,8 @@ const addSubtask = () => {
   resetForm()
   showSubtaskForm.value = false
   showErrors.value = false
+  recurrence_type = null
+  recurrence_end_date = null
 }
 
 const editSubtask = async (sortedIndex) => {
@@ -431,7 +460,9 @@ const editSubtask = async (sortedIndex) => {
     due_date: subtaskToEdit.due_date,
     priority: subtaskToEdit.priority,
     status: subtaskToEdit.status,
-    collaborators: subtaskToEdit.collaborators || []
+    collaborators: subtaskToEdit.collaborators || [],
+    recurrence_type: subtaskToEdit.recurrence_type || null,
+    recurrence_end_date: subtaskToEdit.recurrence_end_date || null
   }
   
   // Load existing collaborators
