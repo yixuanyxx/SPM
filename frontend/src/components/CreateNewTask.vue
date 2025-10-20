@@ -455,10 +455,11 @@ export default {
           formData.append("attachment", this.newAttachmentFile);
         }
 
-        // Collaborators - always include creator
+        // Collaborators - only automatically include creator for STAFF
         const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
-        // Ensure creator is always included
-        if (!collaboratorIds.includes(this.newTask.owner_id)) {
+        // For STAFF: ensure creator is always included
+        // For MANAGER/DIRECTOR: only include selected collaborators
+        if (this.userRole === 'staff' && !collaboratorIds.includes(this.newTask.owner_id)) {
           collaboratorIds.push(this.newTask.owner_id);
         }
         if (collaboratorIds.length > 0) {
