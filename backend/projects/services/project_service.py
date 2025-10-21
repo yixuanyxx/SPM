@@ -84,6 +84,11 @@ class ProjectService:
         try:
             updated_project_data = self.repo.update_project(project_id, update_data)
             return {"status": 200, "message": f"Project {project_id} updated successfully", "data": updated_project_data}
+        except RuntimeError as e:
+            if "not found" in str(e).lower():
+                return {"status": 404, "message": f"Project with ID {project_id} not found"}
+            else:
+                return {"status": 500, "message": f"Failed to update project {project_id}: {str(e)}"}
         except Exception as e:
             return {"status": 500, "message": f"Failed to update project {project_id}: {str(e)}"}
 

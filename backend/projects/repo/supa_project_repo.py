@@ -38,8 +38,12 @@ class SupabaseProjectRepo:
         """
         Get a single project by its ID.
         """
-        res = self.client.table(TABLE).select("*").eq("id", project_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*").eq("id", project_id).single().execute()
+            return res.data
+        except Exception:
+            # If no record is found or any other error occurs, return None
+            return None
 
     def update_project(self, project_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -47,7 +51,7 @@ class SupabaseProjectRepo:
         """
         res = self.client.table(TABLE).update(patch).eq("id", project_id).execute()
         if not res.data:
-            raise RuntimeError("Update failed — no data returned")
+            raise RuntimeError(f"Update failed — project with ID {project_id} not found")
         return res.data[0]
 
     def find_by_owner(self, owner_id: int) -> list:
