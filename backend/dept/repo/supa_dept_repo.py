@@ -18,15 +18,23 @@ class SupabaseDeptRepo:
 
     def insert_dept(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Insert a new department"""
-        res = self.client.table(TABLE).insert(data).execute()
+        # Ensure no ID is being inserted - let database auto-generate
+        clean_data = data.copy()
+        clean_data.pop("id", None)
+        
+        res = self.client.table(TABLE).insert(clean_data).execute()
         if not res.data:
             raise RuntimeError("Insert failed — no data returned")
         return res.data[0]
 
     def get_dept(self, dept_id: int) -> Optional[Dict[str, Any]]:
         """Get department by ID"""
-        res = self.client.table(TABLE).select("*").eq("id", dept_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*").eq("id", dept_id).single().execute()
+            return res.data
+        except Exception:
+            # Department not found - return None
+            return None
 
     def get_all_depts(self) -> List[Dict[str, Any]]:
         """Get all departments"""
