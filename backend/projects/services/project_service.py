@@ -129,6 +129,11 @@ class ProjectService:
             self._trigger_collaborator_addition_notifications(existing_project_data, update_fields, project_id)
             
             return {"status": 200, "message": f"Project {project_id} updated successfully", "data": updated_project_data}
+        except RuntimeError as e:
+            if "not found" in str(e).lower():
+                return {"status": 404, "message": f"Project with ID {project_id} not found"}
+            else:
+                return {"status": 500, "message": f"Failed to update project {project_id}: {str(e)}"}
         except Exception as e:
             return {"status": 500, "message": f"Failed to update project {project_id}: {str(e)}"}
 
