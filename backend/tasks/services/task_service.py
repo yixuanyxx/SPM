@@ -819,6 +819,9 @@ class TaskService:
         # Determine the "base date" to calculate next occurrence
         base_date = max(due_date, completed_at)
 
+        base_date = base_date.replace(hour=due_date.hour, minute=due_date.minute,
+                                  second=due_date.second, microsecond=due_date.microsecond)
+
         # Calculate next due date according to recurrence type
         next_due_date = None
         if recurrence_type.lower() == "daily":
@@ -826,13 +829,11 @@ class TaskService:
 
         elif recurrence_type.lower() == "weekly":
             # Keep same weekday as original due_date
-            weekday = due_date.weekday()  # 0=Monday
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=1)
 
         elif recurrence_type.lower() == "bi-weekly":
-            weekday = due_date.weekday()
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=2)
