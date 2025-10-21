@@ -54,7 +54,7 @@
           <div class="form-group">
             <label for="dueDate">Due Date</label>
             <input
-              type="date"
+              type="datetime-local"
               id="dueDate"
               v-model="editedTask.due_date"
               :disabled="isLoading"
@@ -213,6 +213,37 @@
             </div>
           </div>
 
+          <!-- Recurrence -->
+          <div class="form-group">
+            <label for="recurrence">Recurrence</label>
+            <select
+              id="recurrence"
+              v-model="editedTask.recurrence_type"
+              :disabled="isLoading"
+              class="form-select"
+            >
+              <option value="">-- None --</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="bi-weekly">Bi-Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+
+          <!-- Recurrence End Date -->
+          <div class="form-group" v-if="editedTask.recurrence_type">
+            <label for="recurrenceEndDate">Recurrence End Date</label>
+            <input
+              type="datetime-local"
+              id="recurrenceEndDate"
+              v-model="editedTask.recurrence_end_date"
+              :disabled="isLoading"
+              class="form-input"
+              :min="getCurrentDate()"
+            />
+          </div>
+
           <!-- Task Type Information -->
           <div v-if="isSubtask" class="info-box">
             <i class="bi bi-info-circle"></i>
@@ -320,6 +351,8 @@ export default {
         project_id: null,
         collaborators: [],
         attachments: [],
+        recurrence_type: null, // e.g., 'Daily', 'Weekly', 'Monthly', None
+        recurrence_end_date: null
       },
       originalTask: null,
       selectedCollaborators: [],
@@ -389,6 +422,12 @@ export default {
       const day = String(today.getDate()).padStart(2, '0');
       return `${year}-${month}-${day}`;
     },
+
+    convertToUTC(datetimeLocalStr) {
+      if (!datetimeLocalStr) return null;
+      const localDate = new Date(datetimeLocalStr);
+      return localDate.toISOString(); // Returns UTC in ISO 8601 format
+    },
     
     async fetchTaskDetails() {
       if (!this.taskId) return;
@@ -405,15 +444,23 @@ export default {
         const data = await response.json();
         const task = data.task || data;
 
-        // Format the due date to YYYY-MM-DD format for the date input
-        const dueDate = task.due_date ? new Date(task.due_date).toISOString().split('T')[0] : '';
-        
+        function formatDateForDatetimeLocal(date) {
+          if (!date) return null;
+          const d = new Date(date);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, '0');
+          const day = String(d.getDate()).padStart(2, '0');
+          const hours = String(d.getHours()).padStart(2, '0');
+          const minutes = String(d.getMinutes()).padStart(2, '0');
+          return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
         this.editedTask = {
           id: this.taskId,
           task_name: task.task_name || this.taskTitle,
           description: task.description || "",
           status: task.status || "Unassigned",
-          due_date: dueDate,
+          due_date: task.due_date ? formatDateForDatetimeLocal(task.due_date) : null,
           priority: task.priority || "5",
           owner_id: task.owner_id || this.currentOwner,
           project_id: task.project_id || null,
@@ -421,6 +468,8 @@ export default {
             ? task.collaborators.map(c => parseInt(c))
             : [],
           attachments: task.attachments || [],
+          recurrence_type: task.recurrence_type || "",
+          recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null
         };
 
         // Load current attachments
@@ -556,7 +605,7 @@ export default {
         formData.append('task_name', this.editedTask.task_name);
         formData.append('description', this.editedTask.description);
         formData.append('status', this.editedTask.status);
-        formData.append('due_date', this.editedTask.due_date);
+        formData.append('due_date', this.convertToUTC(this.editedTask.due_date));
         formData.append('priority', this.editedTask.priority);
         // Include project association
         if (this.editedTask.project_id) {
@@ -574,6 +623,11 @@ export default {
         // Add new attachment file if exists (this will be merged with existing)
         if (this.newAttachmentFile) {
           formData.append('attachment', this.newAttachmentFile);
+        }
+
+        formData.append('recurrence_type', this.editedTask.recurrence_type);
+        if (this.editedTask.recurrence_type && this.editedTask.recurrence_end_date) {
+          formData.append('recurrence_end_date', this.convertToUTC(this.editedTask.recurrence_end_date));
         }
 
         console.log('EditPopup sending update for task:', this.taskId);
@@ -625,6 +679,49 @@ export default {
           collaborators: collaboratorIds,
           attachments: this.currentAttachments
         }));
+
+        if (this.editedTask.recurrence_type && this.editedTask.status === 'Completed') {
+          try {
+            // Prepare next occurrence
+            const nextTaskData = new FormData();
+            nextTaskData.append('task_name', this.editedTask.task_name);
+            nextTaskData.append('description', this.editedTask.description);
+            nextTaskData.append('status', 'Pending'); // next task starts as Pending
+            nextTaskData.append('priority', this.editedTask.priority);
+            nextTaskData.append('recurrence_type', this.editedTask.recurrence_type);
+            if (this.editedTask.recurrence_end_date) {
+              nextTaskData.append(
+                'recurrence_end_date',
+                this.convertToUTC(this.editedTask.recurrence_end_date)
+              );
+            }
+
+            // Calculate next due date
+            const currentDue = new Date(this.editedTask.due_date);
+            let nextDue = new Date(currentDue);
+            switch (this.editedTask.recurrence_type) {
+              case 'Daily':
+                nextDue.setDate(currentDue.getDate() + 1);
+                break;
+              case 'Weekly':
+                nextDue.setDate(currentDue.getDate() + 7);
+                break;
+              case 'Monthly':
+                nextDue.setMonth(currentDue.getMonth() + 1);
+                break;
+            }
+            nextTaskData.append('due_date', nextDue.toISOString());
+
+            // Send create request for next occurrence
+            await fetch("http://localhost:5002/tasks/create", {
+              method: "POST",
+              body: nextTaskData,
+            });
+
+          } catch (err) {
+            console.error("Error creating next recurring task:", err);
+          }
+        }
         
         this.isLoading = false;
         
@@ -643,6 +740,8 @@ export default {
             priority: this.editedTask.priority,
             collaborators: collaboratorIds,
             attachments: this.currentAttachments,
+            recurrence_type: this.recurrence_type, 
+            recurrence_end_date: this.recurrence_end_date
           });
           
           setTimeout(() => {
@@ -793,55 +892,72 @@ export default {
 
         if (collaboratorsToNotify.length === 0) return;
 
-        // Check what changed and send appropriate notifications
-        const promises = [];
+        // Collect all changes for consolidated notification
+        const changes = [];
 
-        // Status change notification
+        // Status change
         if (this.originalTask.status !== this.editedTask.status) {
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'status',
-              this.originalTask.status,
-              this.editedTask.status,
-              currentUserName
-            )
-          );
+          changes.push({
+            field: 'status',
+            old_value: this.originalTask.status,
+            new_value: this.editedTask.status,
+            field_name: 'Status'
+          });
         }
 
-        // Due date change notification
+        // Due date change
         if (this.originalTask.due_date !== this.editedTask.due_date) {
           const oldDate = this.originalTask.due_date || 'No due date';
           const newDate = this.editedTask.due_date || 'No due date';
-          
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'due_date',
-              oldDate,
-              newDate,
-              currentUserName
-            )
-          );
+          changes.push({
+            field: 'due_date',
+            old_value: oldDate,
+            new_value: newDate,
+            field_name: 'Due Date'
+          });
         }
 
-        // Description change notification
+        // Description change
         if (this.originalTask.description !== this.editedTask.description) {
-          promises.push(
-            enhancedNotificationService.triggerTaskUpdateNotification(
-              this.taskId,
-              collaboratorsToNotify,
-              'description',
-              null,
-              null,
-              currentUserName
-            )
+          changes.push({
+            field: 'description',
+            old_value: this.originalTask.description || 'No description',
+            new_value: this.editedTask.description || 'No description',
+            field_name: 'Description'
+          });
+        }
+
+        // Priority change (if priority field exists)
+        if (this.originalTask.priority !== this.editedTask.priority) {
+          changes.push({
+            field: 'priority',
+            old_value: this.originalTask.priority || 'Not set',
+            new_value: this.editedTask.priority || 'Not set',
+            field_name: 'Priority'
+          });
+        }
+
+        // Task name change (if task_name field exists)
+        if (this.originalTask.task_name !== this.editedTask.task_name) {
+          changes.push({
+            field: 'task_name',
+            old_value: this.originalTask.task_name || 'No title',
+            new_value: this.editedTask.task_name || 'No title',
+            field_name: 'Task Title'
+          });
+        }
+
+        // Send consolidated notification if there are changes
+        if (changes.length > 0) {
+          await enhancedNotificationService.triggerConsolidatedTaskUpdateNotification(
+            this.taskId,
+            collaboratorsToNotify,
+            changes,
+            currentUserName
           );
         }
 
-        // Collaborator changes notification
+        // Handle collaborator changes separately (assignment notifications)
         const originalCollaborators = this.originalTask.collaborators || [];
         const newCollaborators = this.editedTask.collaborators || [];
         
@@ -859,14 +975,10 @@ export default {
               currentUserName
             )
           );
-          promises.push(...addPromises);
+          await Promise.all(addPromises);
         }
 
-        // Execute all notification triggers
-        if (promises.length > 0) {
-          await Promise.all(promises);
-          console.log('Task update notifications sent successfully');
-        }
+        console.log('Consolidated task update notifications sent successfully');
 
       } catch (error) {
         console.error('Failed to send task update notifications:', error);

@@ -1,0 +1,4 @@
+# Test requirements for report module
+unittest2>=1.1.0
+requests>=2.31.0
+coverage>=7.0.0

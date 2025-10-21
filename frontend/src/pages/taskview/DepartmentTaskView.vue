@@ -1006,36 +1006,6 @@ const fetchTaskUsers = async () => {
   await Promise.all(fetchPromises)
 }
 
-// Fetch department tasks
-const fetchDepartmentTasks = async () => {
-  if (!deptId.value) {
-    console.log('No department ID for tasks')
-    return
-  }
-  
-  isLoadingTasks.value = true
-  console.log('Fetching department tasks for dept:', deptId.value)
-  
-  try {
-    const response = await fetch(`http://localhost:5002/tasks/department/${deptId.value}`)
-    console.log('Tasks response status:', response.status)
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-    
-    const data = await response.json()
-    tasks.value = data.data || []
-    console.log('Fetched department tasks:', tasks.value.length, tasks.value)
-    
-    await fetchTaskUsers()
-  } catch (error) {
-    console.error('Error fetching department tasks:', error)
-    tasks.value = []
-  } finally {
-    isLoadingTasks.value = false
-  }
-}
 
 // Workload management functions
 const getMemberTasks = (memberId) => {

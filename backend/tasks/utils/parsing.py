@@ -60,6 +60,8 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         elif isinstance(attachments_raw, list):
             attachments = attachments_raw
 
+    recurrence_fields = parse_recurrence_fields(form_or_json)
+
     return {
         "task_name": task_name,
         "due_date": due_date,
@@ -73,6 +75,8 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         "subtasks": subtasks if subtasks else None,
         "priority": int(priority) if priority not in (None, "",) else None,
         "attachments": attachments,
+        "recurrence_type": recurrence_fields["recurrence_type"],
+        "recurrence_end_date": recurrence_fields["recurrence_end_date"]
 
     }
 
@@ -155,5 +159,52 @@ def parse_task_update_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             update_data["attachments"] = attachments
         elif isinstance(attachments_raw, list):
             update_data["attachments"] = attachments_raw
+
+    # Optional recurrence fields
+    recurrence_type = g("recurrence_type")
+    recurrence_end_raw = g("recurrence_end_date")
+
+    if recurrence_type:
+        valid_types = [None, "daily", "weekly", "bi-weekly", "monthly", "yearly"]
+        if recurrence_type.lower() not in valid_types:
+            raise ValueError(f"Invalid recurrence_type: {recurrence_type}. Must be one of {valid_types}.")
+        update_data["recurrence_type"] = recurrence_type.lower()
+
+    if recurrence_end_raw:
+        try:
+            update_data["recurrence_end_date"] = dateparser.parse(recurrence_end_raw).isoformat()
+        except Exception:
+            raise ValueError(f"Invalid recurrence_end_date: '{recurrence_end_raw}'")
     
     return update_data
+
+# ---- Recurrence Parsing ----
+def parse_recurrence_fields(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parses recurrence fields from form or JSON input.
+    Accepts recurrence_type (daily, weekly, bi-weekly, monthly, yearly, none)
+    and recurrence_end_date (any parsable date format).
+    """
+    g = form_or_json.get
+
+    recurrence_type_raw = g("recurrence_type")
+    if recurrence_type_raw is not None:
+        recurrence_type_raw = str(recurrence_type_raw).lower().strip()
+
+    valid_types = ["daily", "weekly", "bi-weekly", "monthly", "yearly"]
+    if recurrence_type_raw not in valid_types:
+        recurrence_type_raw = None
+    
+    recurrence_end_raw = g("recurrence_end_date")
+    recurrence_end_date = None
+    if recurrence_end_raw:
+        try:
+            recurrence_end_date = dateparser.parse(recurrence_end_raw).isoformat()
+        except Exception:
+            raise ValueError(f"Invalid recurrence_end_date: '{recurrence_end_raw}'")
+
+    return {
+        "recurrence_type": recurrence_type_raw,
+        "recurrence_end_date": recurrence_end_date
+    }
+

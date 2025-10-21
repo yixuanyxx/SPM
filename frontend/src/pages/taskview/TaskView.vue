@@ -11,6 +11,7 @@
           <h1 class="page-title">My Personal Tasks</h1>
           <p class="page-subtitle">View and Create Your Personal Tasks</p>
         </div>
+        
         <div class="header-actions">
           <div class="header-right-actions">
             <button v-if="canCreateTask" @click="openCreateTask" class="create-task-btn">
@@ -600,34 +601,73 @@ const saveSubtasks = async () => {
   
   try {
     // Prepare subtask data with required fields
-    const subtasksToSave = currentSubtasks.value.map(subtask => ({
-      task_name: subtask.task_name || subtask.name || '',
-      description: subtask.description || '',
-      due_date: subtask.due_date || '',
-      priority: subtask.priority || '5',
-      status: subtask.status || 'Ongoing',
-      owner_id: subtask.owner_id || userId.value,
-      type: 'subtask',
-      parent_task: selectedTask.value.id,
-      project_id: selectedTask.value.project_id || null // Get project ID from parent task
-    }))
+    const subtasksToSave = currentSubtasks.value.map((subtask, idx) => {
+      console.log(`Processing subtask ${idx}:`, subtask)
+      console.log(`Subtask collaborators:`, subtask.collaborators)
+      
+      // Extract collaborator IDs from the collaborators array
+      let collaboratorIds = []
+      if (subtask.collaborators && subtask.collaborators.length > 0) {
+        collaboratorIds = subtask.collaborators.map(collab => {
+          console.log(`Processing collaborator:`, collab, `Type:`, typeof collab)
+          // Handle both formats: {userid, email} and just ID
+          if (typeof collab === 'object' && collab.userid) {
+            return parseInt(collab.userid)
+          }
+          return parseInt(collab)
+        })
+      }
+      
+      console.log(`Final collaborator IDs for subtask ${idx}:`, collaboratorIds)
+      
+      return {
+        task_name: subtask.task_name || subtask.name || '',
+        description: subtask.description || '',
+        due_date: subtask.due_date || '',
+        priority: subtask.priority || '5',
+        status: subtask.status || 'Ongoing',
+        owner_id: subtask.owner_id || userId.value,
+        type: 'subtask',
+        parent_task: selectedTask.value.id,
+        project_id: selectedTask.value.project_id || null,
+        collaborators: collaboratorIds
+      }
+    })
+
+    console.log('Subtasks to save:', subtasksToSave)
 
     // Step 1: Save subtasks to database
-    // Use the specialized subtask endpoints that automatically update parent task
     const endpoint = (userRole.value === 'manager' || userRole.value === 'director')
       ? 'http://localhost:5002/tasks/manager-subtask/create'
       : 'http://localhost:5002/tasks/staff-subtask/create'
+
+    console.log('Using endpoint:', endpoint)
 
     // Create and save each subtask
     const savedSubtasks = []
     for (const subtaskData of subtasksToSave) {
       const formData = new FormData()
       
+      console.log('Processing subtask:', subtaskData)
+      
       // Append all fields to FormData
       Object.keys(subtaskData).forEach(key => {
-        if (subtaskData[key] !== null && subtaskData[key] !== undefined) {
+        if (key === 'collaborators' && Array.isArray(subtaskData[key])) {
+          // Convert collaborators array to comma-separated string
+          if (subtaskData[key].length > 0) {
+            const collaboratorsString = subtaskData[key].join(',')
+            console.log('Appending collaborators string:', collaboratorsString)
+            formData.append('collaborators', collaboratorsString)
+          }
+        } else if (subtaskData[key] !== null && subtaskData[key] !== undefined && subtaskData[key] !== '') {
+          console.log(`Appending ${key}:`, subtaskData[key])
           formData.append(key, subtaskData[key])
         }
+      })
+
+      console.log('FormData entries:')
+      Array.from(formData.entries()).forEach(([key, value]) => {
+        console.log(`  ${key}:`, value)
       })
 
       const response = await fetch(endpoint, {
@@ -635,46 +675,50 @@ const saveSubtasks = async () => {
         body: formData
       })
 
+      console.log('Response status:', response.status)
       const data = await response.json()
+      console.log('Response data:', data)
 
       if (response.ok && data.Code === 201) {
         const savedSubtask = data.data
         savedSubtasks.push(savedSubtask)
-        console.log('Subtask saved to database:', savedSubtask)
+        console.log('✅ Subtask saved to database:', savedSubtask)
       } else {
-        console.error('Failed to save subtask:', data.Message)
-        throw new Error(`Failed to save subtask: ${data.Message}`)
+        console.error('❌ Failed to save subtask. Status:', response.status, 'Message:', data.Message)
+        throw new Error(`Failed to save subtask: ${data.Message || 'Unknown error'}`)
       }
     }
 
-    // Step 2: Update parent task with the saved subtask IDs
-    // The specialized subtask endpoints automatically update the parent task,
-    // but we need to update it locally for immediate UI feedback
-    if (selectedTask.value) {
-      const existingSubtaskIds = Array.isArray(selectedTask.value.subtasks) 
-        ? selectedTask.value.subtasks 
-        : []
-      const allSubtaskIds = [...existingSubtaskIds, ...savedSubtasks.map(st => st.id)]
-      selectedTask.value.subtasks = allSubtaskIds
-      
-      console.log('Updated parent task with subtask IDs:', allSubtaskIds)
-    }
+    // Step 2: Fetch user details for the newly created subtasks FIRST
+    await fetchTaskSpecificUsers({ subtasks: savedSubtasks })
 
-    // Step 3: Fetch user details for the newly created subtasks
-    await fetchTaskSpecificUsers(selectedTask.value)
+    // Step 3: Update parent task in the tasks array with full subtask objects
+    const parentTaskIndex = tasks.value.findIndex(t => t.id === selectedTask.value.id)
+    if (parentTaskIndex !== -1) {
+      // Initialize subtasks array if it doesn't exist
+      if (!tasks.value[parentTaskIndex].subtasks) {
+        tasks.value[parentTaskIndex].subtasks = []
+      }
+      
+      // Add the new subtasks to the existing subtasks array
+      tasks.value[parentTaskIndex].subtasks.push(...savedSubtasks)
+      
+      console.log('✅ Updated parent task with full subtask objects:', tasks.value[parentTaskIndex].subtasks)
+    }
 
     // Step 4: Close modal and reset
     closeSubtaskModal()
 
     // Step 5: Show success message
-    console.log('Subtasks saved successfully')
+    console.log('✅ All subtasks saved successfully')
     showSuccessMessage.value = true
     setTimeout(() => {
       showSuccessMessage.value = false
     }, 3000)
     
   } catch (error) {
-    console.error('Error saving subtasks:', error)
+    console.error('❌ Error saving subtasks:', error)
+    console.error('Full error:', error)
     alert(`Failed to save subtasks: ${error.message}`)
   }
 }

@@ -5,7 +5,6 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import SideNavbar from '../components/SideNavbar.vue'
-import NotificationDropdown from '../components/NotificationDropdown.vue'
 import { sessionState } from '../services/session'
 import { logout } from '../services/auth'
 import { notificationStore, userPreferencesService } from '../services/notifications'
@@ -13,24 +12,20 @@ import './taskview/taskview.css'
 
 const router = useRouter()
 const now = ref(new Date())
-const tasks = ref([])
 const loading = ref(false)
 const userId = localStorage.getItem('spm_userid')
 const API_TASKS = 'http://localhost:5002'
 const API_USERS = 'http://127.0.0.1:5003'
 const userName = ref('')
-const showNotificationDropdown = ref(false)
-const unreadCount = ref(0)
 const userPreferences = ref({ in_app: true, email: true })
-const inAppNotifications = ref([])
 
-const upcomingTasks = computed(() => {
-  const list = Array.isArray(tasks.value) ? tasks.value.slice() : []
-  return list
-    .filter(t => !!t?.due_date)
-    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
-    .slice(0, 5)
-})
+const notifications = computed(() => notificationStore.notifications)
+const recentNotifications = computed(() => notifications.value.slice(0, 5)) // Show up to 5 notifications
+const expandedNotifications = ref([])
+const showNotificationsPopup = ref(false)
+const notificationsFilter = ref('all')
+const notificationsSortBy = ref('newest')
+const expandedPopupNotifications = ref([])
 const greeting = computed(() => {
   const hour = now.value.getHours()
   if (hour < 12) return 'Good morning'
@@ -38,14 +33,45 @@ const greeting = computed(() => {
   return 'Good evening'
 })
 
+// Computed properties for popup notifications
+const unreadCount = computed(() => notificationStore.unreadCount)
+const totalCount = computed(() => notifications.value.length)
+const readCount = computed(() => totalCount.value - unreadCount.value)
+
+const filteredAndSortedNotifications = computed(() => {
+  let filtered = notifications.value
+
+  // Apply filter
+  if (notificationsFilter.value === 'unread') {
+    filtered = filtered.filter(n => !n.is_read)
+  } else if (notificationsFilter.value === 'read') {
+    filtered = filtered.filter(n => n.is_read)
+  }
+
+  // Apply sorting
+  filtered = [...filtered].sort((a, b) => {
+    const dateA = new Date(a.created_at)
+    const dateB = new Date(b.created_at)
+    
+    if (notificationsSortBy.value === 'newest') {
+      return dateB - dateA
+    } else {
+      return dateA - dateB
+    }
+  })
+
+  return filtered
+})
+
 onMounted(async () => {
   const timer = setInterval(() => (now.value = new Date()), 60000)
   // cleanup
   window.addEventListener('beforeunload', () => clearInterval(timer))
   if (userId) {
-    fetchTasks()
     fetchUserName()
     await initializeNotifications()
+    // Also load notifications immediately to ensure they're available
+    await loadNotifications()
   }
 })
 
@@ -54,11 +80,15 @@ async function onLogout() {
     console.log('Logging out...');
     await logout();
     console.log('Logout successful, redirecting to login...');
-    router.push({ name: 'Login' });
+    // Force navigation to login page
+    await router.push({ name: 'Login' });
+    // Force reload to ensure clean state
+    window.location.href = '/login';
   } catch (error) {
     console.error('Logout failed:', error);
     // Still redirect to login even if logout fails
-    router.push({ name: 'Login' });
+    await router.push({ name: 'Login' });
+    window.location.href = '/login';
   }
 }
 
@@ -89,29 +119,30 @@ async function fetchUserName() {
   }
 }
 
+async function loadNotifications() {
+  try {
+    loading.value = true
+    await notificationStore.refresh(userId)
+  } catch (error) {
+    console.error('Failed to load notifications:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
 async function initializeNotifications() {
   try {
     // Initialize notification store
     await notificationStore.init(userId)
-    unreadCount.value = notificationStore.unreadCount
     
     // Get user preferences
     const userData = await userPreferencesService.getUserData(userId)
     userPreferences.value = userData?.data?.notification_preferences || { in_app: true, email: true }
     
-    // Load in-app notifications if enabled
-    if (userPreferences.value.in_app) {
-      loadInAppNotifications()
-    }
-    
     // Set up periodic refresh for notifications (every 30 seconds)
     setInterval(async () => {
       try {
         await notificationStore.refresh(userId)
-        unreadCount.value = notificationStore.unreadCount
-        if (userPreferences.value.in_app) {
-          loadInAppNotifications()
-        }
       } catch (error) {
         console.error('Failed to refresh notifications:', error)
       }
@@ -122,29 +153,6 @@ async function initializeNotifications() {
   }
 }
 
-function loadInAppNotifications() {
-  // Show only recent unread notifications for in-app display
-  const unreadNotifications = notificationStore.notifications.filter(n => !n.is_read)
-  inAppNotifications.value = unreadNotifications.slice(0, 3) // Show max 3 recent notifications
-}
-
-function toggleNotificationDropdown() {
-  showNotificationDropdown.value = !showNotificationDropdown.value
-}
-
-function closeNotificationDropdown() {
-  showNotificationDropdown.value = false
-}
-
-async function dismissInAppNotification(notificationId) {
-  try {
-    await notificationStore.markAsRead(notificationId)
-    loadInAppNotifications() // Refresh in-app notifications
-    unreadCount.value = notificationStore.unreadCount
-  } catch (error) {
-    console.error('Failed to dismiss notification:', error)
-  }
-}
 
 // Utility functions for notifications
 function formatTime(timestamp) {
@@ -183,6 +191,84 @@ function getNotificationColor(type) {
   }
   return colorMap[type] || '#3b82f6'
 }
+
+function truncateText(text, maxLength = 100) {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength) + '...'
+}
+
+async function markAsRead(notification) {
+  try {
+    await notificationStore.markAsRead(notification.id)
+  } catch (error) {
+    console.error('Failed to mark notification as read:', error)
+  }
+}
+
+function toggleNotificationDetails(notification) {
+  const index = expandedNotifications.value.indexOf(notification.id)
+  if (index > -1) {
+    expandedNotifications.value.splice(index, 1)
+  } else {
+    expandedNotifications.value.push(notification.id)
+    // Auto-mark as read when banner is opened
+    if (!notification.is_read) {
+      markAsRead(notification)
+    }
+  }
+}
+
+function formatNotificationText(text) {
+  // Convert markdown-style bold (**text**) to HTML bold
+  return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+}
+
+function getNotificationTitle(notification) {
+  // Extract title from notification content
+  const content = notification.notification
+  if (content.includes('Task Update Summary')) {
+    return 'A Task Has Been Updated'
+  } else if (content.includes('Project Assignment Summary')) {
+    return 'You Have Been Assigned as a Collaborator of a Project'
+  } else if (content.includes('added as a collaborator') || (content.includes('Your Role: Collaborator'))) {
+    return 'You Have Been Assigned as a Collaborator of a Task'
+  } else if (content.includes('assigned as the new owner') || (content.includes('Your Role: Owner'))) {
+    return 'You Have Been Assigned as the Owner of a Task'
+  }
+  return 'Notification'
+}
+
+function viewAllNotifications() {
+  // Show the notifications popup modal
+  showNotificationsPopup.value = true
+}
+
+function closeNotificationsPopup() {
+  showNotificationsPopup.value = false
+  expandedPopupNotifications.value = []
+}
+
+function togglePopupNotificationDetails(notification) {
+  const index = expandedPopupNotifications.value.indexOf(notification.id)
+  if (index > -1) {
+    // Notification is being collapsed - mark as read now
+    expandedPopupNotifications.value.splice(index, 1)
+    if (!notification.is_read) {
+      markAsRead(notification)
+    }
+  } else {
+    // Notification is being expanded - don't mark as read yet
+    expandedPopupNotifications.value.push(notification.id)
+  }
+}
+
+async function markAsUnread(notification) {
+  try {
+    await notificationStore.markAsUnread(notification.id)
+  } catch (error) {
+    console.error('Failed to mark notification as unread:', error)
+  }
+}
 </script>
 
 <template>
@@ -195,12 +281,6 @@ function getNotificationColor(type) {
           <div class="header-left">
             <h1 class="page-title">Welcome</h1>
             <p class="page-subtitle">Your hub for tasks, schedule, and projects</p>
-          </div>
-          <div class="header-right">
-            <button class="notification-bell" @click="toggleNotificationDropdown">
-              <i class="bi bi-bell"></i>
-              <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
-            </button>
           </div>
         </div>
       </div>
@@ -268,85 +348,51 @@ function getNotificationColor(type) {
           </div>
         </div>
 
-        <!-- In-app notifications (if enabled) -->
-        <div v-if="userPreferences.in_app" class="tasks-container" style="margin-top: 1rem;">
-          <div class="in-app-notifications">
-            <div class="notifications-header">
-              <h4 class="notifications-title">
-                <i class="bi bi-bell-fill me-2"></i>
-                New Notifications
-              </h4>
-            </div>
-            
-            <!-- Show notifications if they exist -->
-            <div v-if="inAppNotifications.length > 0" class="notifications-list">
-              <div 
-                v-for="notification in inAppNotifications" 
-                :key="notification.id"
-                class="in-app-notification-item"
-              >
-                <div class="notification-icon">
-                  <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
-                </div>
-                <div class="notification-content">
-                  <div class="notification-message">{{ notification.notification }}</div>
-                  <div class="notification-time">{{ formatTime(notification.created_at) }}</div>
-                </div>
-                <button @click="dismissInAppNotification(notification.id)" class="dismiss-btn">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Show "no new notifications" message if no notifications -->
-            <div v-else class="no-notifications">
-              <div class="no-notifications-content">
-                <i class="bi bi-bell-slash"></i>
-                <span>No new notifications</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- Upcoming tasks summary -->
+        <!-- Latest Notifications -->
         <div class="tasks-container" style="margin-top: 1rem;">
-          <h3 class="page-subtitle" style="color:#374151; margin-bottom: 0.5rem;">Upcoming Tasks</h3>
+          <div class="notifications-header">
+            <h3 class="notifications-heading">Latest Notifications</h3>
+            <button v-if="notifications.length > 5" class="view-all-btn" @click="viewAllNotifications">
+              <i class="bi bi-list-ul"></i> View All Notifications
+            </button>
+          </div>
           <div v-if="loading" class="empty-state" style="padding: 1rem;">
-            <p class="empty-subtitle">Loading tasks…</p>
+            <p class="empty-subtitle">Loading notifications…</p>
           </div>
           <div v-else>
-            <div v-if="upcomingTasks.length === 0" class="empty-state" style="padding: 1rem;">
-              <p class="empty-subtitle">No upcoming tasks.</p>
+            <div v-if="notifications.length === 0" class="empty-state" style="padding: 1rem;">
+              <p class="empty-subtitle">No notifications yet.</p>
             </div>
             <div v-else>
               <div 
-                v-for="(task, index) in upcomingTasks" 
-                :key="task.id" 
-                class="task-card" 
-                :style="{ animationDelay: `${index * 0.05}s` }"
+                v-for="notification in recentNotifications" 
+                :key="notification.id"
+                class="notification-banner"
+                :class="{ 'unread': !notification.is_read, 'expanded': expandedNotifications.includes(notification.id) }"
+                @click="toggleNotificationDetails(notification)"
               >
-                <div class="task-main" @click="router.push(`/tasks/${task.id}`)">
-                  <div class="task-content">
-                    <div class="task-header">
-                      <div class="task-title-section">
-                        <h3 class="task-title">{{ task.task_name }}</h3>
-                        <div class="task-status" :class="{ ongoing: task.status==='Ongoing', completed: task.status==='Completed', 'under-review': task.status==='Under Review' }">
-                          <i class="bi" :class="{ 'bi-play-circle': task.status==='Ongoing', 'bi-check-circle-fill': task.status==='Completed', 'bi-eye': task.status==='Under Review' }"></i>
-                          <span>{{ task.status }}</span>
-                        </div>
-                      </div>
-                      <div class="task-meta">
-                        <div class="task-date">
-                          <i class="bi bi-calendar3"></i>
-                          <span>{{ new Date(task.due_date).toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore', month: 'short', day: 'numeric' }) }}</span>
-                        </div>
-                      </div>
+                <div class="notification-header">
+                  <div class="notification-icon">
+                    <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
+                  </div>
+                  
+                  <div class="notification-summary">
+                    <div class="notification-title">{{ getNotificationTitle(notification) }}</div>
+                    <div class="notification-time">{{ formatTime(notification.created_at) }}</div>
+                  </div>
+
+                  <div class="notification-actions">
+                    <div v-if="!notification.is_read" class="unread-dot"></div>
+                    <div class="expand-icon">
+                      <i :class="expandedNotifications.includes(notification.id) ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
                     </div>
                   </div>
-                  <div class="task-actions">
-                    <div class="click-hint">
-                      <i class="bi bi-arrow-right"></i>
-                    </div>
+                </div>
+
+                <div v-if="expandedNotifications.includes(notification.id)" class="notification-details">
+                  <div class="notification-content">
+                    <div class="notification-text" v-html="formatNotificationText(notification.notification)"></div>
                   </div>
                 </div>
               </div>
@@ -357,12 +403,125 @@ function getNotificationColor(type) {
       </div>
     </div>
 
-    <!-- Notification Dropdown -->
-    <NotificationDropdown 
-      :show="showNotificationDropdown" 
-      :userId="userId" 
-      @close="closeNotificationDropdown" 
-    />
+    <!-- Notifications Popup Modal -->
+    <div v-if="showNotificationsPopup" class="notifications-popup-overlay" @click="closeNotificationsPopup">
+      <div class="notifications-popup-modal" @click.stop>
+        <!-- Popup Header -->
+        <div class="popup-header">
+          <div class="popup-title-section">
+            <h2 class="popup-title">All Notifications</h2>
+            <p class="popup-subtitle">View and manage all your notifications</p>
+          </div>
+          <button @click="closeNotificationsPopup" class="popup-close-btn">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+
+        <!-- Popup Content -->
+        <div class="popup-content">
+          <!-- Empty State -->
+          <div v-if="notifications.length === 0" class="popup-empty-state">
+            <div class="popup-empty-icon">
+              <i class="bi bi-bell-slash"></i>
+            </div>
+            <h3>No notifications yet</h3>
+            <p>You'll see notifications here when tasks are updated, assigned, or when you're added as a collaborator.</p>
+          </div>
+
+          <!-- Notifications List -->
+          <div v-else class="popup-notifications-list">
+            <!-- Filter and Sort Controls -->
+            <div class="popup-controls">
+              <div class="popup-filter-controls">
+                <button 
+                  @click="notificationsFilter = 'all'" 
+                  :class="{ active: notificationsFilter === 'all' }"
+                  class="popup-filter-btn"
+                >
+                  All ({{ totalCount }})
+                </button>
+                <button 
+                  @click="notificationsFilter = 'unread'" 
+                  :class="{ active: notificationsFilter === 'unread' }"
+                  class="popup-filter-btn"
+                >
+                  Unread ({{ unreadCount }})
+                </button>
+                <button 
+                  @click="notificationsFilter = 'read'" 
+                  :class="{ active: notificationsFilter === 'read' }"
+                  class="popup-filter-btn"
+                >
+                  Read ({{ readCount }})
+                </button>
+              </div>
+              
+              <div class="popup-sort-controls">
+                <label for="popup-sort-select">Sort by:</label>
+                <select id="popup-sort-select" v-model="notificationsSortBy" class="popup-sort-select">
+                  <option value="newest">Newest First</option>
+                  <option value="oldest">Oldest First</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Notifications -->
+            <div class="popup-notifications-grid">
+              <div 
+                v-for="notification in filteredAndSortedNotifications" 
+                :key="notification.id"
+                class="popup-notification-card"
+                :class="{ 'unread': !notification.is_read, 'expanded': expandedPopupNotifications.includes(notification.id) }"
+                @click="togglePopupNotificationDetails(notification)"
+              >
+                <div class="popup-notification-header">
+                  <div class="popup-notification-icon">
+                    <i :class="getNotificationIcon(notification.notification_type)" :style="{ color: getNotificationColor(notification.notification_type) }"></i>
+                  </div>
+                  
+                  <div class="popup-notification-summary">
+                    <div class="popup-notification-title">{{ getNotificationTitle(notification) }}</div>
+                    <div class="popup-notification-time">{{ formatTime(notification.created_at) }}</div>
+                  </div>
+
+                  <div class="popup-notification-actions">
+                    <div v-if="!notification.is_read" class="popup-unread-dot"></div>
+                    <div class="popup-expand-icon">
+                      <i :class="expandedPopupNotifications.includes(notification.id) ? 'bi bi-chevron-up' : 'bi bi-chevron-down'"></i>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="expandedPopupNotifications.includes(notification.id)" class="popup-notification-details">
+                  <div class="popup-notification-content">
+                    <div class="popup-notification-text" v-html="formatNotificationText(notification.notification)"></div>
+                  </div>
+                  
+                  <div class="popup-notification-footer">
+                    <button 
+                      v-if="!notification.is_read" 
+                      @click.stop="markAsRead(notification)"
+                      class="popup-mark-read-btn"
+                    >
+                      <i class="bi bi-check"></i>
+                      Mark as Read
+                    </button>
+                    <button 
+                      v-else 
+                      @click.stop="markAsUnread(notification)"
+                      class="popup-mark-unread-btn"
+                    >
+                      <i class="bi bi-arrow-counterclockwise"></i>
+                      Mark as Unread
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -385,91 +544,73 @@ function getNotificationColor(type) {
   margin-top: 0.5rem;
 }
 
-/* Notification Bell */
-.notification-bell {
-  position: relative;
-  background: white;
-  border: 2px solid #e5e7eb;
-  border-radius: 50%;
-  width: 48px;
-  height: 48px;
+/* Notifications Header */
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.notifications-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+  letter-spacing: -0.025em;
+}
+
+.view-all-btn {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.view-all-btn:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.view-all-btn i {
+  font-size: 0.8rem;
+}
+.notification-banner {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 1.2rem;
-  color: #6b7280;
-}
-
-.notification-bell:hover {
-  border-color: #3b82f6;
-  color: #3b82f6;
-  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
-}
-
-.notification-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  background: #ef4444;
-  color: white;
-  font-size: 0.7rem;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 10px;
-  min-width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-
-/* In-app Notifications */
-.in-app-notifications {
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border: 1px solid #bae6fd;
-  border-radius: 12px;
   overflow: hidden;
+}
+
+.notification-banner.unread:hover {
+  border-color: #3b82f6;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
 }
 
-.notifications-header {
-  padding: 1rem 1.25rem;
-  background: rgba(59, 130, 246, 0.05);
-  border-bottom: 1px solid #bae6fd;
+.notification-banner.unread {
+  background: #f8fafc;
+  border-left: 4px solid #3b82f6;
 }
 
-.notifications-title {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 600;
-  color: #1e40af;
+.notification-banner.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.notification-header {
   display: flex;
   align-items: center;
-}
-
-.notifications-list {
-  padding: 0.5rem 0;
-}
-
-.in-app-notification-item {
-  display: flex;
-  align-items: flex-start;
+  padding: 1rem;
   gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  transition: background-color 0.2s ease;
-  position: relative;
-}
-
-.in-app-notification-item:hover {
-  background: rgba(59, 130, 246, 0.05);
-}
-
-.in-app-notification-item:not(:last-child) {
-  border-bottom: 1px solid rgba(186, 230, 253, 0.5);
 }
 
 .notification-icon {
@@ -485,74 +626,74 @@ function getNotificationColor(type) {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.notification-content {
+.notification-summary {
   flex: 1;
   min-width: 0;
 }
 
-.notification-message {
+.notification-title {
   font-size: 0.9rem;
-  line-height: 1.4;
-  color: #1e40af;
+  font-weight: 600;
+  color: #374151;
   margin-bottom: 0.25rem;
-  font-weight: 500;
 }
 
 .notification-time {
   font-size: 0.8rem;
-  color: #64748b;
+  color: #6b7280;
 }
 
-.dismiss-btn {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  transition: all 0.2s ease;
+.notification-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.in-app-notification-item:hover .dismiss-btn {
-  opacity: 1;
-}
-
-.dismiss-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-}
-
-/* No notifications message */
-.no-notifications {
-  padding: 1.5rem;
-  text-align: center;
-}
-
-.no-notifications-content {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  color: #9ca3af;
 }
 
-.no-notifications-content i {
-  font-size: 2rem;
-  opacity: 0.6;
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
 }
 
-.no-notifications-content span {
+.expand-icon {
+  color: #6b7280;
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.notification-banner.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.notification-details {
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 1rem;
+}
+
+.notification-content {
+  margin-bottom: 0;
+}
+
+.notification-text {
+  font-family: inherit;
   font-size: 0.9rem;
-  font-weight: 500;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  margin: 0;
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
 }
+
+.notification-text strong {
+  color: #1f2937;
+  font-weight: 700;
+}
+
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
@@ -562,39 +703,358 @@ function getNotificationColor(type) {
     gap: 1rem;
   }
   
-  .header-right {
-    align-self: flex-end;
-    margin-top: 0;
+  .notification-banner {
+    margin-bottom: 0.5rem;
   }
   
-  .notification-bell {
-    width: 44px;
-    height: 44px;
-    font-size: 1.1rem;
+  .notification-header {
+    padding: 0.75rem;
   }
   
-  .in-app-notification-item {
-    padding: 0.75rem 1rem;
-  }
-  
-  .dismiss-btn {
-    opacity: 1; /* Always show on mobile */
+  .notification-details {
+    padding: 0.75rem;
   }
 }
 
-@media (max-width: 640px) {
-  .notification-bell {
-    width: 40px;
-    height: 40px;
-    font-size: 1rem;
+/* Notifications Popup Modal Styles */
+.notifications-popup-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.notifications-popup-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  width: 100%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.popup-title-section {
+  flex: 1;
+}
+
+.popup-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 0.25rem 0;
+}
+
+.popup-subtitle {
+  font-size: 0.875rem;
+  color: #6b7280;
+  margin: 0;
+}
+
+.popup-close-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 1.25rem;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.popup-close-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+.popup-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0;
+}
+
+.popup-empty-state {
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.popup-empty-icon {
+  font-size: 3rem;
+  color: #9ca3af;
+  margin-bottom: 1rem;
+}
+
+.popup-empty-state h3 {
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.popup-empty-state p {
+  color: #6b7280;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.popup-notifications-list {
+  padding: 1.5rem;
+}
+
+.popup-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.popup-filter-controls {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.popup-filter-btn {
+  background: white;
+  border: 1px solid #d1d5db;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  color: black;
+}
+
+.popup-filter-btn:hover {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+  color: black;
+}
+
+.popup-filter-btn.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.popup-sort-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.popup-sort-controls label {
+  font-size: 0.875rem;
+  color: #374151;
+}
+
+.popup-sort-select {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.5rem;
+  font-size: 0.875rem;
+  background: white;
+}
+
+.popup-notifications-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.popup-notification-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.popup-notification-card.unread:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
+}
+
+.popup-notification-card.unread {
+  background: #f8fafc;
+  border-left: 4px solid #3b82f6;
+}
+
+.popup-notification-card.expanded {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.popup-notification-header {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  gap: 0.75rem;
+}
+
+.popup-notification-icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.popup-notification-summary {
+  flex: 1;
+  min-width: 0;
+}
+
+.popup-notification-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.25rem;
+}
+
+.popup-notification-time {
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.popup-notification-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.popup-unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+}
+
+.popup-expand-icon {
+  color: #6b7280;
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.popup-notification-card.expanded .popup-expand-icon {
+  transform: rotate(180deg);
+}
+
+.popup-notification-details {
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 1rem;
+}
+
+.popup-notification-content {
+  margin-bottom: 1rem;
+}
+
+.popup-notification-text {
+  font-family: inherit;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: #374151;
+  white-space: pre-wrap;
+  margin: 0;
+  background: white;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.popup-notification-text strong {
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.popup-notification-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.popup-mark-read-btn, .popup-mark-unread-btn {
+  background: #10b981;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  transition: background 0.2s ease;
+}
+
+.popup-mark-read-btn:hover {
+  background: #059669;
+}
+
+.popup-mark-unread-btn {
+  background: #6b7280;
+}
+
+.popup-mark-unread-btn:hover {
+  background: #4b5563;
+}
+
+/* Mobile responsiveness for popup */
+@media (max-width: 768px) {
+  .notifications-popup-modal {
+    margin: 0.5rem;
+    max-height: 95vh;
   }
   
-  .notifications-header {
-    padding: 0.75rem 1rem;
+  .popup-header {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
   }
   
-  .notifications-title {
-    font-size: 0.9rem;
+  .popup-controls {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .popup-filter-controls {
+    justify-content: center;
+  }
+  
+  .popup-sort-controls {
+    justify-content: center;
+  }
+  
+  .popup-notification-header {
+    padding: 0.75rem;
+  }
+  
+  .popup-notification-details {
+    padding: 0.75rem;
   }
 }
 </style>

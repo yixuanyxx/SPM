@@ -154,12 +154,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch } from "vue";
 import SideNavbar from '../../components/SideNavbar.vue'
 import './account.css'
 import { supabase } from "../../services/supabase";
 import { resetPasswordForEmail } from "../../services/auth.js";
 import { userPreferencesService } from "../../services/notifications.js";
+import { sessionState } from "../../services/session.js";
 
 const API = 'http://127.0.0.1:5003';
 const TEAM_API = 'http://127.0.0.1:5004';
@@ -209,6 +210,27 @@ async function getDepartmentNameById(deptId) {
   }
 }
 
+// Watch for changes in session state
+watch(() => sessionState.userid, (newUserid) => {
+  if (newUserid && !userid.value) {
+    userid.value = newUserid;
+    onFetch();
+  } else if (!newUserid && userid.value) {
+    // User logged out
+    userid.value = null;
+    name.value = "";
+    email.value = "";
+    role.value = "";
+    team_id.value = null;
+    dept_id.value = null;
+    teamName.value = "";
+    departmentName.value = "";
+    message.value = 'Please log in to access account settings';
+    error.value = true;
+    loading.value = false;
+  }
+}, { immediate: true });
+
 onMounted(async () => {
   loading.value = true;
   
@@ -229,19 +251,25 @@ onMounted(async () => {
     return;
   }
 
-  // Get user ID from localStorage with multiple fallbacks
-  const stored = localStorage.getItem('spm_userid') || 
-                 localStorage.getItem('UID') || 
-                 localStorage.getItem('userId') || 
-                 localStorage.getItem('user_id');
-  
-  if (stored) {
-    userid.value = Number(stored);
+  // Use session state if available, otherwise fallback to localStorage
+  if (sessionState.userid) {
+    userid.value = sessionState.userid;
     await onFetch();
   } else {
-    message.value = 'User ID not found. Please log in again.';
-    error.value = true;
-    loading.value = false;
+    // Get user ID from localStorage with multiple fallbacks
+    const stored = localStorage.getItem('spm_userid') || 
+                   localStorage.getItem('UID') || 
+                   localStorage.getItem('userId') || 
+                   localStorage.getItem('user_id');
+    
+    if (stored) {
+      userid.value = Number(stored);
+      await onFetch();
+    } else {
+      message.value = 'User ID not found. Please log in again.';
+      error.value = true;
+      loading.value = false;
+    }
   }
 });
 

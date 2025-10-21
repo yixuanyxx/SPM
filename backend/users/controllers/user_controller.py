@@ -237,3 +237,7 @@ def update_notification_preferences(userid: int):
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+    
+@user_bp.route("/health")
+def health_check():
+    return jsonify({"status": "ok"}), 200

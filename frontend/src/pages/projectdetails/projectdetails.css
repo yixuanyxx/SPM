@@ -347,22 +347,15 @@
 }
 
 /* Edit Project Button */
-.edit-project-btn {
-  background-color: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
+.project-details-header-actions .btn-ghost {
+  background: transparent;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
 }
 
-.edit-project-btn:hover {
-  background-color: #2563eb;
+.project-details-header-actions .btn-ghost:hover {
+  background: #f8fafc;
+  color: #334155;
 }
 
 /* Modal Styling */
