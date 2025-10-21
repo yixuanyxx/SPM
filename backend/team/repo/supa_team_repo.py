@@ -20,8 +20,12 @@ class SupabaseTeamRepo:
 
     def get_team(self, team_id: int) -> Optional[Dict[str, Any]]:
         """Get team by ID"""
-        res = self.client.table(TABLE).select("*").eq("id", team_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*").eq("id", team_id).single().execute()
+            return res.data
+        except Exception:
+            # Return None if team not found or any other error
+            return None
 
     def get_all_teams(self) -> List[Dict[str, Any]]:
         """Get all teams"""
@@ -43,11 +47,11 @@ class SupabaseTeamRepo:
         res = self.client.table(TABLE).select("*").eq("name", name).eq("dept_id", dept_id).execute()
         return res.data or []
 
-    def update_team(self, team_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
+    def update_team(self, team_id: int, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update team by ID"""
         res = self.client.table(TABLE).update(patch).eq("id", team_id).execute()
         if not res.data:
-            raise RuntimeError("Update failed — no data returned")
+            return None  # Team not found
         return res.data[0]
 
     def delete_team(self, team_id: int) -> bool:
@@ -62,8 +66,12 @@ class SupabaseTeamRepo:
 
     def get_team_with_dept_info(self, team_id: int) -> Optional[Dict[str, Any]]:
         """Get team by ID with department information joined"""
-        res = self.client.table(TABLE).select("*, dept:dept_id(id, name)").eq("id", team_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*, dept:dept_id(id, name)").eq("id", team_id).single().execute()
+            return res.data
+        except Exception:
+            # Return None if team not found or any other error
+            return None
 
     def get_teams_by_dept_with_info(self, dept_id: int) -> List[Dict[str, Any]]:
         """Get teams by department ID with department information joined"""

@@ -26,7 +26,7 @@ def create_comment():
     try:
         data = request.get_json(silent=True) or {}
         result = service.create_comment(data)
-        status_code = result.pop("Code", 201)
+        status_code = result.get("Code", 201)
         return jsonify(result), status_code
         
     except ValueError as ve:
@@ -51,7 +51,7 @@ def get_task_comments(task_id: int):
     """
     try:
         result = service.get_comments_by_task(task_id)
-        status_code = result.pop("Code", 200)
+        status_code = result.get("Code", 200)
         return jsonify(result), status_code
         
     except Exception as e:
@@ -74,7 +74,7 @@ def get_comment(comment_id: int):
     """
     try:
         result = service.get_comment_by_id(comment_id)
-        status_code = result.pop("Code", 200)
+        status_code = result.get("Code", 200)
         return jsonify(result), status_code
         
     except Exception as e:
@@ -92,10 +92,17 @@ def update_comment(comment_id: int):
     - content: New comment content
     
     Returns:
+    Success (200):
     {
         "Code": 200,
         "Message": "Comment <comment_id> updated successfully",
         "data": { ... updated comment data ... }
+    }
+    
+    Not Found (404):
+    {
+        "Code": 404,
+        "Message": "Comment with ID <comment_id> not found"
     }
     """
     try:
@@ -106,7 +113,7 @@ def update_comment(comment_id: int):
             return jsonify({"Code": 400, "Message": "Content is required"}), 400
         
         result = service.update_comment(comment_id, content)
-        status_code = result.pop("Code", 200)
+        status_code = result.get("Code", 200)
         return jsonify(result), status_code
         
     except Exception as e:
@@ -121,14 +128,21 @@ def delete_comment(comment_id: int):
     - comment_id: ID of the comment to delete
     
     Returns:
+    Success (200):
     {
         "Code": 200,
         "Message": "Comment <comment_id> deleted successfully"
     }
+    
+    Not Found (404):
+    {
+        "Code": 404,
+        "Message": "Comment with ID <comment_id> not found"
+    }
     """
     try:
         result = service.delete_comment(comment_id)
-        status_code = result.pop("Code", 200)
+        status_code = result.get("Code", 200)
         return jsonify(result), status_code
         
     except Exception as e:
@@ -137,4 +151,4 @@ def delete_comment(comment_id: int):
 @comment_bp.route("/health", methods=["GET"])
 def health():
     """Health check endpoint"""
-    return jsonify({"status": "Comments service is running"}), 200
+    return jsonify({"Code": 200, "status": "Comments service is running"}), 200

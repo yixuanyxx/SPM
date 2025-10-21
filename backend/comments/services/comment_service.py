@@ -101,20 +101,18 @@ class CommentService:
 
     def update_comment(self, comment_id: int, content: str) -> Dict[str, Any]:
         """Update a comment's content."""
-        # Check if comment exists
-        existing_comment = self.repo.get_comment(comment_id)
-        if not existing_comment:
-            return {
-                "Code": 404,
-                "Message": f"Comment with ID {comment_id} not found"
-            }
-
         # Update the comment
         updated_data = {
             "content": content,
             "updated_at": datetime.now(UTC).isoformat()
         }
         updated_comment = self.repo.update_comment(comment_id, updated_data)
+        
+        if not updated_comment:
+            return {
+                "Code": 404,
+                "Message": f"Comment with ID {comment_id} not found"
+            }
         
         return {
             "Code": 200,
@@ -124,14 +122,6 @@ class CommentService:
 
     def delete_comment(self, comment_id: int) -> Dict[str, Any]:
         """Delete a comment by its ID."""
-        # Check if comment exists
-        existing_comment = self.repo.get_comment(comment_id)
-        if not existing_comment:
-            return {
-                "Code": 404,
-                "Message": f"Comment with ID {comment_id} not found"
-            }
-
         # Delete the comment
         success = self.repo.delete_comment(comment_id)
         if success:
@@ -141,6 +131,6 @@ class CommentService:
             }
         else:
             return {
-                "Code": 500,
-                "Message": f"Failed to delete comment {comment_id}"
+                "Code": 404,
+                "Message": f"Comment with ID {comment_id} not found"
             }

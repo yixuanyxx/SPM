@@ -54,8 +54,9 @@ class TestProjectControllerIntegration(unittest.TestCase):
         """Clean up test data from the database."""
         try:
             # Delete test projects for common test owner IDs
-            test_owners = [297, 200, 297, 999]  # Common test owner IDs
+            test_owners = [297]  # Common test owner IDs (removed duplicate)
             deleted_count = 0
+            deleted_project_ids = set()  # Track deleted projects to avoid duplicates
             
             for owner_id in test_owners:
                 # Get projects for this owner
@@ -65,16 +66,49 @@ class TestProjectControllerIntegration(unittest.TestCase):
                 # Delete projects
                 for project in projects:
                     project_id = project['id']
+                    if project_id in deleted_project_ids:
+                        continue  # Skip if already deleted
+                    
                     try:
                         # Delete the project (this will cascade delete related data)
                         result = self.repo.client.table("project").delete().eq("id", project_id).execute()
                         if result.data:
                             deleted_count += 1
+                            deleted_project_ids.add(project_id)
                             print(f"SUCCESS: Deleted project {project_id} for owner {owner_id}")
                         else:
                             print(f"FAILED: Failed to delete project {project_id} for owner {owner_id}")
                     except Exception as e:
                         print(f"ERROR: Error deleting project {project_id}: {e}")
+            
+            # Also clean up any projects that might have been created with other owner IDs
+            # by looking for projects with test names
+            test_project_names = [
+                "Test Project", "Complete Project", "Project No Collabs", "Project 1", "Project 2",
+                "Solo Project", "Minimal Project", "Old Name", "Updated Project Name", "New Name Only",
+                "Project", "My Project 1", "My Project 2", "Single Owner Project"
+            ]
+            
+            for project_name in test_project_names:
+                try:
+                    # Find projects with test names
+                    result = self.repo.client.table("project").select("id").ilike("proj_name", f"%{project_name}%").execute()
+                    if result.data:
+                        for project in result.data:
+                            project_id = project['id']
+                            if project_id in deleted_project_ids:
+                                continue
+                            
+                            try:
+                                delete_result = self.repo.client.table("project").delete().eq("id", project_id).execute()
+                                if delete_result.data:
+                                    deleted_count += 1
+                                    deleted_project_ids.add(project_id)
+                                    print(f"SUCCESS: Deleted test project {project_id} with name containing '{project_name}'")
+                            except Exception as e:
+                                print(f"ERROR: Error deleting test project {project_id}: {e}")
+                except Exception as e:
+                    print(f"Warning: Could not search for test projects with name '{project_name}': {e}")
             
             if deleted_count > 0:
                 print(f"Cleanup completed: {deleted_count} projects deleted")
@@ -85,6 +119,37 @@ class TestProjectControllerIntegration(unittest.TestCase):
             print(f"Warning: Could not clean up test data: {e}")
             import traceback
             traceback.print_exc()
+
+    def cleanup_specific_project(self, project_id: int):
+        """Clean up a specific project by ID."""
+        try:
+            result = self.repo.client.table("project").delete().eq("id", project_id).execute()
+            if result.data:
+                print(f"SUCCESS: Deleted specific project {project_id}")
+                return True
+            else:
+                print(f"FAILED: Could not delete specific project {project_id}")
+                return False
+        except Exception as e:
+            print(f"ERROR: Error deleting specific project {project_id}: {e}")
+            return False
+
+    def cleanup_projects_by_owner(self, owner_id: int):
+        """Clean up all projects for a specific owner."""
+        try:
+            projects = self.repo.find_by_owner(owner_id)
+            deleted_count = 0
+            
+            for project in projects:
+                project_id = project['id']
+                if self.cleanup_specific_project(project_id):
+                    deleted_count += 1
+            
+            print(f"Cleaned up {deleted_count} projects for owner {owner_id}")
+            return deleted_count
+        except Exception as e:
+            print(f"ERROR: Error cleaning up projects for owner {owner_id}: {e}")
+            return 0
 
     # ==================== create_project Tests ====================
     
@@ -107,6 +172,10 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertIn("data", data)
         self.assertEqual(data["data"]["proj_name"], "Test Project")
         self.assertEqual(data["data"]["owner_id"], 297)
+        
+        # Clean up the created project
+        project_id = data["data"]["id"]
+        self.cleanup_specific_project(project_id)
 
     def test_create_project_with_all_fields(self):
         """Test project creation with all optional fields."""
@@ -127,6 +196,10 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertEqual(data["status"], 201)
         self.assertEqual(data["data"]["collaborators"], [297, 102, 103])
         self.assertEqual(data["data"]["tasks"], [10, 11, 12])
+        
+        # Clean up the created project
+        project_id = data["data"]["id"]
+        self.cleanup_specific_project(project_id)
 
     def test_create_project_missing_owner_id(self):
         """Test project creation fails when owner_id is missing."""
@@ -179,6 +252,10 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = json.loads(response.data)
         self.assertEqual(data["status"], 201)
+        
+        # Clean up the created project
+        project_id = data["data"]["id"]
+        self.cleanup_specific_project(project_id)
 
     # ==================== get_projects_by_user Tests ====================
     
@@ -195,6 +272,7 @@ class TestProjectControllerIntegration(unittest.TestCase):
             "tasks": [10, 11]
         })
         self.assertEqual(create_response1.status_code, 201)
+        project1_id = json.loads(create_response1.data)["data"]["id"]
         
         create_response2 = self.client.post('/projects/create', json={
             "owner_id": 538,
@@ -202,6 +280,7 @@ class TestProjectControllerIntegration(unittest.TestCase):
             "collaborators": [297, 102]
         })
         self.assertEqual(create_response2.status_code, 201)
+        project2_id = json.loads(create_response2.data)["data"]["id"]
         
         # Make request
         response = self.client.get('/projects/user/297')
@@ -212,6 +291,10 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertEqual(data["status"], 200)
         self.assertIn("data", data)
         self.assertGreaterEqual(len(data["data"]), 2)
+        
+        # Clean up the created projects
+        self.cleanup_specific_project(project1_id)
+        self.cleanup_specific_project(project2_id)
 
     def test_get_projects_by_user_not_found(self):
         """Test get projects by user when no projects found."""
@@ -255,6 +338,9 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertIn("data", data)
         self.assertEqual(data["data"]["id"], project_id)
         self.assertEqual(data["data"]["proj_name"], "Test Project")
+        
+        # Clean up the created project
+        self.cleanup_specific_project(project_id)
 
     def test_get_project_by_id_not_found(self):
         """Test get project by ID when project doesn't exist."""
@@ -293,6 +379,9 @@ class TestProjectControllerIntegration(unittest.TestCase):
         self.assertEqual(data["status"], 200)
         self.assertIsNone(data["data"]["collaborators"])
         self.assertIsNone(data["data"]["tasks"])
+        
+        # Clean up the created project
+        self.cleanup_specific_project(project_id)
 
 #     # ==================== update_project Tests ====================
     

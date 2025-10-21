@@ -79,16 +79,16 @@ class TeamService:
 
     def update_team(self, team_id: int, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Update team by ID"""
-        # Check if team exists
-        existing_team = self.repo.get_team(team_id)
-        if not existing_team:
-            return {
-                "__status": 404, 
-                "Message": f"Team with ID {team_id} not found"
-            }
-
         # If updating name and/or dept_id, check for duplicates
         if "name" in payload:
+            # Get existing team to check current dept_id
+            existing_team = self.repo.get_team(team_id)
+            if not existing_team:
+                return {
+                    "__status": 404, 
+                    "Message": f"Team with ID {team_id} not found"
+                }
+            
             # Use the dept_id from payload if provided, otherwise use existing team's dept_id
             check_dept_id = payload.get("dept_id", existing_team["dept_id"])
             existing_name = self.repo.find_by_name_and_dept(payload["name"], check_dept_id)
@@ -100,6 +100,12 @@ class TeamService:
                 }
 
         updated = self.repo.update_team(team_id, payload)
+        if not updated:
+            return {
+                "__status": 404, 
+                "Message": f"Team with ID {team_id} not found"
+            }
+        
         return {
             "__status": 200, 
             "Message": f"Team {team_id} updated successfully", 
@@ -108,14 +114,6 @@ class TeamService:
 
     def delete_team(self, team_id: int) -> Dict[str, Any]:
         """Delete team by ID"""
-        # Check if team exists
-        existing_team = self.repo.get_team(team_id)
-        if not existing_team:
-            return {
-                "__status": 404, 
-                "Message": f"Team with ID {team_id} not found"
-            }
-
         # TODO: Check if team has users/projects before deleting
         # This would require user/project repository integration
 
@@ -127,6 +125,6 @@ class TeamService:
             }
         else:
             return {
-                "__status": 500, 
-                "Message": f"Failed to delete team {team_id}"
+                "__status": 404, 
+                "Message": f"Team with ID {team_id} not found"
             }

@@ -28,14 +28,18 @@ class CommentRepo:
 
     def get_comment(self, comment_id: int) -> Optional[Dict[str, Any]]:
         """Get a single comment by its ID."""
-        res = self.client.table(TABLE).select("*").eq("id", comment_id).single().execute()
-        return res.data
+        try:
+            res = self.client.table(TABLE).select("*").eq("id", comment_id).single().execute()
+            return res.data
+        except Exception:
+            # Return None if comment not found or any other error
+            return None
 
-    def update_comment(self, comment_id: int, patch: Dict[str, Any]) -> Dict[str, Any]:
+    def update_comment(self, comment_id: int, patch: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Update a comment with the provided fields."""
         res = self.client.table(TABLE).update(patch).eq("id", comment_id).execute()
         if not res.data:
-            raise RuntimeError("Update failed – no data returned")
+            return None  # Comment not found
         return res.data[0]
 
     def delete_comment(self, comment_id: int) -> bool:
