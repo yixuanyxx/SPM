@@ -1,3 +1,5 @@
+import { ref, reactive } from 'vue';
+
 // Notification service for API calls
 const NOTIFICATION_API = 'http://127.0.0.1:5006';
 const USER_API = 'http://127.0.0.1:5003';
@@ -136,7 +138,7 @@ export const notificationUtils = {
 };
 
 // Reactive notification store (simple state management)
-export const notificationStore = {
+export const notificationStore = reactive({
   notifications: [],
   unreadCount: 0,
   loading: false,
@@ -225,7 +227,7 @@ export const notificationStore = {
       throw error;
     }
   }
-};
+});
 
 // Enhanced notification service that respects user preferences
 export const enhancedNotificationService = {
@@ -357,6 +359,31 @@ export const enhancedNotificationService = {
       return await response.json();
     } catch (error) {
       console.error('Failed to trigger task update notification:', error);
+      throw error;
+    }
+  },
+
+  // Trigger consolidated task update notification
+  async triggerConsolidatedTaskUpdateNotification(taskId, userIds, changes, updaterName = 'System') {
+    try {
+      const response = await fetch('http://127.0.0.1:5006/notifications/triggers/task-consolidated-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task_id: taskId,
+          user_ids: userIds,
+          changes: changes,
+          updater_name: updaterName
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Failed to trigger consolidated task update notification:', error);
       throw error;
     }
   },

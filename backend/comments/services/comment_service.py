@@ -7,17 +7,53 @@ class CommentService:
     def __init__(self, repo: Optional[CommentRepo] = None):
         self.repo = repo or CommentRepo()
 
+    def _extract_username_from_email(self, email: str) -> str:
+        """Extract username from email (part before @)"""
+        if not email:
+            return "Unknown"
+        
+        at_index = email.find('@')
+        if at_index > 0:
+            return email[:at_index]
+        return email
+
+    def _get_user_data(self, user_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Fetch user data from the user table.
+        Returns email and role for the user.
+        """
+        try:
+            user = self.repo.client.table("user").select("email, role").eq("userid", user_id).single().execute()
+            return user.data if user.data else None
+        except Exception as e:
+            print(f"Error fetching user data for user_id {user_id}: {e}")
+            return None
+
     def create_comment(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create a new comment.
-        Required fields: task_id, user_id, user_name, user_role, content
+        Required fields: task_id, user_id, content
+        Optional fields: user_name (will be extracted from email if not provided), user_role
         """
         # Validate required fields
-        required_fields = ['task_id', 'user_id', 'user_name', 'user_role', 'content']
+        required_fields = ['task_id', 'user_id', 'content']
         missing_fields = [field for field in required_fields if not payload.get(field)]
         
         if missing_fields:
             raise ValueError(f"Missing required fields: {', '.join(missing_fields)}")
+
+        # If user_name is not provided, fetch from user table
+        if not payload.get('user_name'):
+            user_data = self._get_user_data(payload['user_id'])
+            if user_data and user_data.get('email'):
+                payload['user_name'] = self._extract_username_from_email(user_data['email'])
+            else:
+                payload['user_name'] = "Unknown"
+        
+        # If user_role is not provided, fetch from user table
+        if not payload.get('user_role'):
+            user_data = self._get_user_data(payload['user_id'])
+            payload['user_role'] = user_data.get('role', 'user').lower() if user_data else 'user'
 
         # Create comment from payload
         comment = Comment.from_dict(payload)
@@ -108,4 +144,3 @@ class CommentService:
                 "Code": 500,
                 "Message": f"Failed to delete comment {comment_id}"
             }
-

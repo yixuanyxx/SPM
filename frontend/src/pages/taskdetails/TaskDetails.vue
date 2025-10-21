@@ -369,16 +369,11 @@
 
           <!-- Comment Section -->
             <div>
-            <CommentSection 
-              :taskId="taskId"
-              :taskOwnerId="task.owner_id"
-              :comments="taskComments"
-              :users="users"
-              @add-comment="handleAddComment"
-              @edit-comment="handleEditComment"
-              @delete-comment="handleDeleteComment"
-              @reply-comment="handleReplyComment"
-            />
+              <CommentSection 
+                :taskId="selectedTaskId"
+                :taskOwnerId="taskOwnerId"
+                @comments-updated="handleCommentsUpdate"
+              />
           </div>
 
           <!-- Parent Task Reference -->
@@ -458,6 +453,9 @@ const error = ref(null)
 const showEditPopup = ref(false)
 const showAssignPopup = ref(false)
 const users = ref({}) // Store user information lookup { userid: { name, email, ... } }
+const selectedTaskId = computed(() => task.value?.id)
+const taskOwnerId = computed(() => task.value?.owner_id)
+const taskComments = ref([])
 
 // Team members data for assign popup - replace with real data fetching as needed
 const teamMembers = ref([
@@ -507,11 +505,11 @@ const canEditTask = computed(() => {
 const canAssignTask = computed(() => {
   if (!task.value) return false
   
-  // Only show assign button if task is unassigned AND user is manager/director
-  const isUnassigned = task.value.status === 'Unassigned'
+  // Only show assign button if user is manager/director
+  // const isUnassigned = task.value.status === 'Unassigned'
   const hasRolePermission = currentUser.role === 'manager' || currentUser.role === 'director'
   
-  return isUnassigned && hasRolePermission
+  return hasRolePermission //&& isUnassigned
 })
 
 // Computed property to check if task has any attachments
@@ -887,28 +885,10 @@ const updateSuccess = async (updateData) => {
   console.log('Task refreshed')
 }
 
-const taskComments = ref([])
-
-const handleAddComment = (commentData) => {
-  // Send to backend API
-  fetch(`http://localhost:5002/comments`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(commentData)
-  })
-  .then(res => res.json())
-  .then(data => {
-    taskComments.value.push(data.data)
-    // Optional: Send notifications to mentioned users
-  })
+// Add this handler function
+const handleCommentsUpdate = (comments) => {
+  console.log('Comments updated:', comments)
+  taskComments.value = comments
 }
 
-const handleDeleteComment = (commentId) => {
-  fetch(`http://localhost:5002/comments/${commentId}`, {
-    method: 'DELETE'
-  })
-  .then(() => {
-    taskComments.value = taskComments.value.filter(c => c.id !== commentId)
-  })
-}
 </script>

@@ -13,7 +13,25 @@
           <p><strong>Your Role:</strong> {{ userRole.charAt(0).toUpperCase() + userRole.slice(1) }}</p>
         </div>
 
-        <form @submit.prevent="handleAssignment">
+        <!-- Loading indicator -->
+        <div v-if="isLoading" class="loading-message">
+          <p>Loading team members...</p>
+        </div>
+
+        <!-- No eligible members message -->
+        <div v-else-if="eligibleMembers.length === 0" class="no-members-message">
+          <p>
+            <strong>No team members available to assign to.</strong>
+          </p>
+          <p v-if="userRole === 'manager'">
+            There are no staff members in your team to assign this task to.
+          </p>
+          <p v-else-if="userRole === 'director'">
+            There are no managers in your department to assign this task to.
+          </p>
+        </div>
+
+        <form v-else @submit.prevent="handleAssignment">
           <div class="form-group">
             <label for="assignee">Assign to:</label>
             <select 
@@ -384,16 +402,40 @@ export default {
     async triggerAssignmentNotification(assigneeData) {
       try {
         // Get current user info
-        const currentUserName = localStorage.getItem('spm_username') || 'System';
+        const currentUserId = localStorage.getItem('spm_userid');
+        let currentUserName = localStorage.getItem('spm_username') || 'System';
         
-        // Trigger assignment notification
-        await enhancedNotificationService.triggerTaskAssignmentNotification(
+        // Try to get the actual user name from the user service
+        if (currentUserId) {
+          try {
+            const userResponse = await fetch(`http://localhost:5003/users/${currentUserId}`);
+            if (userResponse.ok) {
+              const userData = await userResponse.json();
+              currentUserName = userData.data?.name || currentUserName;
+            }
+          } catch (error) {
+            console.warn('Failed to fetch user name, using stored name:', error);
+          }
+        }
+        
+        // Get current task owner for ownership transfer notification
+        const currentTaskResponse = await fetch(`http://localhost:5002/tasks/${this.taskId}`)
+        if (!currentTaskResponse.ok) {
+          throw new Error('Failed to fetch current task data')
+        }
+        
+        const currentTaskData = await currentTaskResponse.json()
+        const currentTask = currentTaskData.task || currentTaskData
+        const currentOwnerId = currentTask.owner_id
+        
+        // Trigger ownership transfer notification (since we're assigning as owner, not collaborator)
+        await enhancedNotificationService.triggerTaskOwnershipTransferNotification(
           this.taskId,
           assigneeData.userid,
           currentUserName
         );
         
-        console.log('Task assignment notification sent successfully');
+        console.log('Task ownership transfer notification sent successfully');
       } catch (error) {
         console.error('Failed to send task assignment notification:', error);
         // Don't throw error to avoid breaking the main assignment flow
@@ -405,8 +447,11 @@ export default {
     isVisible(newVal) {
       if (newVal) {
         this.clearMessages()
+        this.isLoading = true
         // Fetch eligible users when popup opens
-        this.fetchEligibleUsers()
+        this.fetchEligibleUsers().finally(() => {
+          this.isLoading = false
+        })
       }
     },
     selectedAssignee() {
@@ -501,6 +546,53 @@ export default {
   font-size: 0.85rem;
   color: #374151;
   line-height: 1.4;
+}
+
+/* No Members Message */
+.no-members-message {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.no-members-message p {
+  margin: 0.5rem 0;
+  font-size: 0.875rem;
+  color: #92400e;
+  line-height: 1.5;
+}
+
+.no-members-message p:first-child {
+  margin-top: 0;
+}
+
+.no-members-message p:last-child {
+  margin-bottom: 0;
+}
+
+.no-members-message strong {
+  color: #78350f;
+  font-weight: 600;
+}
+
+/* Loading Message */
+.loading-message {
+  background: #e0f2fe;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+  text-align: center;
+}
+
+.loading-message p {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #075985;
+  line-height: 1.5;
 }
 
 .task-info p:first-child {
@@ -667,6 +759,22 @@ export default {
     font-size: 0.8rem;
   }
 
+  .no-members-message {
+    padding: 1rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.8rem;
+  }
+
+  .loading-message {
+    padding: 1rem;
+  }
+
+  .loading-message p {
+    font-size: 0.8rem;
+  }
+
   .form-group {
     margin-bottom: 1.25rem;
   }
@@ -721,6 +829,22 @@ export default {
     margin: 0.125rem 0;
   }
 
+  .no-members-message {
+    padding: 0.875rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.75rem;
+  }
+
+  .loading-message {
+    padding: 0.875rem;
+  }
+
+  .loading-message p {
+    font-size: 0.75rem;
+  }
+
   .form-group {
     margin-bottom: 1rem;
   }
@@ -757,6 +881,22 @@ export default {
     padding: 0.625rem;
   }
 
+  .no-members-message {
+    padding: 0.75rem;
+  }
+
+  .no-members-message p {
+    font-size: 0.7rem;
+  }
+
+  .loading-message {
+    padding: 0.75rem;
+  }
+
+  .loading-message p {
+    font-size: 0.7rem;
+  }
+
   .form-actions button {
     padding: 0.625rem 1rem;
     font-size: 0.8rem;
@@ -773,6 +913,16 @@ export default {
 
   .task-info p {
     font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
+  .no-members-message p {
+    font-size: 0.65rem;
+    line-height: 1.3;
+  }
+
+  .loading-message p {
+    font-size: 0.65rem;
     line-height: 1.3;
   }
 

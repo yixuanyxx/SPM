@@ -1,11 +1,18 @@
 from typing import Dict, Any, Optional
-from datetime import datetime, UTC
+from datetime import datetime, UTC, timedelta
+from dateutil import parser as dateparser
+from dateutil.relativedelta import relativedelta
 from models.task import Task
 from repo.supa_task_repo import SupabaseTaskRepo
+import requests
+import time
+import copy
+import calendar
 
 class TaskService:
     def __init__(self, repo: Optional[SupabaseTaskRepo] = None):
         self.repo = repo or SupabaseTaskRepo()
+        self._notification_cache = {}  # Cache to prevent duplicate notifications
 
     def manager_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         # uniqueness per owner: task_name
@@ -23,6 +30,10 @@ class TaskService:
         data.pop("id", None)
 
         created = self.repo.insert_task(data)
+        
+        # Trigger collaborator notifications after successful task creation
+        self._trigger_collaborator_notifications(created.get('id'), payload)
+        
         return {"__status": 201, "Message": f"Task created! Task ID: {created.get('id')}", "data": created}
 
     # get tasks by user_id (in owner_id or collaborators) with nested subtasks
@@ -129,6 +140,10 @@ class TaskService:
             # If status is changing TO "Completed", set completed_at timestamp
             if new_status == 'Completed' and old_status != 'Completed':
                 update_fields['completed_at'] = datetime.now(UTC).isoformat()
+                try:
+                    self._generate_next_occurrence(existing_task_data)
+                except Exception as e:
+                    print(f"⚠️ Failed to generate recurring task for {task_id}: {e}")
             
             # If status is changing FROM "Completed" to something else, clear completed_at
             elif old_status == 'Completed' and new_status != 'Completed':
@@ -150,6 +165,13 @@ class TaskService:
         # Perform the update
         try:
             updated_task_data = self.repo.update_task(task_id, update_data)
+            
+            # Check for collaborator additions and trigger notifications
+            self._trigger_collaborator_addition_notifications(existing_task_data, update_fields, task_id)
+            
+            # Notifications are now handled by the frontend to prevent duplicates
+            # self._trigger_update_notifications(existing_task_data, update_fields, task_id)
+            
             return {"__status": 200, "Message": f"Task {task_id} updated successfully", "data": updated_task_data}
         except Exception as e:
             return {"__status": 500, "Message": f"Failed to update task {task_id}: {str(e)}"}
@@ -157,6 +179,250 @@ class TaskService:
     def get_task(self, task_id: int) -> Optional[Dict[str, Any]]:
         task = self.repo.get_task(task_id)
         return task
+
+    def _trigger_update_notifications(self, existing_task_data: Dict[str, Any], update_fields: Dict[str, Any], task_id: int):
+        """
+        Trigger consolidated notifications when specific task fields are updated.
+        """
+        try:
+            print(f"DEBUG: Triggering consolidated notifications for task {task_id} with fields: {list(update_fields.keys())}")
+            
+            # Create a cache key for this update to prevent duplicates
+            cache_key = f"{task_id}_{hash(str(sorted(update_fields.items())))}"
+            
+            # Check if we've already sent notifications for this exact update
+            if cache_key in self._notification_cache:
+                print(f"DEBUG: Notifications already sent for this update, skipping duplicate")
+                return
+            
+            # Get collaborators to notify
+            collaborators = existing_task_data.get("collaborators", [])
+            if not collaborators:
+                print(f"DEBUG: No collaborators found for task {task_id}")
+                return  # No collaborators to notify
+            
+            print(f"DEBUG: Notifying collaborators: {collaborators}")
+            
+            # Get updater name (not used in notifications anymore)
+            updater_name = "System"
+            
+            # Collect all changes for consolidated notification
+            changes = []
+            
+            # Check for status changes
+            if "status" in update_fields:
+                old_status = existing_task_data.get("status", "Unknown")
+                new_status = update_fields["status"]
+                if old_status != new_status:
+                    changes.append({
+                        "field": "status",
+                        "old_value": old_status,
+                        "new_value": new_status,
+                        "field_name": "Status"
+                    })
+            
+            # Check for due date changes
+            if "due_date" in update_fields:
+                old_due_date = existing_task_data.get("due_date", "No due date set")
+                new_due_date = update_fields["due_date"]
+                if old_due_date != new_due_date:
+                    changes.append({
+                        "field": "due_date",
+                        "old_value": old_due_date,
+                        "new_value": new_due_date,
+                        "field_name": "Due Date"
+                    })
+            
+            # Check for description changes
+            if "description" in update_fields:
+                old_description = existing_task_data.get("description", "")
+                new_description = update_fields["description"]
+                if old_description != new_description:
+                    changes.append({
+                        "field": "description",
+                        "old_value": old_description,
+                        "new_value": new_description,
+                        "field_name": "Description"
+                    })
+            
+            # Check for task name/title changes
+            if "task_name" in update_fields:
+                old_task_name = existing_task_data.get("task_name", "")
+                new_task_name = update_fields["task_name"]
+                if old_task_name != new_task_name:
+                    changes.append({
+                        "field": "task_name",
+                        "old_value": old_task_name,
+                        "new_value": new_task_name,
+                        "field_name": "Task Title"
+                    })
+            
+            # Check for priority changes
+            if "priority" in update_fields:
+                old_priority = existing_task_data.get("priority", "Not set")
+                new_priority = update_fields["priority"]
+                if old_priority != new_priority:
+                    changes.append({
+                        "field": "priority",
+                        "old_value": old_priority,
+                        "new_value": new_priority,
+                        "field_name": "Priority"
+                    })
+            
+            # Check for ownership changes (this is handled separately as it's a different type of notification)
+            if "owner_id" in update_fields:
+                old_owner_id = existing_task_data.get("owner_id")
+                new_owner_id = update_fields["owner_id"]
+                if old_owner_id != new_owner_id and new_owner_id:
+                    self._send_task_ownership_transfer_notification(task_id, new_owner_id, old_owner_id, updater_name)
+            
+            # Send consolidated notification if there are changes
+            if changes:
+                self._send_consolidated_task_update_notification(task_id, collaborators, changes, updater_name)
+                
+                # Cache this update to prevent duplicates (expire after 5 minutes)
+                self._notification_cache[cache_key] = {
+                    'timestamp': time.time(),
+                    'changes': [change['field'] for change in changes]
+                }
+                print(f"DEBUG: Cached consolidated notification for {cache_key}, changes: {[change['field'] for change in changes]}")
+                
+                # Clean up old cache entries (older than 5 minutes)
+                current_time = time.time()
+                self._notification_cache = {
+                    k: v for k, v in self._notification_cache.items() 
+                    if current_time - v['timestamp'] < 300
+                }
+                    
+        except Exception as e:
+            print(f"Warning: Failed to trigger update notifications for task {task_id}: {e}")
+    
+    # Individual notification methods removed - now using consolidated notifications only
+    
+    def _send_consolidated_task_update_notification(self, task_id: int, collaborators: list, changes: list, updater_name: str):
+        """Send consolidated notification for multiple task changes."""
+        try:
+            response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-consolidated-update",
+                                   json={
+                                       "task_id": task_id,
+                                       "user_ids": collaborators,
+                                       "changes": changes,
+                                       "updater_name": updater_name
+                                   })
+            if response.status_code not in [200, 201]:
+                print(f"Warning: Failed to send consolidated update notification: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send consolidated update notification: {e}")
+    
+    def _send_task_ownership_transfer_notification(self, task_id: int, new_owner_id: int, old_owner_id: int, updater_name: str):
+        """Send notification for task ownership transfer."""
+        try:
+            # Get old owner name for the notification
+            old_owner_name = "Previous Owner"
+            if old_owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{old_owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        old_owner_name = user_data.get("data", {}).get("name", "Previous Owner")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-ownership-transfer", 
+                                   json={
+                                       "task_id": task_id,
+                                       "new_owner_id": new_owner_id,
+                                       "previous_owner_name": old_owner_name
+                                   })
+            if response.status_code not in [200, 201]:
+                print(f"Warning: Failed to send ownership transfer notification: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send ownership transfer notification: {e}")
+
+    def _trigger_collaborator_notifications(self, task_id: int, payload: Dict[str, Any]):
+        """
+        Trigger notifications for collaborators when a new task is created.
+        """
+        try:
+            # Get collaborators from payload
+            collaborators = payload.get("collaborators", [])
+            owner_id = payload.get("owner_id")
+            
+            # Get creator name
+            creator_name = "System"
+            if owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        creator_name = user_data.get("data", {}).get("name", "System")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            # Send notifications to all collaborators except the owner
+            collaborator_ids = [collab_id for collab_id in collaborators if collab_id != owner_id]
+            
+            if collaborator_ids:
+                response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-collaborator-addition", 
+                                       json={
+                                           "task_id": task_id,
+                                           "collaborator_ids": collaborator_ids,
+                                           "creator_name": creator_name
+                                       })
+                if response.status_code not in [200, 201]:
+                    print(f"Warning: Failed to send collaborator notifications: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send collaborator notifications: {e}")
+
+    def _trigger_collaborator_addition_notifications(self, existing_task_data: Dict[str, Any], update_fields: Dict[str, Any], task_id: int):
+        """
+        Trigger notifications for newly added collaborators when updating an existing task.
+        """
+        try:
+            # Check if collaborators field was updated
+            if 'collaborators' not in update_fields:
+                return
+            
+            # Get existing and new collaborators
+            existing_collaborators = set(existing_task_data.get("collaborators", []) or [])
+            new_collaborators = set(update_fields.get("collaborators", []) or [])
+            
+            # Find newly added collaborators (excluding the owner)
+            owner_id = existing_task_data.get("owner_id")
+            newly_added_collaborators = new_collaborators - existing_collaborators
+            
+            # Remove owner from newly added collaborators (they shouldn't get notifications)
+            if owner_id:
+                newly_added_collaborators.discard(owner_id)
+            
+            if not newly_added_collaborators:
+                return
+            
+            # Get updater name
+            updater_name = "System"
+            # Try to get updater from request context or use owner as fallback
+            if owner_id:
+                try:
+                    response = requests.get(f"http://127.0.0.1:5003/users/{owner_id}")
+                    if response.status_code == 200:
+                        user_data = response.json()
+                        updater_name = user_data.get("data", {}).get("name", "System")
+                except Exception:
+                    pass  # Use default name if we can't fetch it
+            
+            # Send notifications to newly added collaborators
+            collaborator_ids = list(newly_added_collaborators)
+            if collaborator_ids:
+                response = requests.post("http://127.0.0.1:5006/notifications/triggers/task-collaborator-addition", 
+                                       json={
+                                           "task_id": task_id,
+                                           "collaborator_ids": collaborator_ids,
+                                           "creator_name": updater_name
+                                       })
+                if response.status_code not in [200, 201]:
+                    print(f"Warning: Failed to send collaborator addition notifications: {response.status_code}")
+        except Exception as e:
+            print(f"Warning: Failed to send collaborator addition notifications: {e}")
 
     def staff_create(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -524,3 +790,106 @@ class TaskService:
                 "Message": f"Error retrieving department tasks: {str(e)}",
                 "data": []
             }
+        
+    def _generate_next_occurrence(self, completed_task: dict):
+        """
+        Automatically generate the next task occurrence based on recurrence frequency.
+        Ensures next due date is always after completed_at and respects the original schedule.
+        """
+        recurrence_type = completed_task.get("recurrence_type")
+        recurrence_end_date = completed_task.get("recurrence_end_date")
+
+        if not recurrence_type or recurrence_type.lower() == "none":
+            return  # No recurrence
+
+        due_date_str = completed_task.get("due_date")
+        completed_at_str = completed_task.get("completed_at")
+
+        try:
+            due_date = dateparser.parse(due_date_str)
+        except Exception:
+            print(f"⚠️ Could not parse due date for task {completed_task.get('id')}")
+            return
+
+        try:
+            completed_at = dateparser.parse(completed_at_str) if completed_at_str else datetime.now()
+        except Exception:
+            completed_at = datetime.now()
+
+        # Determine the "base date" to calculate next occurrence
+        base_date = max(due_date, completed_at)
+
+        # Calculate next due date according to recurrence type
+        next_due_date = None
+        if recurrence_type.lower() == "daily":
+            next_due_date = base_date + timedelta(days=1)
+
+        elif recurrence_type.lower() == "weekly":
+            # Keep same weekday as original due_date
+            weekday = due_date.weekday()  # 0=Monday
+            next_due_date = due_date
+            while next_due_date <= completed_at:
+                next_due_date += timedelta(weeks=1)
+
+        elif recurrence_type.lower() == "bi-weekly":
+            weekday = due_date.weekday()
+            next_due_date = due_date
+            while next_due_date <= completed_at:
+                next_due_date += timedelta(weeks=2)
+
+        elif recurrence_type.lower() == "monthly":
+            # Increment month until > completed_at
+            original_day = due_date.day
+            next_due_date = due_date
+            while next_due_date <= completed_at:
+                month = next_due_date.month + 1
+                year = next_due_date.year + (month - 1) // 12
+                month = (month - 1) % 12 + 1
+                # get last day of the month
+                last_day = calendar.monthrange(year, month)[1]
+                day = min(original_day, last_day)
+                next_due_date = next_due_date.replace(year=year, month=month, day=day)
+
+        elif recurrence_type.lower() == "yearly":
+            next_due_date = due_date
+            while next_due_date <= completed_at:
+                next_due_date = next_due_date.replace(year=next_due_date.year + 1)
+
+        else:
+            print(f"⚠️ Unsupported recurrence type '{recurrence_type}'")
+            return
+
+        # Check recurrence end date
+        if recurrence_end_date:
+            try:
+                recurrence_end = dateparser.parse(recurrence_end_date)
+                if next_due_date > recurrence_end:
+                    print(f"ℹ️ Recurrence ended for task {completed_task.get('id')} (end date reached)")
+                    return None
+            except Exception:
+                print(f"⚠️ Could not parse recurrence_end_date '{recurrence_end_date}'")
+
+        # Prepare new task payload (copy all details except id, status, completed_at)
+        task_payload = copy.deepcopy(completed_task)
+        task_payload.pop("id", None)
+        task_payload["status"] = "Ongoing"
+        task_payload["completed_at"] = None
+        task_payload["created_at"] = datetime.now().isoformat()
+        task_payload["due_date"] = next_due_date.isoformat()
+        task_payload["type"] = completed_task.get("type", "parent")
+        task_payload["recurrence_type"] = recurrence_type
+        task_payload["recurrence_end_date"] = recurrence_end_date
+
+        if completed_task.get("type") == "subtask":
+            task_payload["parent_task"] = completed_task.get("parent_task")
+
+        # Insert into database
+        try:
+            created = self.repo.insert_task(task_payload)
+            print(f"✅ Created recurring task {created.get('id')} for recurrence '{recurrence_type}'")
+            if task_payload.get("type") == "subtask" and task_payload.get("parent_task"):
+                self.repo.add_subtask_to_parent(task_payload["parent_task"], created["id"])
+            return created
+        except Exception as e:
+            print(f"❌ Failed to create recurring task: {e}")
+            return None 

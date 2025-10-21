@@ -126,11 +126,21 @@
 
               <div class="selected-collaborators">
                 <span 
-                  v-for="user in selectedCollaborators" 
-                  :key="user.id" 
-                  class="selected-email"
+                  v-for="(user, index) in selectedCollaborators" 
+                  :key="index"
+                  :class="['selected-email', { 'creator-locked': user.isCreator }]"
                 >
-                  {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+                  {{ user.email }}
+                  <i 
+                    v-if="user.isCreator"
+                    class="bi bi-lock-fill"
+                    title="Task creator (cannot be removed)"
+                  ></i>
+                  <i 
+                    v-else
+                    class="bi bi-x" 
+                    @click="removeCollaborator(user)"
+                  ></i>
                 </span>
               </div>
             </div>
@@ -154,6 +164,30 @@
               class="file-input"
             />
             <span class="file-hint">Only PDF files allowed</span>
+          </div>
+
+          <!-- Recurrence -->
+          <div class="form-group">
+            <label for="recurrence_type">Recurrence</label>
+            <select id="recurrence_type" v-model="newTask.recurrence_type" :disabled="isLoading" class="form-select">
+              <option :value="null">-- None --</option>
+              <option value="daily">Daily</option>
+              <option value="weekly">Weekly</option>
+              <option value="bi-weekly">Bi-Weekly</option>
+              <option value="monthly">Monthly</option>
+              <option value="yearly">Yearly</option>
+            </select>
+          </div>
+
+          <div v-if="newTask.recurrence_type !== null" class="form-group">
+            <label for="recurrenceEnd">Recurrence End Date</label>
+            <input
+              type="datetime-local"
+              id="recurrenceEnd"
+              v-model="newTask.recurrence_end_date"
+              :disabled="isLoading"
+              :min="getTodayDateTime()"
+            />
           </div>
 
           <!-- Actions -->
@@ -213,6 +247,7 @@ export default {
     return {
       userRole: '',
       userId: null,
+      userEmail: '',
       userProjects: [],
       collaboratorQuery: '',
       selectedCollaborators: [],
@@ -228,7 +263,9 @@ export default {
         project_id: "",
         collaborators: "",
         parent_task: "",
-        subtasks: []
+        subtasks: [], 
+        recurrence_type: null,      
+        recurrence_end_date: null
       },
       newAttachmentFile: null,
       isLoading: false,
@@ -267,11 +304,26 @@ export default {
     this.userRole = userData.role?.toLowerCase() || '';
     this.userId = parseInt(userData.userid) || null;
     this.newTask.owner_id = this.userId;
+    this.userEmail = userData.email || '';
+
+    console.log('User data loaded:', { 
+      role: this.userRole, 
+      email: this.userEmail, 
+      id: this.userId 
+    });
 
     // Set default status based on user role
     this.newTask.status = (this.userRole === 'manager' || this.userRole === 'director') ? 'Unassigned' : 'Ongoing';
 
-    console.log('CreateNewTaskForm mounted with userId:', this.userId);
+    // Only add current user as locked creator for STAFF
+    if (this.userRole === 'staff' && this.userEmail && this.userId) {
+      this.selectedCollaborators = [{
+        userid: this.userId,
+        email: this.userEmail,
+        isCreator: true
+      }];
+      console.log('Added creator to collaborators:', this.selectedCollaborators);
+    }
 
     // Fetch projects owned by user
     if (this.userId) {
@@ -328,6 +380,14 @@ export default {
       this.collaboratorSuggestions = [];
     },
     removeCollaborator(user) {
+      // Prevent removal if creator
+      if (user.isCreator) {
+        this.errorMessage = "Cannot remove task creator from collaborators";
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 2000);
+        return;
+      }
       this.selectedCollaborators = this.selectedCollaborators.filter(u => u.userid !== user.userid);
     },
     async handleCreate() {
@@ -355,6 +415,16 @@ export default {
       if (hasDuplicateSubtask) {
         this.errorMessage = "A subtask cannot have the same name as the parent task. Please use different names.";
         return;
+      }
+
+      // Validate recurrence end date if set
+      if (this.newTask.recurrence_type && this.newTask.recurrence_end_date) {
+        const endDate = new Date(this.newTask.recurrence_end_date);
+        const startDate = new Date(this.newTask.due_date);
+        if (endDate < startDate) {
+          this.errorMessage = "Recurrence end date cannot be before the task's due date.";
+          return;
+        }
       }
 
       this.isLoading = true;
@@ -385,13 +455,30 @@ export default {
           formData.append("attachment", this.newAttachmentFile);
         }
 
-        // Collaborators
+        // Collaborators - only automatically include creator for STAFF
         const collaboratorIds = this.selectedCollaborators.map(user => parseInt(user.userid));
-        if (this.userRole === "staff" && !collaboratorIds.includes(this.newTask.owner_id)) {
+        // For STAFF: ensure creator is always included
+        // For MANAGER/DIRECTOR: only include selected collaborators
+        if (this.userRole === 'staff' && !collaboratorIds.includes(this.newTask.owner_id)) {
           collaboratorIds.push(this.newTask.owner_id);
         }
         if (collaboratorIds.length > 0) {
           formData.append("collaborators", collaboratorIds.join(","));
+        }
+
+        // Recurrence
+        if (this.newTask.recurrence_type) {
+          formData.append("recurrence_type", this.newTask.recurrence_type);
+
+          if (this.newTask.recurrence_end_date) {
+            const endUTC = new Date(this.newTask.recurrence_end_date).toISOString();
+            formData.append("recurrence_end_date", endUTC);
+          } else {
+            formData.append("recurrence_end_date", "");
+          }
+        } else {
+          formData.append("recurrence_type", "None");
+          formData.append("recurrence_end_date", "");
         }
 
         // Role-based endpoint for PARENT task
@@ -433,6 +520,20 @@ export default {
 
           for (const [index, subtask] of this.newTask.subtasks.entries()) {
             try {
+              // Extract subtask's own collaborators (not parent's)
+              let subtaskCollaboratorIds = [];
+              if (subtask.collaborators && subtask.collaborators.length > 0) {
+                subtaskCollaboratorIds = subtask.collaborators.map(collab => {
+                  // Handle both formats: {userid, email} and just ID
+                  if (typeof collab === 'object' && collab.userid) {
+                    return parseInt(collab.userid);
+                  }
+                  return parseInt(collab);
+                });
+              }
+              
+              console.log(`Subtask ${index + 1} collaborators:`, subtaskCollaboratorIds);
+
               // Prepare subtask data
               const subtaskData = {
                 owner_id: this.newTask.owner_id,
@@ -442,8 +543,8 @@ export default {
                 priority: subtask.priority.toString(),
                 status: subtask.status || 'Ongoing',
                 project_id: this.newTask.project_id || null,
-                parent_task: createdParentTask.id, // Link to parent
-                collaborators: collaboratorIds.length > 0 ? collaboratorIds.join(',') : ''
+                parent_task: createdParentTask.id,
+                collaborators: subtaskCollaboratorIds.length > 0 ? subtaskCollaboratorIds.join(',') : ''
               };
 
               console.log(`Creating subtask ${index + 1}/${this.newTask.subtasks.length}:`, subtaskData);
@@ -504,9 +605,22 @@ export default {
         project_id: "",
         collaborators: "",
         parent_task: "",
-        subtasks: []
+        subtasks: [], 
+        recurrence_type: null, 
+        recurrence_end_date: null
       };
-      this.selectedCollaborators = [];
+      
+      // Reset collaborators - only add creator for STAFF
+      if (this.userRole === 'staff' && this.userEmail && this.userId) {
+        this.selectedCollaborators = [{
+          userid: this.userId,
+          email: this.userEmail,
+          isCreator: true
+        }];
+      } else {
+        this.selectedCollaborators = [];
+      }
+      
       this.newAttachmentFile = null;
       this.collaboratorQuery = '';
       this.collaboratorSuggestions = [];
@@ -775,6 +889,7 @@ textarea:focus {
   padding: 0.75rem;
   cursor: pointer;
   border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
 }
 
 .suggestion-item:hover {
@@ -803,13 +918,28 @@ textarea:focus {
   font-size: 0.875rem;
 }
 
+.selected-email.creator-locked {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
 .selected-email i {
   cursor: pointer;
   font-weight: bold;
 }
 
+.selected-email.creator-locked i.bi-lock-fill {
+  cursor: not-allowed;
+  font-size: 0.75rem;
+}
+
 .selected-email i:hover {
   color: #1e3a8a;
+}
+
+.selected-email.creator-locked i.bi-lock-fill:hover {
+  color: #92400e;
 }
 
 .file-input {

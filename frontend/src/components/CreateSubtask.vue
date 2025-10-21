@@ -1,5 +1,5 @@
 <template>
-  <div class="subtasks-section">
+  <div class="subtasks-section" ref="subtasksSectionRef">
     <!-- Toast Notification -->
     <transition name="toast">
       <div v-if="toast.show" :class="['toast-notification', toast.type]">
@@ -114,20 +114,45 @@
 
           <div class="selected-collaborators">
             <span 
-              v-for="user in selectedCollaborators" 
-              :key="user.id" 
-              class="selected-email"
+              v-for="(user, index) in selectedCollaborators" 
+              :key="index"
+              :class="['selected-email', { 'creator-locked': user.isCreator }]"
             >
-              {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
+              {{ user.email }} 
+              <i v-if="user.isCreator" class="bi bi-lock-fill" title="Subtask creator (cannot be removed)"></i>
+              <i v-else class="bi bi-x" @click="removeCollaborator(user)"></i>
             </span>
           </div>
         </div>
       </div>
 
+      <div class="form-group">
+        <label for="recurrence_type">Recurrence</label>
+        <select id="recurrence_type" v-model="currentSubtask.recurrence_type" :disabled="isLoading" class="form-select">
+          <option :value="null">-- None --</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="bi-weekly">Bi-Weekly</option>
+          <option value="monthly">Monthly</option>
+          <option value="yearly">Yearly</option>
+        </select>
+      </div>
+
+      <div v-if="currentSubtask.recurrence_type !== null" class="form-group">
+        <label for="recurrenceEnd">Recurrence End Date</label>
+        <input
+          type="datetime-local"
+          id="recurrenceEnd"
+          v-model="currentSubtask.recurrence_end_date"
+          :disabled="isLoading"
+          :min="getTodayDateTime()"
+        />
+      </div>
+
       <div class="form-actions">
         <button type="button" @click="addSubtask" class="btn-primary">
           <i class="bi bi-plus-circle"></i>
-          Add Subtask
+          Create Subtask
         </button>
         <button type="button" @click="cancelForm" class="btn-secondary">
           Cancel
@@ -216,17 +241,30 @@ const collaboratorQuery = ref('')
 const selectedCollaborators = ref([])
 const collaboratorSuggestions = ref([])
 const userRole = ref('')
+const currentUserEmail = ref('')
+const currentUserId = ref(null)
+const subtasksSectionRef = ref(null)
 
-// Get user role on component mount
+// Get user role and email on component mount
 import { getCurrentUserData } from '../services/session.js'
 
 const initUserRole = () => {
   try {
     const userData = getCurrentUserData()
+    console.log('User data loaded:', userData)
     userRole.value = userData.role?.toLowerCase() || ''
+    currentUserEmail.value = userData.email || ''
+    currentUserId.value = userData.id || userData.userid || null
+    console.log('Initialized user:', { 
+      role: userRole.value, 
+      email: currentUserEmail.value, 
+      id: currentUserId.value 
+    })
   } catch (err) {
     console.error('Error getting user data:', err)
     userRole.value = ''
+    currentUserEmail.value = ''
+    currentUserId.value = null
   }
 }
 
@@ -241,10 +279,22 @@ const getDefaultStatus = () => {
   return 'Ongoing'
 }
 
+// Scroll to form function
+const scrollToForm = () => {
+  if (subtasksSectionRef.value) {
+    setTimeout(() => {
+      const formElement = subtasksSectionRef.value.querySelector('.subtask-form')
+      if (formElement) {
+        formElement.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 0)
+  }
+}
+
 // Watch for autoOpen prop and automatically open the form
 watch(() => props.autoOpen, (newValue) => {
   if (newValue) {
-    showSubtaskForm.value = true
+    openFormWithCreator()
   }
 }, { immediate: true })
 
@@ -272,7 +322,9 @@ const currentSubtask = ref({
   due_date: '',
   priority: 5,
   status: getDefaultStatus(),
-  collaborators: []
+  collaborators: [],
+  recurrence_type: null,
+  recurrence_end_date: null
 })
 
 const toast = ref({
@@ -317,6 +369,11 @@ const addCollaborator = (user) => {
 }
 
 const removeCollaborator = (user) => {
+  // Prevent removing creator
+  if (user.isCreator) {
+    showToast('Cannot remove subtask creator from collaborators', 'warning')
+    return
+  }
   selectedCollaborators.value = selectedCollaborators.value.filter(u => u.userid !== user.userid)
 }
 
@@ -333,7 +390,6 @@ const addSubtask = () => {
   // Validate for duplicate subtask name
   const taskNameLower = currentSubtask.value.task_name.trim().toLowerCase()
   const isDuplicate = props.modelValue.some((subtask, index) => {
-    // If editing, exclude the current subtask from duplication check
     if (editingIndex.value !== null && index === editingIndex.value) {
       return false
     }
@@ -345,7 +401,6 @@ const addSubtask = () => {
     return
   }
 
-  // Validate that due date is not in the past
   const selectedDate = new Date(currentSubtask.value.due_date)
   const now = new Date()
   
@@ -354,37 +409,45 @@ const addSubtask = () => {
     return
   }
 
-  // Create new subtask with proper data types
+  // Create new subtask
   const newSubtask = { 
     task_name: currentSubtask.value.task_name,
     description: currentSubtask.value.description,
     due_date: currentSubtask.value.due_date,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
-    collaborators: selectedCollaborators.value.map(u => parseInt(u.userid)),
-    id: Date.now() // Temporary ID for frontend display
+    collaborators: selectedCollaborators.value.map(u => ({
+      userid: parseInt(u.userid),
+      email: u.email,
+      isCreator: u.isCreator || false
+    })),
+    recurrence_type: currentSubtask.value.recurrence_type,
+    recurrence_end_date: currentSubtask.value.recurrence_end_date,
+    id: Date.now()
   }
 
   if (editingIndex.value !== null) {
     // Update existing subtask
+    newSubtask.id = props.modelValue[editingIndex.value].id
     const updatedSubtasks = [...props.modelValue]
     updatedSubtasks[editingIndex.value] = newSubtask
     emit('update:modelValue', updatedSubtasks)
-    showToast('Subtask updated successfully!', 'success')
+    showToast('Subtask updated!', 'success')
     editingIndex.value = null
   } else {
     // Add new subtask
     emit('update:modelValue', [...props.modelValue, newSubtask])
-    showToast('Subtask added successfully!', 'success')
+    showToast('Subtask added to form!', 'success')
   }
   
-  // Reset form and close
   resetForm()
   showSubtaskForm.value = false
   showErrors.value = false
+  recurrence_type = null
+  recurrence_end_date = null
 }
 
-const editSubtask = (sortedIndex) => {
+const editSubtask = async (sortedIndex) => {
   // Get the actual subtask from sorted list
   const subtaskToEdit = sortedSubtasks.value[sortedIndex]
   
@@ -397,11 +460,60 @@ const editSubtask = (sortedIndex) => {
     due_date: subtaskToEdit.due_date,
     priority: subtaskToEdit.priority,
     status: subtaskToEdit.status,
-    collaborators: subtaskToEdit.collaborators || []
+    collaborators: subtaskToEdit.collaborators || [],
+    recurrence_type: subtaskToEdit.recurrence_type || null,
+    recurrence_end_date: subtaskToEdit.recurrence_end_date || null
   }
+  
+  // Load existing collaborators
+  if (subtaskToEdit.collaborators && subtaskToEdit.collaborators.length > 0) {
+    try {
+      const collaboratorDetails = await Promise.all(
+        subtaskToEdit.collaborators.map(collaboratorId => {
+          if (typeof collaboratorId === 'object' && collaboratorId.userid) {
+            return Promise.resolve({
+              userid: collaboratorId.userid,
+              email: collaboratorId.email,
+              isCreator: collaboratorId.isCreator || false
+            });
+          }
+          
+          return fetch(`http://localhost:5003/users/${collaboratorId}`)
+            .then(res => {
+              if (!res.ok) throw new Error(`Failed to fetch user ${collaboratorId}`);
+              return res.json();
+            })
+            .then(data => ({
+              userid: data.data.id || collaboratorId,
+              email: data.data.email || `User ${collaboratorId}`,
+              isCreator: false
+            }))
+            .catch(err => {
+              console.error(`Error fetching user ${collaboratorId}:`, err);
+              return {
+                userid: collaboratorId,
+                email: `User ${collaboratorId}`,
+                isCreator: false
+              };
+            });
+        })
+      );
+      
+      console.log('Loaded collaborators:', collaboratorDetails);
+      selectedCollaborators.value = collaboratorDetails;
+    } catch (err) {
+      console.error('Error loading collaborators:', err);
+      selectedCollaborators.value = [];
+    }
+  } else {
+    selectedCollaborators.value = [];
+  }
+  
   editingIndex.value = originalIndex
   showSubtaskForm.value = true
   showErrors.value = false
+
+  scrollToForm()
 }
 
 const resetForm = () => {
@@ -425,12 +537,34 @@ const cancelForm = () => {
   showErrors.value = false
 }
 
+// Extracted function to open form with creator
+const openFormWithCreator = () => {
+  console.log('Opening form with creator check - role:', userRole.value)
+  
+  if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
+    selectedCollaborators.value = [{
+      userid: currentUserId.value,
+      email: currentUserEmail.value,
+      isCreator: true
+    }]
+    console.log('Creator added:', selectedCollaborators.value)
+  } else {
+    selectedCollaborators.value = []
+    console.log('No creator added - role is:', userRole.value)
+  }
+  
+  showSubtaskForm.value = true
+  scrollToForm()
+}
+
 const toggleSubtaskForm = () => {
   if (showSubtaskForm.value) {
     resetForm()
     showErrors.value = false
+    showSubtaskForm.value = false
+  } else {
+    openFormWithCreator()
   }
-  showSubtaskForm.value = !showSubtaskForm.value
 }
 
 const removeSubtask = (index) => {
@@ -749,13 +883,28 @@ const getPriorityClass = (priority) => {
   font-size: 0.875rem;
 }
 
+.selected-email.creator-locked {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
 .selected-email i {
   cursor: pointer;
   font-weight: bold;
 }
 
+.selected-email.creator-locked i.bi-lock-fill {
+  cursor: not-allowed;
+  font-size: 0.75rem;
+}
+
 .selected-email i:hover {
   color: #1e3a8a;
+}
+
+.selected-email.creator-locked i.bi-lock-fill:hover {
+  color: #92400e;
 }
 
 .form-actions {

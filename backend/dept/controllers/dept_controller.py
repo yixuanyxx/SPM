@@ -89,7 +89,7 @@ def get_department_by_id(dept_id: int):
         return jsonify(result), status
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
-
+      
 # @dept_bp.route("/departments/<int:dept_id>", methods=["PUT", "PATCH"])
 # def update_department(dept_id: int):
 #     """
@@ -186,3 +186,8 @@ def get_department_by_id(dept_id: int):
 #         return jsonify(result), status
 #     except Exception as e:
 #         return jsonify({"Message": str(e), "Code": 500}), 500
+    
+@dept_bp.route('/health')
+def health_check():
+    return jsonify({"status": "ok"}), 200
+

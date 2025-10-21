@@ -1,0 +1,9 @@
+flask
+flask-cors
+python-dotenv
+python-dateutil
+requests
+fpdf2
+openpyxl
+reportlab
+pandas

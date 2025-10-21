@@ -17,6 +17,7 @@ const ProjectDetail = () => import('../pages/projectdetails/ProjectDetails.vue')
 const ScheduleView = () => import('../pages/schedule/ScheduleView.vue')
 const ProjectMemberSchedule = () => import('../pages/schedule/ProjectMemberSchedule.vue')
 const TeamScheduleView = () => import('../pages/schedule/TeamScheduleView.vue')
+const ReportView = () => import('../pages/reportview/ReportView.vue')
 
 const routes = [
   { path: "/login", name: "Login", component: Login },
@@ -81,6 +82,11 @@ const routes = [
     path: '/schedule/team',
     name: 'TeamSchedule',
     component: TeamScheduleView
+  },
+
+  { path: '/reports',
+    name: 'report-view',
+    component: ReportView
   },
 ];
 

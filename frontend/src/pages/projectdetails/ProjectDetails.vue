@@ -52,18 +52,18 @@
               </div>
               <div class="project-details-header-actions">
                 <button 
-                  class="btn-primary edit-project-btn" 
+                  class="btn btn-primary" 
                   @click="navigateToWorkload"
                 >
                   <i class="bi bi-bar-chart"></i>
                   View Workload
                 </button>
                 <button 
-                  class="btn-primary edit-project-btn" 
-                  @click="showEditModal = true"
+                  class="btn btn-ghost" 
+                  @click="openEditProject"
                 >
                   <i class="bi bi-pencil"></i>
-                  Edit Project
+                  Edit
                 </button>
               </div>
             </div>
@@ -195,6 +195,7 @@
 
               <label>Status</label>
               <select v-model="newTask.status">
+                <option value="Unassigned">Unassigned</option>
                 <option value="Ongoing">Ongoing</option>
                 <option value="Under Review">Under Review</option>
                 <option value="Completed">Completed</option>
@@ -233,8 +234,11 @@
               <input type="file" @change="handleFileUpload" accept="application/pdf" />
 
               <div class="modal-actions">
-                <button @click="submitNewTask">Create</button>
-                <button @click="showCreateModal = false">Cancel</button>
+                <button @click="submitNewTask" :disabled="isCreatingTask">
+                  <i v-if="isCreatingTask" class="bi bi-arrow-repeat spin"></i>
+                  {{ isCreatingTask ? 'Creating...' : 'Create' }}
+                </button>
+                <button @click="closeCreateTaskModal" :disabled="isCreatingTask">Cancel</button>
               </div>
 
               <!-- Error Popup -->
@@ -249,77 +253,15 @@
 
 
 
-          <!-- Add the edit modal -->
-          <div v-if="showEditModal" class="modal-overlay">
-            <div class="modal-content">
-              <div class="modal-header">
-                <h2>Edit Project</h2>
-                <button class="close-btn" @click="showEditModal = false">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-
-              <div class="form-group">
-                <label>Project Name*</label>
-                <input v-model="editedProject.proj_name" required />
-              </div>
-
-              <div class="form-group">
-                <label>Collaborators</label>
-                <div class="autocomplete">
-                  <input 
-                    type="text"
-                    v-model="collaboratorQuery"
-                    placeholder="Search users by email..."
-                    @input="searchUsers"
-                  />
-                  
-                  <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
-                    <li 
-                      v-for="user in collaboratorSuggestions" 
-                      :key="user.id"
-                      @click="addCollaborator(user)"
-                      class="suggestion-item"
-                    >
-                      {{ user.email }}
-                    </li>
-                  </ul>
-                </div>
-
-                <div class="selected-collaborators">
-                  <div 
-                    v-for="collab in editedProject.collaborators" 
-                    :key="collab.id"
-                    class="collaborator-chip"
-                  >
-                    {{ collab.email }}
-                    <button 
-                      class="remove-collab-btn"
-                      @click="removeCollaborator(collab)"
-                    >
-                      <i class="bi bi-x"></i>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="modal-actions">
-                <button 
-                  class="submit-btn" 
-                  @click="updateProject"
-                  :disabled="!isFormValid"
-                >
-                  Update Project
-                </button>
-                <button 
-                  class="cancel-btn" 
-                  @click="showEditModal = false"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
+          <!-- Edit Project Component -->
+          <EditProject
+            :isVisible="showEditProject"
+            :projectId="project?.id"
+            :currentProjectName="project?.proj_name || ''"
+            :currentCollaborators="project?.collaborators || []"
+            @close="closeEditProject"
+            @update-success="handleProjectUpdate"
+          />
         </div>
       </div>
     </div>
@@ -331,6 +273,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getCurrentUserData } from '../../services/session.js'
 import SideNavbar from '../../components/SideNavbar.vue'
+import EditProject from '../../components/EditProject.vue'
 import '../projectdetails/projectdetails.css'
 
 const route = useRoute()
@@ -340,16 +283,19 @@ const project = ref(null)
 const loading = ref(true)
 const error = ref(null)
 const showCreateModal = ref(false)
-const showEditModal = ref(false)
-const collaboratorQuery = ref('')
-const selectedCollaborators = ref([])
-const collaboratorSuggestions = ref([])
+const showEditProject = ref(false)
 const newTaskFile = ref(null)
 const showErrorPopup = ref(false)
 const errorMessage = ref('')
 const userId = ref(getCurrentUserData().userid)
 const userRole = ref(getCurrentUserData().role?.toLowerCase())
 const users = ref({}) // Add this with your other refs
+
+// Create Task Modal Variables
+const collaboratorQuery = ref('')
+const collaboratorSuggestions = ref([])
+const selectedCollaborators = ref([])
+const isCreatingTask = ref(false)
 
 // Add the new task form data
 const newTask = ref({
@@ -364,15 +310,17 @@ const newTask = ref({
   collaborators: [],
 })
 
-// Add the edited project data
-const editedProject = ref({
-  proj_name: '',
-  collaborators: [],
-})
 
 onMounted(async () => {
   await fetchProjectDetails()
 })
+
+// Watch for route parameter changes to reload project details
+watch(() => route.params.id, async (newId, oldId) => {
+  if (newId && newId !== oldId) {
+    await fetchProjectDetails()
+  }
+}, { immediate: false })
 
 const fetchProjectDetails = async () => {
   try {
@@ -381,17 +329,38 @@ const fetchProjectDetails = async () => {
     
     const projectId = route.params.id
     
+    // Validate project ID
+    if (!projectId || isNaN(projectId)) {
+      throw new Error('Invalid project ID')
+    }
+    
     // Fetch project details
     const projectResponse = await fetch(`http://localhost:5001/projects/${projectId}`)
     if (!projectResponse.ok) {
-      throw new Error(`Failed to fetch project: ${projectResponse.status}`)
+      if (projectResponse.status === 404) {
+        throw new Error('Project not found')
+      } else if (projectResponse.status === 500) {
+        throw new Error('Server error - project may not exist')
+      } else {
+        throw new Error(`Failed to fetch project: ${projectResponse.status}`)
+      }
     }
     const projectData = await projectResponse.json()
+    
+    // Validate project data
+    if (!projectData || (!projectData.data && !projectData.proj_name)) {
+      throw new Error('Invalid project data received')
+    }
     
     // Get initial project data
     project.value = {
       ...(projectData.data || projectData),
       tasks: []
+    }
+    
+    // Ensure required fields exist
+    if (!project.value.proj_name) {
+      throw new Error('Project name is missing')
     }
 
     // Fetch all user details
@@ -492,6 +461,7 @@ const submitNewTask = async () => {
     return
   }
 
+  isCreatingTask.value = true
   try {
     const endpoint = (userRole.value === 'manager' || userRole.value === 'director')
       ? 'http://localhost:5002/tasks/manager-task/create'
@@ -532,93 +502,58 @@ const submitNewTask = async () => {
     if (response.ok && data.Code === 201) {
       // Refresh project details to show new task
       await fetchProjectDetails()
-      showCreateModal.value = false
-      
-      // Reset form
-      newTask.value = {
-        owner_id: userId.value,
-        task_name: '',
-        description: '',
-        type: 'parent',
-        due_date: '',
-        priority: '5',
-        status: 'Ongoing',
-        project_id: '',
-        collaborators: [],
-      }
-      selectedCollaborators.value = []
-      newTaskFile.value = null
+      closeCreateTaskModal()
     } else {
       throw new Error(data.Message || 'Failed to create task')
     }
   } catch (error) {
     errorMessage.value = error.message
     showErrorPopup.value = true
+  } finally {
+    isCreatingTask.value = false
   }
 }
 
-const isFormValid = computed(() => {
-  return editedProject.value.proj_name.trim() !== ''
-})
-
-const initializeEditForm = () => {
-  editedProject.value = {
-    proj_name: project.value.proj_name,
-    collaborators: [...(project.value.collaborators || [])]
-  }
+// Edit Project methods
+const openEditProject = () => {
+  showEditProject.value = true
 }
 
-const searchUsers = async () => {
-  if (!collaboratorQuery.value) {
-    collaboratorSuggestions.value = []
-    return
-  }
-
-  try {
-    const response = await fetch(
-      `http://localhost:5003/users/search?email=${encodeURIComponent(collaboratorQuery.value)}`
-    )
-    if (!response.ok) throw new Error('Failed to fetch users')
-    
-    const data = await response.json()
-    collaboratorSuggestions.value = data.data || []
-  } catch (error) {
-    console.error('Error searching users:', error)
-    collaboratorSuggestions.value = []
-  }
+const closeEditProject = () => {
+  showEditProject.value = false
 }
 
-const updateProject = async () => {
-  try {
-    const response = await fetch(`http://localhost:5001/projects/update`, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        project_id: project.value.id,
-        proj_name: editedProject.value.proj_name,
-        collaborators: editedProject.value.collaborators.map(c => 
-          typeof c === 'object' ? c.id || c.userid : c
-        )
-      })
-    })
+const handleProjectUpdate = async (updateData) => {
+  // Refresh project details to show updated data
+  await fetchProjectDetails()
+  closeEditProject()
+}
 
-    if (!response.ok) {
-      throw new Error('Failed to update project')
-    }
-
-    // Refresh project details
-    await fetchProjectDetails()
-    showEditModal.value = false
-
-    // Show success message
-    // You can add a success notification here if needed
-  } catch (error) {
-    console.error('Error updating project:', error)
-    errorMessage.value = error.message
-    showErrorPopup.value = true
+// Create Task Modal Methods
+const resetCreateTaskForm = () => {
+  newTask.value = {
+    owner_id: userId.value,
+    task_name: '',
+    description: '',
+    type: 'parent',
+    due_date: '',
+    priority: '5',
+    status: 'Ongoing',
+    project_id: '',
+    collaborators: [],
   }
+  selectedCollaborators.value = []
+  collaboratorQuery.value = ''
+  collaboratorSuggestions.value = []
+  newTaskFile.value = null
+  errorMessage.value = ''
+  showErrorPopup.value = false
+  isCreatingTask.value = false
+}
+
+const closeCreateTaskModal = () => {
+  showCreateModal.value = false
+  resetCreateTaskForm()
 }
 
 // Update the fetchProjectUsers function
@@ -665,12 +600,6 @@ const fetchUserDetails = async (userid) => {
   return null
 }
 
-// Initialize edit form when edit modal is shown
-watch(() => showEditModal.value, (newValue) => {
-  if (newValue) {
-    initializeEditForm()
-  }
-})
 
 // Add this helper method
 const getUserName = (userid) => {

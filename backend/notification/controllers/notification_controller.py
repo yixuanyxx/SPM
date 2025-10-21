@@ -309,59 +309,58 @@ def trigger_task_ownership_transfer_notification():
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
 
-@notification_bp.route("/notifications/triggers/task-status-change", methods=["POST"])
-def trigger_task_status_change_notification():
+# Old individual notification endpoints removed - now using consolidated notifications only
+
+@notification_bp.route("/notifications/test-email", methods=["POST"])
+def test_email_notification():
     """
-    Trigger notification for task status change.
+    Test endpoint for sending email notifications directly.
+    Useful for debugging email issues.
     
     Required fields in JSON body:
-    - task_id: ID of the task
-    - user_ids: List of user IDs to notify (collaborators)
-    - old_status: Previous status
-    - new_status: New status
-    - updater_name: Name of the person who updated the task (optional, defaults to "System")
+    - user_email: Email address to send to
+    - subject: Email subject
+    - message: Email message (HTML)
     
     Returns:
     {
-        "message": "Notifications sent to all collaborators",
-        "results": [ ... notification results for each user ... ],
+        "message": "Test email sent",
+        "result": { ... email result ... },
         "status": 200
     }
     """
     try:
         data = request.get_json(silent=True) or {}
         
-        task_id = data.get("task_id")
-        user_ids = data.get("user_ids", [])
-        old_status = data.get("old_status")
-        new_status = data.get("new_status")
-        updater_name = data.get("updater_name", "System")
+        user_email = data.get("user_email")
+        subject = data.get("subject", "Test Notification")
+        message = data.get("message", "<p>This is a test email notification.</p>")
         
-        if not task_id or not user_ids or not old_status or not new_status:
-            return jsonify({"error": "task_id, user_ids, old_status, and new_status are required", "status": 400}), 400
+        if not user_email:
+            return jsonify({"error": "user_email is required", "status": 400}), 400
         
-        results = trigger_service.notify_task_status_change(task_id, user_ids, old_status, new_status, updater_name)
+        result = service.send_email_notification(user_email, subject, message)
+        status_code = result.pop("status", 200)
         
-        return jsonify({"message": "Notifications sent to all collaborators", "results": results, "status": 200}), 200
+        return jsonify({"message": "Test email sent", "result": result, "status": status_code}), status_code
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
 
-@notification_bp.route("/notifications/triggers/task-due-date-change", methods=["POST"])
-def trigger_task_due_date_change_notification():
+@notification_bp.route("/notifications/triggers/task-consolidated-update", methods=["POST"])
+def trigger_task_consolidated_update_notification():
     """
-    Trigger notification for task due date change.
+    Trigger consolidated notification for multiple task field changes.
     
     Required fields in JSON body:
     - task_id: ID of the task
     - user_ids: List of user IDs to notify (collaborators)
-    - old_due_date: Previous due date
-    - new_due_date: New due date
+    - changes: List of change objects with field, old_value, new_value, field_name
     - updater_name: Name of the person who updated the task (optional, defaults to "System")
     
     Returns:
     {
-        "message": "Notifications sent to all collaborators",
+        "message": "Consolidated notifications sent to all collaborators",
         "results": [ ... notification results for each user ... ],
         "status": 200
     }
@@ -371,34 +370,33 @@ def trigger_task_due_date_change_notification():
         
         task_id = data.get("task_id")
         user_ids = data.get("user_ids", [])
-        old_due_date = data.get("old_due_date")
-        new_due_date = data.get("new_due_date")
+        changes = data.get("changes", [])
         updater_name = data.get("updater_name", "System")
         
-        if not task_id or not user_ids or not old_due_date or not new_due_date:
-            return jsonify({"error": "task_id, user_ids, old_due_date, and new_due_date are required", "status": 400}), 400
+        if not task_id or not user_ids or not changes:
+            return jsonify({"error": "task_id, user_ids, and changes are required", "status": 400}), 400
         
-        results = trigger_service.notify_task_due_date_change(task_id, user_ids, old_due_date, new_due_date, updater_name)
+        results = trigger_service.notify_task_consolidated_update(task_id, user_ids, changes, updater_name)
         
-        return jsonify({"message": "Notifications sent to all collaborators", "results": results, "status": 200}), 200
+        return jsonify({"message": "Consolidated notifications sent to all collaborators", "results": results, "status": 200}), 200
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
 
-@notification_bp.route("/notifications/triggers/task-description-change", methods=["POST"])
-def trigger_task_description_change_notification():
+@notification_bp.route("/notifications/triggers/task-collaborator-addition", methods=["POST"])
+def trigger_task_collaborator_addition_notification():
     """
-    Trigger notification for task description change.
+    Trigger notifications for collaborators when a new task is created.
     
     Required fields in JSON body:
-    - task_id: ID of the task
-    - user_ids: List of user IDs to notify (collaborators)
-    - updater_name: Name of the person who updated the task (optional, defaults to "System")
+    - task_id: ID of the created task
+    - collaborator_ids: List of user IDs who are collaborators
+    - creator_name: Name of the person who created the task (optional, defaults to "System")
     
     Returns:
     {
-        "message": "Notifications sent to all collaborators",
-        "results": [ ... notification results for each user ... ],
+        "message": "Collaborator notifications sent based on user preferences",
+        "results": [ ... notification results ... ],
         "status": 200
     }
     """
@@ -406,32 +404,37 @@ def trigger_task_description_change_notification():
         data = request.get_json(silent=True) or {}
         
         task_id = data.get("task_id")
-        user_ids = data.get("user_ids", [])
-        updater_name = data.get("updater_name", "System")
+        collaborator_ids = data.get("collaborator_ids", [])
+        creator_name = data.get("creator_name", "System")
         
-        if not task_id or not user_ids:
-            return jsonify({"error": "task_id and user_ids are required", "status": 400}), 400
+        if not task_id or not collaborator_ids:
+            return jsonify({"error": "task_id and collaborator_ids are required", "status": 400}), 400
         
-        results = trigger_service.notify_task_description_change(task_id, user_ids, updater_name)
+        results = []
+        for collaborator_id in collaborator_ids:
+            result = trigger_service.notify_task_assignment(task_id, collaborator_id, creator_name)
+            results.append({"user_id": collaborator_id, "result": result})
         
-        return jsonify({"message": "Notifications sent to all collaborators", "results": results, "status": 200}), 200
+        return jsonify({"message": "Collaborator notifications sent", "results": results, "status": 200}), 200
         
     except Exception as e:
-        return jsonify({"error": str(e), "status": 500}), 500@notification_bp.route("/notifications/triggers/project-collaborator-addition", methods=["POST"])
+        return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/project-collaborator-addition", methods=["POST"])
 def trigger_project_collaborator_addition_notification():
     """
-    Trigger notification when collaborators are added to a project.
+    Trigger notifications for collaborators when a new project is created.
     
     Required fields in JSON body:
-    - project_id: ID of the project
-    - collaborator_ids: List of user IDs added as collaborators
+    - project_id: ID of the created project
+    - collaborator_ids: List of user IDs who are collaborators
     - project_name: Name of the project
-    - adder_name: Name of the person who added the collaborators (optional, defaults to "System")
+    - creator_name: Name of the person who created the project (optional, defaults to "System")
     
     Returns:
     {
-        "message": "Notifications sent to all new collaborators",
-        "results": [ ... notification results for each collaborator ... ],
+        "message": "Project collaborator notifications sent based on user preferences",
+        "results": [ ... notification results ... ],
         "status": 200
     }
     """
@@ -440,15 +443,15 @@ def trigger_project_collaborator_addition_notification():
         
         project_id = data.get("project_id")
         collaborator_ids = data.get("collaborator_ids", [])
-        project_name = data.get("project_name", "Unknown Project")
-        adder_name = data.get("adder_name", "System")
+        project_name = data.get("project_name")
+        creator_name = data.get("creator_name", "System")
         
-        if not project_id or not collaborator_ids:
-            return jsonify({"error": "project_id and collaborator_ids are required", "status": 400}), 400
+        if not project_id or not collaborator_ids or not project_name:
+            return jsonify({"error": "project_id, collaborator_ids, and project_name are required", "status": 400}), 400
         
-        results = trigger_service.notify_project_collaborator_addition(project_id, collaborator_ids, project_name, adder_name)
+        results = trigger_service.notify_project_collaborator_addition(project_id, collaborator_ids, project_name, creator_name)
         
-        return jsonify({"message": "Notifications sent to all new collaborators", "results": results, "status": 200}), 200
+        return jsonify({"message": "Project collaborator notifications sent", "results": results, "status": 200}), 200
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
