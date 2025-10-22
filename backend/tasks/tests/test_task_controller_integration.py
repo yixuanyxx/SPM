@@ -72,18 +72,18 @@ class TestTaskControllerIntegration(unittest.TestCase):
                     task_id = task['id']
                     if self.repo.delete_task(task_id):
                         deleted_count += 1
-                        print(f"✓ Deleted subtask {task_id} for owner {owner_id}")
+                        print(f"[SUCCESS] Deleted subtask {task_id} for owner {owner_id}")
                     else:
-                        print(f"✗ Failed to delete subtask {task_id} for owner {owner_id}")
+                        print(f"[ERROR] Failed to delete subtask {task_id} for owner {owner_id}")
                 
                 # Then delete parent tasks
                 for task in parent_tasks:
                     task_id = task['id']
                     if self.repo.delete_task(task_id):
                         deleted_count += 1
-                        print(f"✓ Deleted parent task {task_id} for owner {owner_id}")
+                        print(f"[SUCCESS] Deleted parent task {task_id} for owner {owner_id}")
                     else:
-                        print(f"✗ Failed to delete parent task {task_id} for owner {owner_id}")
+                        print(f"[ERROR] Failed to delete parent task {task_id} for owner {owner_id}")
             
             if deleted_count > 0:
                 print(f"Cleanup completed: {deleted_count} tasks deleted")

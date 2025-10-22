@@ -5,3 +5,4 @@ python-dateutil==2.9.0.post0
 supabase==2.19.0
 requests==2.31.0
 sendgrid==6.11.0
+apscheduler==3.10.4

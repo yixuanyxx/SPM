@@ -48,6 +48,22 @@
             />
           </div>
 
+          <!-- Reminder Intervals -->
+          <div class="form-group">
+            <label for="reminderIntervals">Reminder Intervals</label>
+            <input
+              type="text"
+              id="reminderIntervals"
+              v-model="newTask.reminder_intervals"
+              :disabled="isLoading"
+              placeholder="e.g., 7, 3, 1"
+              class="form-input"
+            />
+            <div class="field-hint">
+              Default: 7, 3, 1 days before due date. Enter comma-separated numbers (e.g., 10, 5, 2)
+            </div>
+          </div>
+
           <!-- Status -->
           <div class="form-group">
             <label for="status">Status</label>
@@ -284,7 +300,8 @@ export default {
         subtasks: [], 
         recurrence_type: null,      
         recurrence_end_date: null,
-        recurrence_interval_days: null
+        recurrence_interval_days: null,
+        reminder_intervals: "" 
       },
       newAttachmentFile: null,
       isLoading: false,
@@ -477,6 +494,11 @@ export default {
           const utcDateString = localDate.toISOString();
           formData.append('due_date', utcDateString);
         }
+
+        // Reminder intervals
+        if (this.newTask.reminder_intervals && this.newTask.reminder_intervals.trim()) {
+          formData.append("reminder_intervals", this.newTask.reminder_intervals.trim());
+        }
         
         if (this.newAttachmentFile) {
           formData.append("attachment", this.newAttachmentFile);
@@ -641,7 +663,8 @@ export default {
         subtasks: [], 
         recurrence_type: null, 
         recurrence_end_date: null,
-        recurrence_interval_days: null
+        recurrence_interval_days: null,
+        reminder_intervals: ""
       };
       
       // Reset collaborators - only add creator for STAFF
@@ -994,6 +1017,15 @@ textarea:focus {
   font-size: 0.875rem;
   color: #6b7280;
   font-style: italic;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.4;
 }
 
 .form-actions {

@@ -216,3 +216,31 @@ class SupabaseTaskRepo:
         # Deduplicate by task ID
         combined = {t["id"]: t for t in all_tasks}
         return list(combined.values())
+
+    def find_tasks_with_upcoming_deadlines(self, max_days_ahead: int = 7) -> List[Dict[str, Any]]:
+        """
+        Find tasks with upcoming deadlines within the specified number of days.
+        
+        Args:
+            max_days_ahead: Maximum number of days to look ahead for deadlines
+            
+        Returns:
+            List of tasks with due dates in the next max_days_ahead days
+        """
+        from datetime import datetime, timedelta
+        
+        # Calculate date range
+        today = datetime.now().date()
+        end_date = today + timedelta(days=max_days_ahead)
+        
+        # Query tasks with due dates in the next max_days_ahead days
+        # Exclude completed tasks
+        res = self.client.table(TABLE).select("*").gte(
+            "due_date", today.isoformat()
+        ).lte(
+            "due_date", end_date.isoformat()
+        ).neq(
+            "status", "Completed"
+        ).execute()
+        
+        return res.data or []
