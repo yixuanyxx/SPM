@@ -63,6 +63,22 @@
             />
           </div>
 
+          <!-- Reminder Intervals -->
+          <div class="form-group">
+            <label for="reminderIntervals">Reminder Intervals</label>
+            <input
+              type="text"
+              id="reminderIntervals"
+              v-model="editedTask.reminder_intervals"
+              :disabled="isLoading"
+              placeholder="e.g., 7, 3, 1"
+              class="form-input"
+            />
+            <div class="field-hint">
+              Default: 7, 3, 1 days before due date. Enter comma-separated numbers (e.g., 10, 5, 2)
+            </div>
+          </div>
+
           <!-- Priority Level -->
           <div class="form-group">
             <label for="priority">Priority Level: {{ editedTask.priority }}</label>
@@ -352,7 +368,8 @@ export default {
         collaborators: [],
         attachments: [],
         recurrence_type: null, // e.g., 'Daily', 'Weekly', 'Monthly', None
-        recurrence_end_date: null
+        recurrence_end_date: null,
+        reminder_intervals: ""
       },
       originalTask: null,
       selectedCollaborators: [],
@@ -469,7 +486,8 @@ export default {
             : [],
           attachments: task.attachments || [],
           recurrence_type: task.recurrence_type || "",
-          recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null
+          recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null,
+          reminder_intervals: task.reminder_intervals ? (Array.isArray(task.reminder_intervals) ? task.reminder_intervals.join(', ') : task.reminder_intervals) : ""
         };
 
         // Load current attachments
@@ -628,6 +646,11 @@ export default {
         formData.append('recurrence_type', this.editedTask.recurrence_type);
         if (this.editedTask.recurrence_type && this.editedTask.recurrence_end_date) {
           formData.append('recurrence_end_date', this.convertToUTC(this.editedTask.recurrence_end_date));
+        }
+
+        // Add reminder intervals
+        if (this.editedTask.reminder_intervals && this.editedTask.reminder_intervals.trim()) {
+          formData.append('reminder_intervals', this.editedTask.reminder_intervals.trim());
         }
 
         console.log('EditPopup sending update for task:', this.taskId);
@@ -1791,6 +1814,15 @@ export default {
   font-size: 0.875rem;
   color: #6b7280;
   font-style: italic;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-style: italic;
+  line-height: 1.4;
 }
 
 /* Updated Role Badge Styles */

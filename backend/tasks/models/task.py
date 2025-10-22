@@ -22,6 +22,7 @@ class Task:
     priority: Optional[int] = None       # Priority level (optional integer)
     recurrence_type: Optional[str] = None       # none, daily, weekly, bi-weekly, monthly, yearly
     recurrence_end_date: Optional[datetime] = None
+    reminder_intervals: Optional[List[int]] = field(default_factory=lambda: [7, 3, 1])  # Days before due date to send reminders
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Task object to dictionary"""
@@ -43,7 +44,8 @@ class Task:
             'recurrence_end_date': (
                 self.recurrence_end_date.isoformat() if isinstance(self.recurrence_end_date, datetime)
                 else self.recurrence_end_date
-            )
+            ),
+            'reminder_intervals': self.reminder_intervals
         }
         
         # Include ID if it exists
@@ -122,6 +124,26 @@ class Task:
             except Exception:
                 recurrence_end_date = None
         
+        # Handle reminder_intervals - ensure it's a list of integers
+        reminder_intervals = data.get('reminder_intervals', [7, 3, 1])
+        if reminder_intervals is not None:
+            if isinstance(reminder_intervals, str) and reminder_intervals.strip():
+                # Parse comma-separated string
+                try:
+                    reminder_intervals = [int(x.strip()) for x in reminder_intervals.split(",") if x.strip()]
+                except ValueError:
+                    reminder_intervals = [7, 3, 1]  # Default fallback
+            elif isinstance(reminder_intervals, list):
+                # Ensure all elements are integers
+                try:
+                    reminder_intervals = [int(x) for x in reminder_intervals if x is not None]
+                except (ValueError, TypeError):
+                    reminder_intervals = [7, 3, 1]  # Default fallback
+            else:
+                reminder_intervals = [7, 3, 1]  # Default fallback
+        else:
+            reminder_intervals = [7, 3, 1]  # Default fallback
+        
         # Create task instance
         task = cls(
             owner_id=int(data.get('owner_id', 0)),
@@ -139,7 +161,8 @@ class Task:
             attachments=attachments,
             priority=priority,
             recurrence_type=recurrence_type,
-            recurrence_end_date=recurrence_end_date
+            recurrence_end_date=recurrence_end_date,
+            reminder_intervals=reminder_intervals
         )
         
         # Set ID if provided (since it's init=False)

@@ -1,0 +1,48 @@
+2025-10-23 01:43:56,492 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-23 01:43:58,742 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 200)
+2025-10-23 01:44:00,963 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-23 01:44:00,964 - deadline_reminder_scheduler - INFO - Querying tasks with due dates between 2025-10-23 and 2025-10-30
+2025-10-23 01:44:03,132 - deadline_reminder_scheduler - INFO - Found 18 tasks with upcoming deadlines
+2025-10-23 01:44:05,980 - deadline_reminder_scheduler - INFO - ================================================================================
+2025-10-23 01:44:05,985 - deadline_reminder_scheduler - INFO - Starting deadline reminder processing
+2025-10-23 01:44:05,985 - deadline_reminder_scheduler - INFO - ================================================================================
+2025-10-23 01:44:05,986 - deadline_reminder_scheduler - INFO - Querying tasks with due dates between 2025-10-23 and 2025-10-30
+2025-10-23 01:44:08,239 - deadline_reminder_scheduler - INFO - Found 18 tasks with upcoming deadlines
+2025-10-23 01:44:08,239 - deadline_reminder_scheduler - INFO - Processing task 1209 ('testing'): 0 days until due
+2025-10-23 01:44:08,240 - deadline_reminder_scheduler - INFO - Processing task 156 ('Client Report Draft'): 1 days until due
+2025-10-23 01:44:10,281 - deadline_reminder_scheduler - INFO - Sending reminder for task 156 (1 days before due)
+2025-10-23 01:44:16,225 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 156: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:16,225 - deadline_reminder_scheduler - INFO - Processing task 1622 ('many recurrence check'): 0 days until due
+2025-10-23 01:44:16,226 - deadline_reminder_scheduler - INFO - Processing task 1624 ('custom recurring task of 5 days'): 5 days until due
+2025-10-23 01:44:16,226 - deadline_reminder_scheduler - INFO - Processing task 1628 ('check recurrence fields'): 0 days until due
+2025-10-23 01:44:16,226 - deadline_reminder_scheduler - INFO - Processing task 1632 ('recurrence fieldssss'): 0 days until due
+2025-10-23 01:44:16,227 - deadline_reminder_scheduler - INFO - Processing task 1288 ('test adding collab'): 3 days until due
+2025-10-23 01:44:18,292 - deadline_reminder_scheduler - INFO - Sending reminder for task 1288 (3 days before due)
+2025-10-23 01:44:22,779 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1288: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:22,785 - deadline_reminder_scheduler - INFO - Processing task 1653 ('monthly report'): 0 days until due
+2025-10-23 01:44:22,786 - deadline_reminder_scheduler - INFO - Processing task 47 ('test email notif'): 1 days until due
+2025-10-23 01:44:24,815 - deadline_reminder_scheduler - INFO - Sending reminder for task 47 (1 days before due)
+2025-10-23 01:44:29,799 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 47: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:29,801 - deadline_reminder_scheduler - INFO - Processing task 1677 ('task with no project'): 1 days until due
+2025-10-23 01:44:31,853 - deadline_reminder_scheduler - INFO - Sending reminder for task 1677 (1 days before due)
+2025-10-23 01:44:36,781 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1677: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:36,782 - deadline_reminder_scheduler - INFO - Processing task 544 ('task for task creation'): 0 days until due
+2025-10-23 01:44:36,782 - deadline_reminder_scheduler - INFO - Processing task 155 ('Develop Frontend Layout'): 6 days until due
+2025-10-23 01:44:36,782 - deadline_reminder_scheduler - INFO - Processing task 1295 ('test assigning proj to task'): 1 days until due
+2025-10-23 01:44:38,847 - deadline_reminder_scheduler - INFO - Sending reminder for task 1295 (1 days before due)
+2025-10-23 01:44:43,808 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1295: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:43,809 - deadline_reminder_scheduler - INFO - Processing task 1620 ('Custom Recurring Task'): 2 days until due
+2025-10-23 01:44:43,809 - deadline_reminder_scheduler - INFO - Processing task 201 ('testing 1'): 0 days until due
+2025-10-23 01:44:43,809 - deadline_reminder_scheduler - INFO - Processing task 209 ('Weekly Report'): 5 days until due
+2025-10-23 01:44:43,811 - deadline_reminder_scheduler - INFO - Processing task 1676 ('Task for me'): 1 days until due
+2025-10-23 01:44:45,862 - deadline_reminder_scheduler - INFO - Sending reminder for task 1676 (1 days before due)
+2025-10-23 01:44:50,399 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1676: Deadline reminder notifications sent to all collaborators
+2025-10-23 01:44:50,400 - deadline_reminder_scheduler - INFO - Processing task 1760 ('Test due date reminder'): 0 days until due
+2025-10-23 01:44:50,400 - deadline_reminder_scheduler - INFO - ================================================================================
+2025-10-23 01:44:50,401 - deadline_reminder_scheduler - INFO - Deadline reminder processing complete
+2025-10-23 01:44:50,401 - deadline_reminder_scheduler - INFO - Reminders sent: 6
+2025-10-23 01:44:50,402 - deadline_reminder_scheduler - INFO - Reminders skipped: 0
+2025-10-23 01:44:50,403 - deadline_reminder_scheduler - INFO - Errors: 0
+2025-10-23 01:44:50,404 - deadline_reminder_scheduler - INFO - ================================================================================
+2025-10-23 01:47:10,555 - deadline_reminder_scheduler - INFO - Sending reminder for task 1760 (3 days before due)
+2025-10-23 01:47:15,225 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1760: Deadline reminder notifications sent to all collaborators

@@ -21,6 +21,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     subtasks_raw = g("subtasks", "")
     priority = g("priority")
     attachments_raw = g("attachments")
+    reminder_intervals_raw = g("reminder_intervals", "")
 
 
     if not all([task_name, description, owner_id]):
@@ -61,6 +62,20 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             attachments = attachments_raw
 
     recurrence_fields = parse_recurrence_fields(form_or_json)
+    
+    # Parse reminder_intervals (comma-separated ints or list) - optional
+    reminder_intervals: List[int] = [7, 3, 1]  # Default
+    if reminder_intervals_raw:
+        if isinstance(reminder_intervals_raw, str) and reminder_intervals_raw.strip():
+            try:
+                reminder_intervals = [int(x.strip()) for x in reminder_intervals_raw.split(",") if x.strip()]
+            except ValueError:
+                reminder_intervals = [7, 3, 1]  # Default fallback
+        elif isinstance(reminder_intervals_raw, list):
+            try:
+                reminder_intervals = [int(x) for x in reminder_intervals_raw]
+            except (ValueError, TypeError):
+                reminder_intervals = [7, 3, 1]  # Default fallback
 
     return {
         "task_name": task_name,
@@ -76,7 +91,8 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         "priority": int(priority) if priority not in (None, "",) else None,
         "attachments": attachments,
         "recurrence_type": recurrence_fields["recurrence_type"],
-        "recurrence_end_date": recurrence_fields["recurrence_end_date"]
+        "recurrence_end_date": recurrence_fields["recurrence_end_date"],
+        "reminder_intervals": reminder_intervals
 
     }
 
@@ -138,8 +154,8 @@ def parse_task_update_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     if due_date_raw:
         update_data["due_date"] = dateparser.parse(due_date_raw).isoformat()
     
-    # Optional list fields (collaborators, subtasks)
-    for field_name, raw_field in [("collaborators", "collaborators"), ("subtasks", "subtasks")]:
+    # Optional list fields (collaborators, subtasks, reminder_intervals)
+    for field_name, raw_field in [("collaborators", "collaborators"), ("subtasks", "subtasks"), ("reminder_intervals", "reminder_intervals")]:
         raw_value = g(raw_field, "")
         if raw_value:
             parsed_list = []

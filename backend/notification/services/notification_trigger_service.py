@@ -96,10 +96,11 @@ class NotificationTriggerService:
         """
         # Create subject based on notification type
         subject_map = {
-            "task_assigned": "New Task Assignmen",
+            "task_assigned": "New Task Assignment",
             "task_ownership_transferred": "Task Ownership Transfer",
             "task_updated": "Task Update Notification",
             "project_collaborator_added": "Project Collaborator Addition",
+            "due_date_reminder": "Deadline Reminder",
             "general": "SPM Notification",
             "system": "SPM System Notification"
         }
@@ -602,6 +603,123 @@ Please review the updated task details and take any necessary actions."""
                 plain_text
             )
             results.append({"user_id": user_id, "result": result})
+        
+        return results
+    
+    def notify_deadline_reminder(self, task_id: int, reminder_days: int) -> List[Dict[str, Any]]:
+        """
+        Send deadline reminder notifications to all task collaborators.
+        
+        Args:
+            task_id: ID of the task with upcoming deadline
+            reminder_days: Number of days before due date (e.g., 7, 3, 1)
+        
+        Returns:
+            List of notification results for each collaborator
+        """
+        # Ensure reminder_days is an integer
+        try:
+            reminder_days = int(reminder_days)
+            if reminder_days < 0:
+                return [{"error": f"Invalid reminder_days value: {reminder_days}. Must be a positive integer.", "status": 400}]
+        except (ValueError, TypeError):
+            return [{"error": f"Invalid reminder_days value: {reminder_days}. Must be an integer.", "status": 400}]
+        
+        # Get task details from Supabase
+        task_details = self._get_task_details_from_supabase(task_id)
+        
+        if not task_details:
+            return [{"error": f"Task {task_id} not found", "status": 404}]
+        
+        # Check if task is already completed
+        if task_details.get("status") == "Completed":
+            return [{"message": f"Task {task_id} is already completed, no reminder sent", "status": 200}]
+        
+        # Get task information
+        task_name = task_details.get("task_name", f"Task {task_id}")
+        due_date = task_details.get("due_date", "No due date set")
+        description = task_details.get("description", "No description available")
+        status = task_details.get("status", "Unknown")
+        
+        # Format due date for display
+        formatted_due_date = due_date
+        if due_date != "No due date set":
+            try:
+                from datetime import datetime
+                due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                formatted_due_date = due_date_obj.strftime('%Y-%m-%d')
+            except:
+                pass
+        
+        # Get all collaborators (owner + collaborators)
+        collaborators = []
+        owner_id = task_details.get("owner_id")
+        if owner_id:
+            collaborators.append(owner_id)
+        
+        task_collaborators = task_details.get("collaborators", [])
+        if task_collaborators:
+            collaborators.extend(task_collaborators)
+        
+        # Remove duplicates while preserving order
+        collaborators = list(dict.fromkeys(collaborators))
+        
+        if not collaborators:
+            return [{"error": f"No collaborators found for task {task_id}", "status": 404}]
+        
+        # Create reminder message based on days remaining
+        if reminder_days == 1:
+            urgency_text = "⚠️ URGENT: Due Tomorrow"
+            urgency_style = "color: #dc2626; font-weight: bold;"
+        elif reminder_days <= 3:
+            urgency_text = f"⏰ Reminder: Due in {reminder_days} days"
+            urgency_style = "color: #ea580c; font-weight: bold;"
+        else:
+            urgency_text = f"📅 Reminder: Due in {reminder_days} days"
+            urgency_style = "color: #2563eb; font-weight: bold;"
+        
+        # HTML content for email
+        notification_content = f"""
+        <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Deadline Reminder</strong></h3>
+        <p style="{urgency_style} margin-bottom: 16px;">{urgency_text}</p>
+        <p style="color: #374151; margin-bottom: 12px;">Your task is approaching its due date:</p>
+        <ul style="color: #374151; margin-bottom: 16px;">
+            <li><strong>Task:</strong> {task_name}</li>
+            <li><strong>Task ID:</strong> {task_id}</li>
+            <li><strong>Description:</strong> {description}</li>
+            <li><strong>Status:</strong> {status}</li>
+            <li><strong>Due Date:</strong> {formatted_due_date}</li>
+            <li><strong>Days Remaining:</strong> {reminder_days} day{'s' if reminder_days != 1 else ''}</li>
+        </ul>
+        <p style="color: #6b7280; font-size: 14px;">Please review the task and take necessary actions to meet the deadline.</p>
+        """
+        
+        # Plain text content for in-app notification
+        plain_text = f"""**Deadline Reminder**
+{urgency_text}
+
+Your task is approaching its due date:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {formatted_due_date}
+Days Remaining: {reminder_days} day{'s' if reminder_days != 1 else ''}
+
+Please review the task and take necessary actions to meet the deadline."""
+        
+        # Send notifications to all collaborators
+        results = []
+        for collaborator_id in collaborators:
+            result = self.send_notification_based_on_preferences(
+                collaborator_id,
+                notification_content,
+                "due_date_reminder",
+                task_id,
+                plain_text
+            )
+            results.append({"user_id": collaborator_id, "result": result})
         
         return results
 

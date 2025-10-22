@@ -455,3 +455,35 @@ def trigger_project_collaborator_addition_notification():
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/deadline-reminder", methods=["POST"])
+def trigger_deadline_reminder_notification():
+    """
+    Trigger deadline reminder notifications for task collaborators.
+    
+    Required fields in JSON body:
+    - task_id: ID of the task with upcoming deadline
+    - reminder_days: Number of days before due date (e.g., 7, 3, 1)
+    
+    Returns:
+    {
+        "message": "Deadline reminder notifications sent to all collaborators",
+        "results": [ ... notification results for each collaborator ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        task_id = data.get("task_id")
+        reminder_days = data.get("reminder_days")
+        
+        if not task_id or reminder_days is None:
+            return jsonify({"error": "task_id and reminder_days are required", "status": 400}), 400
+        
+        results = trigger_service.notify_deadline_reminder(task_id, reminder_days)
+        
+        return jsonify({"message": "Deadline reminder notifications sent to all collaborators", "results": results, "status": 200}), 200
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500

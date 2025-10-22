@@ -24,6 +24,7 @@ def manager_create_task():
     - parent_task: Parent task ID (for subtasks)
     - subtasks: List of subtask IDs
     - priority: Priority level (integer)
+    - reminder_intervals: List of days before due date to send reminders (comma-separated string or list, defaults to [7, 3, 1])
     - attachment: PDF file to be uploaded
 
     RETURNS:
@@ -96,6 +97,7 @@ def staff_create_task():
     - subtasks: List of subtask IDs
     - type: Task type ("parent" or "subtask") - defaults to "parent"
     - priority: Priority level (integer)
+    - reminder_intervals: List of days before due date to send reminders (comma-separated string or list, defaults to [7, 3, 1])
     - attachment: PDF file to be uploaded
 
     Note: owner_id is automatically added to the collaborators list
@@ -166,6 +168,7 @@ def manager_create_subtask():
     - status: Task status (Unassigned|Ongoing|Under Review|Completed)
     - project_id: Project ID
     - collaborators: List of user IDs or comma-separated string
+    - reminder_intervals: List of days before due date to send reminders (comma-separated string or list, defaults to [7, 3, 1])
 
     Note: type is automatically set to "subtask"
     Note: The parent task's subtasks list will be automatically updated
@@ -220,6 +223,7 @@ def staff_create_subtask():
     - status: Task status (Unassigned|Ongoing|Under Review|Completed)
     - project_id: Project ID
     - collaborators: List of user IDs or comma-separated string
+    - reminder_intervals: List of days before due date to send reminders (comma-separated string or list, defaults to [7, 3, 1])
 
     Note: type is automatically set to "subtask"
     Note: owner_id is automatically added to the collaborators list
@@ -531,12 +535,47 @@ def get_tasks_by_department(dept_id: int):
     }
     
     RESPONSES:
-        200: Tasks found and returned
-        404: No tasks found for this department
-        500: Internal Server Error
+    200: Tasks found and returned
+    404: No tasks found for this department
+    500: Internal Server Error
     """
     try:
         result = service.get_tasks_by_department(dept_id)
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+
+@task_bp.route("/tasks/upcoming-deadlines", methods=["GET"])
+def get_tasks_with_upcoming_deadlines():
+    """
+    Get tasks with upcoming deadlines within a specified number of days.
+    
+    Query Parameters:
+    - max_days_ahead: Maximum number of days to look ahead for deadlines (default: 7)
+    
+    RETURNS:
+    {
+        "Message": "Successfully retrieved X tasks with upcoming deadlines",
+        "data": [ ... list of tasks with upcoming deadlines ... ],
+        "Code": 200
+    }
+    
+    RESPONSES:
+    200: Tasks found and returned
+    404: No tasks with upcoming deadlines found
+    500: Internal Server Error
+    """
+    try:
+        # Get max_days_ahead from query parameters, default to 7
+        max_days_ahead = request.args.get('max_days_ahead', 7, type=int)
+        
+        # Validate max_days_ahead
+        if max_days_ahead < 1 or max_days_ahead > 365:
+            return jsonify({"Message": "max_days_ahead must be between 1 and 365", "Code": 400}), 400
+        
+        result = service.get_tasks_with_upcoming_deadlines(max_days_ahead)
         status = result.pop("__status", 200)
         result["Code"] = status
         return jsonify(result), status

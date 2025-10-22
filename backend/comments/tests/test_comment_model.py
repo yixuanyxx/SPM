@@ -283,3 +283,4 @@ class TestCommentModel(unittest.TestCase):
         # Test roundtrip
         reconstructed = Comment.from_dict(result)
         assert reconstructed.content == long_content
+

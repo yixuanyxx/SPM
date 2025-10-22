@@ -58,3 +58,4 @@ set SUPABASE_SERVICE_KEY=your-service-key
 ## Test Data Cleanup
 
 The integration tests automatically clean up test data after each test run to prevent database pollution.
+

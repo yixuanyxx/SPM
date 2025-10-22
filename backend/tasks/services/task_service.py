@@ -790,6 +790,38 @@ class TaskService:
                 "Message": f"Error retrieving department tasks: {str(e)}",
                 "data": []
             }
+
+    def get_tasks_with_upcoming_deadlines(self, max_days_ahead: int = 7) -> Dict[str, Any]:
+        """
+        Get tasks with upcoming deadlines within the specified number of days.
+        
+        Args:
+            max_days_ahead: Maximum number of days to look ahead for deadlines
+            
+        Returns:
+            Dict with status, message, and task data
+        """
+        try:
+            tasks = self.repo.find_tasks_with_upcoming_deadlines(max_days_ahead)
+            
+            if not tasks:
+                return {
+                    "__status": 404,
+                    "Message": f"No tasks with upcoming deadlines found in the next {max_days_ahead} days",
+                    "data": []
+                }
+            
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(tasks)} tasks with upcoming deadlines",
+                "data": tasks
+            }
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving tasks with upcoming deadlines: {str(e)}",
+                "data": []
+            }
         
     def _generate_next_occurrence(self, completed_task: dict):
         """

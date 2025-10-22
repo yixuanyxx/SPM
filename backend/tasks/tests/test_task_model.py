@@ -29,6 +29,7 @@ class TestTaskModel(unittest.TestCase):
         assert task.completed_at is None
         assert task.attachments is None
         assert task.priority is None
+        assert task.reminder_intervals == [7, 3, 1]  # Default value
         assert isinstance(task.created_at, str)
 
     def test_task_creation_with_values(self):
@@ -46,7 +47,8 @@ class TestTaskModel(unittest.TestCase):
             type="subtask",
             subtasks=[10, 11, 12],
             attachments=[{"url": "http://example.com/file.pdf", "name": "file.pdf"}],
-            priority=5
+            priority=5,
+            reminder_intervals=[10, 5, 2]
         )
         
         assert task.owner_id == 123
@@ -61,6 +63,7 @@ class TestTaskModel(unittest.TestCase):
         assert task.subtasks == [10, 11, 12]
         assert task.attachments == [{"url": "http://example.com/file.pdf", "name": "file.pdf"}]
         assert task.priority == 5
+        assert task.reminder_intervals == [10, 5, 2]
 
     # check again, failed once when ci workflow was running
     # def test_to_dict_without_id(self):
@@ -307,6 +310,57 @@ class TestTaskModel(unittest.TestCase):
         task = Task.from_dict(data)
         
         assert task.priority is None
+
+    def test_from_dict_with_reminder_intervals_string(self):
+        """Test creating task from dictionary with comma-separated reminder_intervals string."""
+        data = {
+            'owner_id': 123,
+            'task_name': 'Test Task',
+            'description': 'Test Description',
+            'reminder_intervals': '10, 5, 2'
+        }
+        
+        task = Task.from_dict(data)
+        
+        assert task.reminder_intervals == [10, 5, 2]
+
+    def test_from_dict_with_reminder_intervals_list(self):
+        """Test creating task from dictionary with reminder_intervals list."""
+        data = {
+            'owner_id': 123,
+            'task_name': 'Test Task',
+            'description': 'Test Description',
+            'reminder_intervals': [14, 7, 3, 1]
+        }
+        
+        task = Task.from_dict(data)
+        
+        assert task.reminder_intervals == [14, 7, 3, 1]
+
+    def test_from_dict_with_invalid_reminder_intervals(self):
+        """Test creating task from dictionary with invalid reminder_intervals."""
+        data = {
+            'owner_id': 123,
+            'task_name': 'Test Task',
+            'description': 'Test Description',
+            'reminder_intervals': 'invalid, data'
+        }
+        
+        task = Task.from_dict(data)
+        
+        assert task.reminder_intervals == [7, 3, 1]  # Default fallback
+
+    def test_from_dict_without_reminder_intervals(self):
+        """Test creating task from dictionary without reminder_intervals (should use default)."""
+        data = {
+            'owner_id': 123,
+            'task_name': 'Test Task',
+            'description': 'Test Description'
+        }
+        
+        task = Task.from_dict(data)
+        
+        assert task.reminder_intervals == [7, 3, 1]  # Default value
 
     def test_from_dict_with_empty_strings(self):
         """Test creating task from dictionary with empty string values."""
