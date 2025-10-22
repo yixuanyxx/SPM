@@ -58,13 +58,15 @@ def manager_create_task():
 
         recurrence_type = payload.get("recurrence_type")
         recurrence_end_date = payload.get("recurrence_end_date")
+        recurrence_interval_days = payload.get("recurrence_interval_days")
 
         if recurrence_type is not None:
             try:
                 service.create_recurring_tasks(
                     parent_task_id=result["data"]["task_id"],
                     recurrence_type=recurrence_type,
-                    recurrence_end_date=recurrence_end_date
+                    recurrence_end_date=recurrence_end_date,
+                    recurrence_interval_days=recurrence_interval_days
                 )
             except Exception as e:
                 # Log but don’t fail the original task creation
@@ -132,13 +134,15 @@ def staff_create_task():
 
         recurrence_type = payload.get("recurrence_type")
         recurrence_end_date = payload.get("recurrence_end_date")
+        recurrence_interval_days = payload.get("recurrence_interval_days")
 
         if recurrence_type is not None:
             try:
                 service.create_recurring_tasks(
                     parent_task_id=result["data"]["task_id"],
                     recurrence_type=recurrence_type,
-                    recurrence_end_date=recurrence_end_date
+                    recurrence_end_date=recurrence_end_date,
+                    recurrence_interval_days = recurrence_interval_days
                 )
             except Exception as e:
                 # Log but don’t fail the original task creation
@@ -196,6 +200,22 @@ def manager_create_subtask():
         result = service.manager_create_subtask(payload)
         status = result.pop("__status", 201)
         result["Code"] = status
+
+        recurrence_type = payload.get("recurrence_type")
+        recurrence_end_date = payload.get("recurrence_end_date")
+        recurrence_interval_days = payload.get("recurrence_interval_days")
+
+        if recurrence_type is not None:
+            try:
+                service.create_recurring_tasks(
+                    parent_task_id=result["data"]["task_id"],
+                    recurrence_type=recurrence_type,
+                    recurrence_end_date=recurrence_end_date,
+                    recurrence_interval_days=recurrence_interval_days
+                )
+            except Exception as e:
+                # Log but don’t fail the original task creation
+                print(f"Failed to create recurring tasks: {str(e)}")
         
         # Update message to indicate subtask
         if "Message" in result and "Task created!" in result["Message"]:
@@ -252,6 +272,22 @@ def staff_create_subtask():
         result = service.staff_create_subtask(payload)
         status = result.pop("__status", 201)
         result["Code"] = status
+
+        recurrence_type = payload.get("recurrence_type")
+        recurrence_end_date = payload.get("recurrence_end_date")
+        recurrence_interval_days = payload.get("recurrence_interval_days")
+
+        if recurrence_type is not None:
+            try:
+                service.create_recurring_tasks(
+                    parent_task_id=result["data"]["task_id"],
+                    recurrence_type=recurrence_type,
+                    recurrence_end_date=recurrence_end_date,
+                    recurrence_interval_days=recurrence_interval_days
+                )
+            except Exception as e:
+                # Log but don’t fail the original task creation
+                print(f"Failed to create recurring tasks: {str(e)}")
         
         # Update message to indicate subtask
         if "Message" in result and "Task created!" in result["Message"]:

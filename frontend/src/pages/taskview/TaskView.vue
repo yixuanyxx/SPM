@@ -180,6 +180,7 @@
                     <!-- New Create Subtask Button -->
                     <button 
                       class="create-subtask-btn" 
+                      :parent-task-id="task.id"
                       @click.stop="openSubtaskModal(task)"
                       title="Create subtasks"
                     >

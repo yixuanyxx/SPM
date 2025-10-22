@@ -244,7 +244,20 @@
               <option value="bi-weekly">Bi-Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
+              <option value="custom">Custom</option>
             </select>
+          </div>
+
+          <div class="form-group" v-if="editedTask.recurrence_type === 'custom'">
+            <label for="recurrenceInterval">Custom Interval (Days)</label>
+            <input
+              type="number"
+              id="recurrenceInterval"
+              v-model.number="editedTask.recurrence_interval_days"
+              min="1"
+              :disabled="isLoading"
+              class="form-input"
+            />
           </div>
 
           <!-- Recurrence End Date -->
@@ -367,8 +380,9 @@ export default {
         project_id: null,
         collaborators: [],
         attachments: [],
-        recurrence_type: null, // e.g., 'Daily', 'Weekly', 'Monthly', None
-        recurrence_end_date: null,
+        recurrence_type: null,
+        recurrence_end_date: null, 
+        recurrence_interval_days: null,
         reminder_intervals: ""
       },
       originalTask: null,
@@ -487,7 +501,8 @@ export default {
           attachments: task.attachments || [],
           recurrence_type: task.recurrence_type || "",
           recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null,
-          reminder_intervals: task.reminder_intervals ? (Array.isArray(task.reminder_intervals) ? task.reminder_intervals.join(', ') : task.reminder_intervals) : ""
+          recurrence_interval_days: task.recurrence_interval_days || null,
+          reminder_intervals: task.reminder_intervals ? (Array.isArray(task.reminder_intervals) ? task.reminder_intervals.join(', ') : task.reminder_intervals) : ""  
         };
 
         // Load current attachments
@@ -647,11 +662,14 @@ export default {
         if (this.editedTask.recurrence_type && this.editedTask.recurrence_end_date) {
           formData.append('recurrence_end_date', this.convertToUTC(this.editedTask.recurrence_end_date));
         }
+        if (this.editedTask.recurrence_type === 'custom' && this.editedTask.recurrence_interval_days) {
+          formData.append('recurrence_interval_days', this.editedTask.recurrence_interval_days);
+        }
 
         // Add reminder intervals
         if (this.editedTask.reminder_intervals && this.editedTask.reminder_intervals.trim()) {
           formData.append('reminder_intervals', this.editedTask.reminder_intervals.trim());
-        }
+        
 
         console.log('EditPopup sending update for task:', this.taskId);
         console.log('Current attachments being sent:', this.currentAttachments);
@@ -702,49 +720,6 @@ export default {
           collaborators: collaboratorIds,
           attachments: this.currentAttachments
         }));
-
-        if (this.editedTask.recurrence_type && this.editedTask.status === 'Completed') {
-          try {
-            // Prepare next occurrence
-            const nextTaskData = new FormData();
-            nextTaskData.append('task_name', this.editedTask.task_name);
-            nextTaskData.append('description', this.editedTask.description);
-            nextTaskData.append('status', 'Pending'); // next task starts as Pending
-            nextTaskData.append('priority', this.editedTask.priority);
-            nextTaskData.append('recurrence_type', this.editedTask.recurrence_type);
-            if (this.editedTask.recurrence_end_date) {
-              nextTaskData.append(
-                'recurrence_end_date',
-                this.convertToUTC(this.editedTask.recurrence_end_date)
-              );
-            }
-
-            // Calculate next due date
-            const currentDue = new Date(this.editedTask.due_date);
-            let nextDue = new Date(currentDue);
-            switch (this.editedTask.recurrence_type) {
-              case 'Daily':
-                nextDue.setDate(currentDue.getDate() + 1);
-                break;
-              case 'Weekly':
-                nextDue.setDate(currentDue.getDate() + 7);
-                break;
-              case 'Monthly':
-                nextDue.setMonth(currentDue.getMonth() + 1);
-                break;
-            }
-            nextTaskData.append('due_date', nextDue.toISOString());
-
-            // Send create request for next occurrence
-            await fetch("http://localhost:5002/tasks/create", {
-              method: "POST",
-              body: nextTaskData,
-            });
-
-          } catch (err) {
-            console.error("Error creating next recurring task:", err);
-          }
-        }
         
         this.isLoading = false;
         
@@ -776,6 +751,30 @@ export default {
         console.error("Error updating task:", err);
         this.errorMessage = err.message || "Failed to update task. Please try again.";
         this.isLoading = false;
+      }
+    },
+
+    async markAsCompleted(task) {
+      try {
+        const formData = new FormData();
+        formData.append('status', 'Completed');
+
+        const updateUrl = `http://localhost:5002/tasks/${task.id}/update`;
+        const response = await fetch(updateUrl, {
+          method: 'PUT',
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`Failed to mark as completed: ${response.status} - ${errText}`);
+        }
+
+        console.log('✅ Task marked as completed.');
+        // Optional: Refresh task list after completion
+        this.fetchTasks && this.fetchTasks();
+      } catch (err) {
+        console.error('❌ Error marking task as completed:', err);
       }
     },
 
