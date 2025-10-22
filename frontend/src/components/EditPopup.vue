@@ -228,7 +228,20 @@
               <option value="bi-weekly">Bi-Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
+              <option value="custom">Custom</option>
             </select>
+          </div>
+
+          <div class="form-group" v-if="editedTask.recurrence_type === 'custom'">
+            <label for="recurrenceInterval">Custom Interval (Days)</label>
+            <input
+              type="number"
+              id="recurrenceInterval"
+              v-model.number="editedTask.recurrence_interval_days"
+              min="1"
+              :disabled="isLoading"
+              class="form-input"
+            />
           </div>
 
           <!-- Recurrence End Date -->
@@ -351,8 +364,9 @@ export default {
         project_id: null,
         collaborators: [],
         attachments: [],
-        recurrence_type: null, // e.g., 'Daily', 'Weekly', 'Monthly', None
-        recurrence_end_date: null
+        recurrence_type: null,
+        recurrence_end_date: null, 
+        recurrence_interval_days: null
       },
       originalTask: null,
       selectedCollaborators: [],
@@ -469,7 +483,8 @@ export default {
             : [],
           attachments: task.attachments || [],
           recurrence_type: task.recurrence_type || "",
-          recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null
+          recurrence_end_date: task.recurrence_end_date ? formatDateForDatetimeLocal(task.recurrence_end_date) : null,
+          recurrence_interval_days: task.recurrence_interval_days || null
         };
 
         // Load current attachments
@@ -628,6 +643,10 @@ export default {
         formData.append('recurrence_type', this.editedTask.recurrence_type);
         if (this.editedTask.recurrence_type && this.editedTask.recurrence_end_date) {
           formData.append('recurrence_end_date', this.convertToUTC(this.editedTask.recurrence_end_date));
+        }
+
+        if (this.editedTask.recurrence_type === 'custom' && this.editedTask.recurrence_interval_days) {
+          formData.append('recurrence_interval_days', this.editedTask.recurrence_interval_days);
         }
 
         console.log('EditPopup sending update for task:', this.taskId);
