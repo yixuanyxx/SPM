@@ -20,8 +20,9 @@ class Task:
     created_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
     completed_at: Optional[str] = None   # Timestamp when task was completed (ISO format)
     priority: Optional[int] = None       # Priority level (optional integer)
-    recurrence_type: Optional[str] = None       # none, daily, weekly, bi-weekly, monthly, yearly
+    recurrence_type: Optional[str] = None    
     recurrence_end_date: Optional[datetime] = None
+    recurrence_interval_days: Optional[int] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert Task object to dictionary"""
@@ -43,7 +44,8 @@ class Task:
             'recurrence_end_date': (
                 self.recurrence_end_date.isoformat() if isinstance(self.recurrence_end_date, datetime)
                 else self.recurrence_end_date
-            )
+            ),
+            'recurrence_interval_days': self.recurrence_interval_days
         }
         
         # Include ID if it exists
@@ -111,7 +113,7 @@ class Task:
 
         # Handle recurrence fields
         recurrence_type = data.get('recurrence_type')
-        valid_types = {'daily', 'weekly', 'bi-weekly', 'monthly', 'yearly'}
+        valid_types = {'daily', 'weekly', 'bi-weekly', 'monthly', 'yearly','custom'}
         if recurrence_type not in valid_types:
             recurrence_type = None
 
@@ -121,6 +123,13 @@ class Task:
                 recurrence_end_date = dateparser.parse(recurrence_end_date)
             except Exception:
                 recurrence_end_date = None
+
+        recurrence_interval_days = data.get('recurrence_interval_days')
+        if recurrence_interval_days is not None:
+            try:
+                recurrence_interval_days = int(recurrence_interval_days)
+            except Exception:
+                recurrence_interval_days = None
         
         # Create task instance
         task = cls(
@@ -139,7 +148,8 @@ class Task:
             attachments=attachments,
             priority=priority,
             recurrence_type=recurrence_type,
-            recurrence_end_date=recurrence_end_date
+            recurrence_end_date=recurrence_end_date,
+            recurrence_interval_days = recurrence_interval_days
         )
         
         # Set ID if provided (since it's init=False)

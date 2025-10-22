@@ -61,6 +61,7 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             attachments = attachments_raw
 
     recurrence_fields = parse_recurrence_fields(form_or_json)
+    
 
     return {
         "task_name": task_name,
@@ -76,8 +77,8 @@ def parse_task_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
         "priority": int(priority) if priority not in (None, "",) else None,
         "attachments": attachments,
         "recurrence_type": recurrence_fields["recurrence_type"],
-        "recurrence_end_date": recurrence_fields["recurrence_end_date"]
-
+        "recurrence_end_date": recurrence_fields["recurrence_end_date"],
+        "recurrence_interval_days": recurrence_fields["recurrence_interval_days"]
     }
 
 def parse_subtask_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
@@ -165,7 +166,7 @@ def parse_task_update_payload(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     recurrence_end_raw = g("recurrence_end_date")
 
     if recurrence_type:
-        valid_types = [None, "daily", "weekly", "bi-weekly", "monthly", "yearly"]
+        valid_types = [None, "daily", "weekly", "bi-weekly", "monthly", "yearly","custom"]
         if recurrence_type.lower() not in valid_types:
             raise ValueError(f"Invalid recurrence_type: {recurrence_type}. Must be one of {valid_types}.")
         update_data["recurrence_type"] = recurrence_type.lower()
@@ -191,7 +192,7 @@ def parse_recurrence_fields(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
     if recurrence_type_raw is not None:
         recurrence_type_raw = str(recurrence_type_raw).lower().strip()
 
-    valid_types = ["daily", "weekly", "bi-weekly", "monthly", "yearly"]
+    valid_types = ["daily", "weekly", "bi-weekly", "monthly", "yearly","custom"]
     if recurrence_type_raw not in valid_types:
         recurrence_type_raw = None
     
@@ -202,9 +203,21 @@ def parse_recurrence_fields(form_or_json: Dict[str, Any]) -> Dict[str, Any]:
             recurrence_end_date = dateparser.parse(recurrence_end_raw).isoformat()
         except Exception:
             raise ValueError(f"Invalid recurrence_end_date: '{recurrence_end_raw}'")
-
+        
+    recurrence_interval_days = None
+    if recurrence_type_raw == "custom":
+        interval_raw = g("recurrence_interval_days")
+        if interval_raw not in (None, ""):
+            try:
+                recurrence_interval_days = int(interval_raw)
+                if recurrence_interval_days <= 0:
+                    raise ValueError
+            except Exception:
+                raise ValueError("recurrence_interval_days must be a positive integer for custom recurrence")
+    
     return {
         "recurrence_type": recurrence_type_raw,
-        "recurrence_end_date": recurrence_end_date
+        "recurrence_end_date": recurrence_end_date,
+        "recurrence_interval_days": recurrence_interval_days
     }
 

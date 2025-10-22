@@ -135,7 +135,25 @@
           <option value="bi-weekly">Bi-Weekly</option>
           <option value="monthly">Monthly</option>
           <option value="yearly">Yearly</option>
+          <option value="custom">Custom</option>
         </select>
+      </div>
+
+      <div
+        v-if="currentSubtask.recurrence_type === 'custom'"
+        class="form-group"
+      >
+        <label for="recurrence_interval_days">Repeat Every (Days)<span style="color: red">*</span></label>
+        <input
+          type="number"
+          id="recurrence_interval_days"
+          v-model.number="currentSubtask.recurrence_interval_days"
+          min="1"
+          placeholder="Enter number of days (e.g. 10)"
+          :disabled="isLoading"
+          :required="currentSubtask.recurrence_type === 'custom'"
+          class="form-input"
+        />
       </div>
 
       <div v-if="currentSubtask.recurrence_type !== null" class="form-group">
@@ -324,6 +342,7 @@ const currentSubtask = ref({
   status: getDefaultStatus(),
   collaborators: [],
   recurrence_type: null,
+  recurrence_interval_days: null,
   recurrence_end_date: null
 })
 
@@ -421,8 +440,9 @@ const addSubtask = () => {
       email: u.email,
       isCreator: u.isCreator || false
     })),
-    recurrence_type: currentSubtask.value.recurrence_type,
-    recurrence_end_date: currentSubtask.value.recurrence_end_date,
+    recurrence_type: currentSubtask.value.recurrence_type || null,
+    recurrence_interval_days: currentSubtask.value.recurrence_type === 'custom' ? currentSubtask.value.recurrence_interval_days : null,
+    recurrence_end_date: currentSubtask.value.recurrence_type ? currentSubtask.value.recurrence_end_date : null,
     id: Date.now()
   }
 
@@ -443,9 +463,10 @@ const addSubtask = () => {
   resetForm()
   showSubtaskForm.value = false
   showErrors.value = false
-  recurrence_type = null
-  recurrence_end_date = null
-}
+  currentSubtask.value.recurrence_type = null
+  currentSubtask.value.recurrence_end_date = null
+  currentSubtask.value.recurrence_interval_days = null
+} 
 
 const editSubtask = async (sortedIndex) => {
   // Get the actual subtask from sorted list
@@ -523,7 +544,10 @@ const resetForm = () => {
     due_date: '',
     priority: 5,
     status: getDefaultStatus(),
-    collaborators: []
+    collaborators: [], 
+    recurrence_type: null,
+    recurrence_interval_days: null,
+    recurrence_end_date: null
   }
   selectedCollaborators.value = []
   collaboratorQuery.value = ''

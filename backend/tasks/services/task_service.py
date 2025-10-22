@@ -1,5 +1,5 @@
 from typing import Dict, Any, Optional
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, UTC, timedelta,timezone
 from dateutil import parser as dateparser
 from dateutil.relativedelta import relativedelta
 from models.task import Task
@@ -96,10 +96,10 @@ class TaskService:
             raise ValueError(f"Parent task with ID {parent_task_id} not found")
         
         # Ensure type is set to subtask
-        payload["type"] = "subtask"
+        subtask_payload = self._prepare_subtask_payload(payload)
         
         # Create the subtask using the regular create method
-        result = self.manager_create(payload)
+        result = self.manager_create(subtask_payload)
         
         # If subtask was successfully created, update the parent
         if result.get("__status") == 201 and result.get("data", {}).get("id"):
@@ -478,12 +478,8 @@ class TaskService:
         if owner_id not in collaborators:
             collaborators.append(owner_id)
         
-        # Update payload with modified collaborators and ensure type is subtask
-        payload["collaborators"] = collaborators
-        payload["type"] = "subtask"
-        
-        # Create the subtask using the regular manager_create method
-        result = self.manager_create(payload)
+        subtask_payload = self._prepare_subtask_payload(payload)
+        result = self.manager_create(subtask_payload)
         
         # If subtask was successfully created, update the parent
         if result.get("__status") == 201 and result.get("data", {}).get("id"):
@@ -794,10 +790,14 @@ class TaskService:
     def _generate_next_occurrence(self, completed_task: dict):
         """
         Automatically generate the next task occurrence based on recurrence frequency.
-        Ensures next due date is always after completed_at and respects the original schedule.
+        Keeps timezone-awareness intact and ensures next due date > completed_at.
         """
+        print(f"⚙️ Generating next occurrence for task {completed_task.get('id')} "
+            f"with recurrence_type={completed_task.get('recurrence_type')}")
+
         recurrence_type = completed_task.get("recurrence_type")
         recurrence_end_date = completed_task.get("recurrence_end_date")
+        recurrence_interval_days = completed_task.get("recurrence_interval_days")
 
         if not recurrence_type or recurrence_type.lower() == "none":
             return  # No recurrence
@@ -805,85 +805,112 @@ class TaskService:
         due_date_str = completed_task.get("due_date")
         completed_at_str = completed_task.get("completed_at")
 
+        # --- Parse dates safely ---
         try:
             due_date = dateparser.parse(due_date_str)
+            if due_date and due_date.tzinfo is None:
+                due_date = due_date.replace(tzinfo=timezone.utc)
         except Exception:
             print(f"⚠️ Could not parse due date for task {completed_task.get('id')}")
             return
 
         try:
-            completed_at = dateparser.parse(completed_at_str) if completed_at_str else datetime.now()
+            completed_at = dateparser.parse(completed_at_str) if completed_at_str else datetime.now(timezone.utc)
+            if completed_at and completed_at.tzinfo is None:
+                completed_at = completed_at.replace(tzinfo=timezone.utc)
         except Exception:
-            completed_at = datetime.now()
+            completed_at = datetime.now(timezone.utc)
 
-        # Determine the "base date" to calculate next occurrence
+        # --- Use timezone-aware now() as fallback ---
+        now_aware = datetime.now(timezone.utc)
+
+        # --- Determine base date ---
         base_date = max(due_date, completed_at)
+        base_date = base_date.replace(
+            hour=due_date.hour,
+            minute=due_date.minute,
+            second=due_date.second,
+            microsecond=due_date.microsecond
+        )
 
-        # Calculate next due date according to recurrence type
+        # --- Calculate next due date ---
         next_due_date = None
-        if recurrence_type.lower() == "daily":
+        rec_type = recurrence_type.lower()
+
+        if rec_type == "daily":
             next_due_date = base_date + timedelta(days=1)
 
-        elif recurrence_type.lower() == "weekly":
-            # Keep same weekday as original due_date
-            weekday = due_date.weekday()  # 0=Monday
+        elif rec_type == "weekly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=1)
 
-        elif recurrence_type.lower() == "bi-weekly":
-            weekday = due_date.weekday()
+        elif rec_type == "bi-weekly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=2)
 
-        elif recurrence_type.lower() == "monthly":
-            # Increment month until > completed_at
+        elif rec_type == "monthly":
             original_day = due_date.day
             next_due_date = due_date
             while next_due_date <= completed_at:
                 month = next_due_date.month + 1
                 year = next_due_date.year + (month - 1) // 12
                 month = (month - 1) % 12 + 1
-                # get last day of the month
                 last_day = calendar.monthrange(year, month)[1]
                 day = min(original_day, last_day)
                 next_due_date = next_due_date.replace(year=year, month=month, day=day)
 
-        elif recurrence_type.lower() == "yearly":
+        elif rec_type == "yearly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date = next_due_date.replace(year=next_due_date.year + 1)
+
+        elif rec_type == "custom":
+            interval = completed_task.get("recurrence_interval_days")
+            try:
+                interval = int(interval)
+            except (TypeError, ValueError):
+                interval = None
+
+            if interval and interval > 0:
+                next_due_date = base_date + timedelta(days=interval)
+            else:
+                print(f"⚠️ Invalid custom recurrence interval for task {completed_task.get('id')} (interval={interval})")
+                return
 
         else:
             print(f"⚠️ Unsupported recurrence type '{recurrence_type}'")
             return
 
-        # Check recurrence end date
+        # --- Handle recurrence end date ---
         if recurrence_end_date:
             try:
                 recurrence_end = dateparser.parse(recurrence_end_date)
+                if recurrence_end and recurrence_end.tzinfo is None:
+                    recurrence_end = recurrence_end.replace(tzinfo=timezone.utc)
                 if next_due_date > recurrence_end:
                     print(f"ℹ️ Recurrence ended for task {completed_task.get('id')} (end date reached)")
                     return None
             except Exception:
                 print(f"⚠️ Could not parse recurrence_end_date '{recurrence_end_date}'")
 
-        # Prepare new task payload (copy all details except id, status, completed_at)
+        # --- Prepare new task payload ---
         task_payload = copy.deepcopy(completed_task)
         task_payload.pop("id", None)
         task_payload["status"] = "Ongoing"
         task_payload["completed_at"] = None
-        task_payload["created_at"] = datetime.now().isoformat()
+        task_payload["created_at"] = now_aware.isoformat()
         task_payload["due_date"] = next_due_date.isoformat()
         task_payload["type"] = completed_task.get("type", "parent")
         task_payload["recurrence_type"] = recurrence_type
         task_payload["recurrence_end_date"] = recurrence_end_date
+        task_payload["recurrence_interval_days"] = recurrence_interval_days
 
         if completed_task.get("type") == "subtask":
             task_payload["parent_task"] = completed_task.get("parent_task")
 
-        # Insert into database
+        # --- Insert new recurring task ---
         try:
             created = self.repo.insert_task(task_payload)
             print(f"✅ Created recurring task {created.get('id')} for recurrence '{recurrence_type}'")
@@ -892,4 +919,26 @@ class TaskService:
             return created
         except Exception as e:
             print(f"❌ Failed to create recurring task: {e}")
-            return None 
+            return None
+        
+    def _prepare_subtask_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ensures subtask payload has type, owner in collaborators, and recurrence fields.
+        """
+        owner_id = payload.get("owner_id")
+        if not owner_id:
+            raise ValueError("owner_id is required")
+
+        collaborators = set(payload.get("collaborators") or [])
+        collaborators.add(owner_id)
+
+        subtask_payload = copy.deepcopy(payload)
+        subtask_payload["type"] = "subtask"
+        subtask_payload["collaborators"] = list(collaborators)
+        
+        # Include recurrence fields explicitly
+        subtask_payload["recurrence_type"] = payload.get("recurrence_type")
+        subtask_payload["recurrence_end_date"] = payload.get("recurrence_end_date")
+        subtask_payload["recurrence_interval_days"] = payload.get("recurrence_interval_days")
+        
+        return subtask_payload
