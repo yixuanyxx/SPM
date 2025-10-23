@@ -476,6 +476,12 @@ class TestTaskControllerIntegration(unittest.TestCase):
             "task_name": "Parent Task",
             "description": "Parent task for subtask"
         })
+        
+        # Debug: Print parent task creation response
+        if parent_response.status_code != 201:
+            print(f"DEBUG: Parent task creation failed: {parent_response.status_code}")
+            print(f"DEBUG: Response: {parent_response.data}")
+        
         self.assertEqual(parent_response.status_code, 201)
         parent_data = json.loads(parent_response.data)
         parent_task_id = parent_data["data"]["id"]
@@ -488,6 +494,11 @@ class TestTaskControllerIntegration(unittest.TestCase):
             "parent_task": parent_task_id,
             "collaborators": [102, 103]
         })
+        
+        # Debug: Print subtask creation response
+        if response.status_code != 201:
+            print(f"DEBUG: Subtask creation failed: {response.status_code}")
+            print(f"DEBUG: Response: {response.data}")
         
         # Assertions
         self.assertEqual(response.status_code, 201)

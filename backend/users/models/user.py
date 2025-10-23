@@ -45,9 +45,9 @@ class User:
         return cls(
             id=uuid.UUID(data['id']) if isinstance(data['id'], str) else data['id'],
             userid=data.get('userid', 0),
-            role=data.get('role', ''),
-            name=data.get('name', ''),
-            email=data.get('email', ''),
+            role=data.get('role') or '',
+            name=data.get('name') or '',
+            email=data.get('email') or '',
             team_id=data.get('team_id'),
             dept_id=data.get('dept_id'),
             notification_preferences=notification_preferences
