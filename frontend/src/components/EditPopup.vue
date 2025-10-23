@@ -669,7 +669,7 @@ export default {
         // Add reminder intervals
         if (this.editedTask.reminder_intervals && this.editedTask.reminder_intervals.trim()) {
           formData.append('reminder_intervals', this.editedTask.reminder_intervals.trim());
-        
+        }
 
         console.log('EditPopup sending update for task:', this.taskId);
         console.log('Current attachments being sent:', this.currentAttachments);
@@ -841,7 +841,7 @@ export default {
             collaborators: mergedCollaborators
           };
 
-          await fetch("http://127.0.0.1:5001/projects/update", {
+          await fetch("http://localhost:5001/projects/update", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(updateData),

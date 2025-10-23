@@ -376,6 +376,9 @@ const fetchProjectDetails = async () => {
       project.value.tasks = []
     }
     
+    // Sync all task collaborators with project collaborators
+    await syncAllTaskCollaborators()
+    
   } catch (err) {
     error.value = err.message
   } finally {
@@ -500,7 +503,10 @@ const submitNewTask = async () => {
     const data = await response.json()
 
     if (response.ok && data.Code === 201) {
-      // Refresh project details to show new task
+      // Update project collaborators with task collaborators
+      await updateProjectCollaborators(collaboratorIds)
+      
+      // Refresh project details to show new task and updated collaborators
       await fetchProjectDetails()
       closeCreateTaskModal()
     } else {
@@ -606,5 +612,118 @@ const getUserName = (userid) => {
   if (!userid) return 'Unknown User'
   const user = users.value[userid]
   return user?.name || 'Unknown User'
+}
+
+// Add this method with your other methods
+const updateProjectCollaborators = async (taskCollaboratorIds) => {
+  if (!taskCollaboratorIds || taskCollaboratorIds.length === 0) return
+
+  try {
+    const projectCollaborators = project.value.collaborators || []
+    const projectOwnerId = parseInt(project.value.owner_id)
+    
+    // Convert to Set for efficient comparison
+    const projectCollaboratorsSet = new Set(
+      projectCollaborators.map(collab => parseInt(collab))
+    )
+    
+    // Find collaborators that need to be added
+    const newCollaborators = taskCollaboratorIds.filter(
+      collabId => {
+        const id = parseInt(collabId)
+        return !projectCollaboratorsSet.has(id) && id !== projectOwnerId
+      }
+    )
+
+    console.log('Task collaborators:', taskCollaboratorIds)
+    console.log('Project collaborators:', projectCollaborators)
+    console.log('New collaborators to add:', newCollaborators)
+
+    if (newCollaborators.length > 0) {
+      // Update the project with new collaborators
+      const updateResponse = await fetch(`http://localhost:5001/projects/update`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: project.value.id,
+          collaborators: [...projectCollaborators, ...newCollaborators]
+        })
+      })
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to update project collaborators')
+      }
+
+      console.log('Project collaborators updated successfully')
+      
+      // Fetch user details for new collaborators
+      await Promise.all(newCollaborators.map(id => fetchUserDetails(id)))
+    }
+  } catch (error) {
+    console.error('Error updating project collaborators:', error)
+  }
+}
+
+// Add this method to sync all task collaborators with project collaborators
+const syncAllTaskCollaborators = async () => {
+  if (!project.value.tasks || project.value.tasks.length === 0) return
+
+  try {
+    const allTaskCollaborators = new Set()
+    
+    // Collect all unique collaborators and owners from all tasks
+    project.value.tasks.forEach(task => {
+      if (task.collaborators) {
+        task.collaborators.forEach(collab => allTaskCollaborators.add(parseInt(collab)))
+      }
+      if (task.owner_id) {
+        allTaskCollaborators.add(parseInt(task.owner_id))
+      }
+    })
+
+    const projectCollaborators = project.value.collaborators || []
+    const projectOwnerId = parseInt(project.value.owner_id)
+    
+    const projectCollaboratorsSet = new Set(
+      projectCollaborators.map(collab => parseInt(collab))
+    )
+
+    // Find collaborators that need to be added
+    const newCollaborators = Array.from(allTaskCollaborators).filter(
+      collabId => !projectCollaboratorsSet.has(collabId) && collabId !== projectOwnerId
+    )
+
+    console.log('All task collaborators:', Array.from(allTaskCollaborators))
+    console.log('Missing project collaborators:', newCollaborators)
+
+    if (newCollaborators.length > 0) {
+      const updateResponse = await fetch(`http://localhost:5001/projects/update`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          project_id: project.value.id,
+          collaborators: [...projectCollaborators, ...newCollaborators]
+        })
+      })
+
+      if (!updateResponse.ok) {
+        throw new Error('Failed to sync project collaborators')
+      }
+
+      console.log('All task collaborators synced with project')
+      
+      // Update local project data
+      project.value.collaborators = [...projectCollaborators, ...newCollaborators]
+      
+      // Fetch user details for new collaborators
+      await Promise.all(newCollaborators.map(id => fetchUserDetails(id)))
+    }
+  } catch (error) {
+    console.error('Error syncing task collaborators:', error)
+  }
 }
 </script>
