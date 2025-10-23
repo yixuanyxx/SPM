@@ -475,6 +475,158 @@ As the new owner, you are responsible for managing this task and can edit its de
             results.append({"task_id": task_id, "user_id": user_id, "result": result})
         
         return results
+
+    def notify_comment_mention(self, task_id: int, mentioned_user_id: int, commenter_name: str, 
+                             comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment mentions following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            mentioned_user_id, notification_content, "comment_mention", task_id, plain_text
+        )
+
+    def notify_comment_collaborator(self, task_id: int, collaborator_user_id: int, commenter_name: str, 
+                                  comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment collaborators following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to your task:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to your task:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            collaborator_user_id, notification_content, "comment_collaborator", task_id, plain_text
+        )
     
     def notify_project_collaborator_addition(self, project_id: int, collaborator_ids: List[int], project_name: str, adder_name: str = "System") -> List[Dict[str, Any]]:
         """
@@ -540,6 +692,158 @@ You can now view and contribute to this project."""
             results.append({"user_id": collaborator_id, "result": result})
         
         return results
+
+    def notify_comment_mention(self, task_id: int, mentioned_user_id: int, commenter_name: str, 
+                             comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment mentions following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            mentioned_user_id, notification_content, "comment_mention", task_id, plain_text
+        )
+
+    def notify_comment_collaborator(self, task_id: int, collaborator_user_id: int, commenter_name: str, 
+                                  comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment collaborators following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to your task:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to your task:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            collaborator_user_id, notification_content, "comment_collaborator", task_id, plain_text
+        )
     
     def notify_task_consolidated_update(self, task_id: int, user_ids: List[int], changes: List[Dict[str, Any]], updater_name: str = "System") -> List[Dict[str, Any]]:
         """
@@ -605,6 +909,158 @@ Please review the updated task details and take any necessary actions."""
             results.append({"user_id": user_id, "result": result})
         
         return results
+
+    def notify_comment_mention(self, task_id: int, mentioned_user_id: int, commenter_name: str, 
+                             comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment mentions following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            mentioned_user_id, notification_content, "comment_mention", task_id, plain_text
+        )
+
+    def notify_comment_collaborator(self, task_id: int, collaborator_user_id: int, commenter_name: str, 
+                                  comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment collaborators following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to your task:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to your task:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            collaborator_user_id, notification_content, "comment_collaborator", task_id, plain_text
+        )
     
     def notify_deadline_reminder(self, task_id: int, reminder_days: int) -> List[Dict[str, Any]]:
         """
@@ -722,4 +1178,156 @@ Please review the task and take necessary actions to meet the deadline."""
             results.append({"user_id": collaborator_id, "result": result})
         
         return results
+
+    def notify_comment_mention(self, task_id: int, mentioned_user_id: int, commenter_name: str, 
+                             comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment mentions following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>Comment Mention Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">You have been mentioned in a comment on task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**Comment Mention Summary**
+You have been mentioned in a comment on task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            mentioned_user_id, notification_content, "comment_mention", task_id, plain_text
+        )
+
+    def notify_comment_collaborator(self, task_id: int, collaborator_user_id: int, commenter_name: str, 
+                                  comment_content: str, task_name: str = None) -> Dict[str, Any]:
+        """
+        Send notification for comment collaborators following the structured format of task assignments.
+        """
+        # Get task details
+        task_details = self._get_task_details(task_id)
+        
+        if task_details:
+            task_name = task_details.get("task_name", f"Task {task_id}")
+            description = task_details.get("description", "No description available")
+            due_date = task_details.get("due_date", "No due date set")
+            status = task_details.get("status", "Unknown")
+            
+            # Format due date for display
+            if due_date != "No due date set":
+                try:
+                    from datetime import datetime
+                    due_date_obj = datetime.fromisoformat(due_date.replace('Z', '+00:00'))
+                    due_date = due_date_obj.strftime('%Y-%m-%d')
+                except:
+                    pass
+            
+            # HTML content for email - following the structured format
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to your task:</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Task:</strong> {task_name}</li>
+                <li><strong>Task ID:</strong> {task_id}</li>
+                <li><strong>Description:</strong> {description}</li>
+                <li><strong>Status:</strong> {status}</li>
+                <li><strong>Due Date:</strong> {due_date}</li>
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            # Plain text content for in-app notification - following the structured format
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to your task:
+
+Task: {task_name}
+Task ID: {task_id}
+Description: {description}
+Status: {status}
+Due Date: {due_date}
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        else:
+            # Fallback if task details not available
+            notification_content = f"""
+            <h3 style="color: #1f2937; margin-bottom: 16px;"><strong>New Comment Summary</strong></h3>
+            <p style="color: #374151; margin-bottom: 12px;">A new comment has been added to task (ID: {task_id}):</p>
+            <ul style="color: #374151; margin-bottom: 16px;">
+                <li><strong>Commenter:</strong> {commenter_name}</li>
+                <li><strong>Comment:</strong> "{comment_content}"</li>
+            </ul>
+            <p style="color: #6b7280; font-size: 14px;">You can view and respond to this comment in your task.</p>
+            """
+            
+            plain_text = f"""**New Comment Summary**
+A new comment has been added to task (ID: {task_id}):
+
+Commenter: {commenter_name}
+Comment: "{comment_content}"
+
+You can view and respond to this comment in your task."""
+        
+        return self.send_notification_based_on_preferences(
+            collaborator_user_id, notification_content, "comment_collaborator", task_id, plain_text
+        )
 

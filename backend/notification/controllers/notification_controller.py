@@ -487,3 +487,81 @@ def trigger_deadline_reminder_notification():
         
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/comment-mention-structured", methods=["POST"])
+def trigger_comment_mention_structured_notification():
+    """
+    Trigger structured notification for comment mentions following task assignment format.
+    
+    Required fields in JSON body:
+    - task_id: ID of the task
+    - mentioned_user_id: ID of the mentioned user
+    - commenter_name: Name of the person who commented
+    - comment_content: Content of the comment
+    - task_name: Name of the task (optional)
+    
+    Returns:
+    {
+        "message": "Structured mention notification sent",
+        "results": [ ... notification results ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        task_id = data.get("task_id")
+        mentioned_user_id = data.get("mentioned_user_id")
+        commenter_name = data.get("commenter_name")
+        comment_content = data.get("comment_content")
+        task_name = data.get("task_name")
+        
+        if not all([task_id, mentioned_user_id, commenter_name, comment_content]):
+            return jsonify({"error": "task_id, mentioned_user_id, commenter_name, and comment_content are required", "status": 400}), 400
+        
+        result = trigger_service.notify_comment_mention(task_id, mentioned_user_id, commenter_name, comment_content, task_name)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+
+@notification_bp.route("/notifications/triggers/comment-collaborator-structured", methods=["POST"])
+def trigger_comment_collaborator_structured_notification():
+    """
+    Trigger structured notification for comment collaborators following task assignment format.
+    
+    Required fields in JSON body:
+    - task_id: ID of the task
+    - collaborator_user_id: ID of the collaborator user
+    - commenter_name: Name of the person who commented
+    - comment_content: Content of the comment
+    - task_name: Name of the task (optional)
+    
+    Returns:
+    {
+        "message": "Structured collaborator notification sent",
+        "results": [ ... notification results ... ],
+        "status": 200
+    }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        
+        task_id = data.get("task_id")
+        collaborator_user_id = data.get("collaborator_user_id")
+        commenter_name = data.get("commenter_name")
+        comment_content = data.get("comment_content")
+        task_name = data.get("task_name")
+        
+        if not all([task_id, collaborator_user_id, commenter_name, comment_content]):
+            return jsonify({"error": "task_id, collaborator_user_id, commenter_name, and comment_content are required", "status": 400}), 400
+        
+        result = trigger_service.notify_comment_collaborator(task_id, collaborator_user_id, commenter_name, comment_content, task_name)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500

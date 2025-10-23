@@ -73,6 +73,45 @@ def get_user_by_userid(userid: int):
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
 
+@user_bp.route("/users/search", methods=["GET"])
+def search_users():
+    """
+    Search users for mention suggestions.
+    
+    Query parameters:
+    - q: Search query (username or email substring)
+    - limit: Maximum number of results (default: 10)
+    
+    Returns:
+    {
+        "data": [ ... list of matching users ... ],
+        "status": 200
+    }
+    
+    Responses:
+        200: Users found and returned
+        400: Missing search query
+        500: Internal Server Error
+    """
+    try:
+        search_query = request.args.get("q", "").strip()
+        limit = int(request.args.get("limit", 10))
+        
+        if not search_query:
+            return jsonify({"error": "Search query 'q' is required", "status": 400}), 400
+        
+        if limit > 50:
+            limit = 50  # Cap at 50 results
+        
+        result = service.search_users(search_query, limit)
+        status_code = result.pop("status", 200)
+        
+        return jsonify(result), status_code
+        
+    except ValueError as ve:
+        return jsonify({"error": str(ve), "status": 400}), 400
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
 
 @user_bp.route("/users/<int:userid>", methods=["PUT", "PATCH"])
 def update_user_by_userid(userid: int):

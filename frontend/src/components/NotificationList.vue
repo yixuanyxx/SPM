@@ -181,7 +181,7 @@ function getNotificationColor(type) {
 }
 
 function formatNotificationType(type) {
-  return type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())
+  return notificationUtils.formatNotificationType(type)
 }
 </script>
 

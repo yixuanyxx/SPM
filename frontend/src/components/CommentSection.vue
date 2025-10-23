@@ -16,14 +16,41 @@
         class="user-avatar-small"
       />
       <div class="comment-input-wrapper">
-        <input
-          v-model="newComment"
-          type="text"
-          placeholder="Add a comment..."
-          class="comment-input"
-          @focus="showCommentForm = true"
-          :class="{ 'input-focused': showCommentForm }"
-        />
+        <div class="mention-input-container">
+          <input
+            ref="commentInput"
+            v-model="newComment"
+            type="text"
+            placeholder="Add a comment... (use @ to mention users)"
+            class="comment-input"
+            @focus="showCommentForm = true"
+            @input="handleInput"
+            @keydown="handleKeydown"
+            :class="{ 'input-focused': showCommentForm }"
+          />
+          <!-- Mention suggestions dropdown -->
+          <div 
+            v-if="showMentionSuggestions && mentionSuggestions.length > 0"
+            class="mention-suggestions"
+          >
+            <div 
+              v-for="(user, index) in mentionSuggestions"
+              :key="user.userid"
+              @click="selectMention(user)"
+              :class="['mention-suggestion', { active: selectedMentionIndex === index }]"
+            >
+              <img 
+                :src="getUserAvatar(user.userid, user.name)" 
+                :alt="user.name"
+                class="mention-avatar"
+              />
+              <div class="mention-info">
+                <div class="mention-name">{{ user.name }}</div>
+                <div class="mention-username">@{{ user.username }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
         <div v-if="showCommentForm" class="comment-form-actions">
           <button 
             @click="cancelComment"
@@ -162,6 +189,7 @@ const emit = defineEmits(['comments-updated'])
 
 // Configuration
 const COMMENTS_API_URL = import.meta.env.VITE_COMMENTS_API_URL || 'http://localhost:5008'
+const USERS_API_URL = import.meta.env.VITE_USERS_API_URL || 'http://localhost:5003'
 
 // User data
 const userData = getCurrentUserData()
@@ -179,6 +207,14 @@ const isLoading = ref(false)
 const editingCommentId = ref(null)
 const deleteConfirmationId = ref(null)
 const showDeleteConfirm = ref(false)
+
+// Mention functionality
+const commentInput = ref(null)
+const showMentionSuggestions = ref(false)
+const mentionSuggestions = ref([])
+const selectedMentionIndex = ref(-1)
+const mentionStartPosition = ref(-1)
+const mentionQuery = ref('')
 
 // Toast state
 const toast = ref({
@@ -329,6 +365,7 @@ const cancelComment = () => {
   newComment.value = ''
   showCommentForm.value = false
   editingCommentId.value = null
+  hideMentionSuggestions()
 }
 
 // Edit comment
@@ -377,6 +414,121 @@ const confirmDelete = async () => {
 const cancelDelete = () => {
   showDeleteConfirm.value = false
   deleteConfirmationId.value = null
+}
+
+// Mention functionality methods
+const handleInput = (event) => {
+  const value = event.target.value
+  const cursorPosition = event.target.selectionStart
+  
+  // Check if user is typing @mention
+  const lastAtIndex = value.lastIndexOf('@', cursorPosition - 1)
+  
+  if (lastAtIndex !== -1) {
+    // Check if there's no space between @ and cursor
+    const textAfterAt = value.substring(lastAtIndex + 1, cursorPosition)
+    if (!textAfterAt.includes(' ')) {
+      mentionStartPosition.value = lastAtIndex
+      mentionQuery.value = textAfterAt
+      
+      if (textAfterAt.length >= 0) {
+        searchUsers(mentionQuery.value)
+      }
+      return
+    }
+  }
+  
+  // Hide suggestions if not in mention mode
+  hideMentionSuggestions()
+}
+
+const handleKeydown = (event) => {
+  if (!showMentionSuggestions.value || mentionSuggestions.value.length === 0) {
+    return
+  }
+  
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      selectedMentionIndex.value = Math.min(
+        selectedMentionIndex.value + 1,
+        mentionSuggestions.value.length - 1
+      )
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      selectedMentionIndex.value = Math.max(selectedMentionIndex.value - 1, 0)
+      break
+    case 'Enter':
+      event.preventDefault()
+      if (selectedMentionIndex.value >= 0) {
+        selectMention(mentionSuggestions.value[selectedMentionIndex.value])
+      }
+      break
+    case 'Escape':
+      event.preventDefault()
+      hideMentionSuggestions()
+      break
+  }
+}
+
+const searchUsers = async (query) => {
+  if (!query || query.length < 1) {
+    mentionSuggestions.value = []
+    showMentionSuggestions.value = false
+    return
+  }
+  
+  try {
+    const response = await fetch(`${USERS_API_URL}/users/search?q=${encodeURIComponent(query)}&limit=5`)
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const data = await response.json()
+    
+    if (data && data.data) {
+      mentionSuggestions.value = data.data
+      showMentionSuggestions.value = true
+      selectedMentionIndex.value = 0
+    } else {
+      mentionSuggestions.value = []
+      showMentionSuggestions.value = false
+    }
+  } catch (error) {
+    console.error('Error searching users:', error)
+    mentionSuggestions.value = []
+    showMentionSuggestions.value = false
+  }
+}
+
+const selectMention = (user) => {
+  if (!user) return
+  
+  const beforeMention = newComment.value.substring(0, mentionStartPosition.value)
+  const afterMention = newComment.value.substring(mentionStartPosition.value + 1 + mentionQuery.value.length)
+  
+  newComment.value = beforeMention + `@${user.username}` + afterMention
+  
+  hideMentionSuggestions()
+  
+  // Focus back to input and position cursor after mention
+  setTimeout(() => {
+    if (commentInput.value) {
+      const newPosition = beforeMention.length + user.username.length + 2 // +2 for @
+      commentInput.value.focus()
+      commentInput.value.setSelectionRange(newPosition, newPosition)
+    }
+  }, 0)
+}
+
+const hideMentionSuggestions = () => {
+  showMentionSuggestions.value = false
+  mentionSuggestions.value = []
+  selectedMentionIndex.value = -1
+  mentionStartPosition.value = -1
+  mentionQuery.value = ''
 }
 
 // Check if comment has been edited
@@ -867,5 +1019,69 @@ watch(() => props.taskId, (newTaskId) => {
   to {
     opacity: 1;
   }
+}
+
+/* Mention functionality styles */
+.mention-input-container {
+  position: relative;
+  width: 100%;
+}
+
+.mention-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 2px;
+}
+
+.mention-suggestion {
+  display: flex;
+  align-items: center;
+  padding: 0.75rem;
+  cursor: pointer;
+  border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
+}
+
+.mention-suggestion:last-child {
+  border-bottom: none;
+}
+
+.mention-suggestion:hover,
+.mention-suggestion.active {
+  background-color: #f8fafc;
+}
+
+.mention-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  margin-right: 0.75rem;
+  flex-shrink: 0;
+}
+
+.mention-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mention-name {
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.9rem;
+  margin-bottom: 0.125rem;
+}
+
+.mention-username {
+  color: #6b7280;
+  font-size: 0.8rem;
 }
 </style>

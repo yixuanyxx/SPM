@@ -194,3 +194,47 @@ class UserService:
         # Update using the existing update method
         return self.update_user_by_userid(userid, {"notification_preferences": preferences})
 
+    def search_users(self, search_query: str, limit: int = 10) -> Dict[str, Any]:
+        """
+        Search users for mention suggestions.
+        Searches by username (extracted from email) and email.
+        """
+        try:
+            # Search users by email substring
+            users_data = self.repo.search_users_by_email(search_query)
+            
+            # Filter and limit results
+            filtered_users = []
+            for user_data in users_data:
+                if len(filtered_users) >= limit:
+                    break
+                    
+                # Extract username from email for additional matching
+                email = user_data.get('email', '')
+                if email:
+                    username = email.split('@')[0] if '@' in email else email
+                    
+                    # Check if search query matches username or email
+                    if (search_query.lower() in email.lower() or 
+                        search_query.lower() in username.lower()):
+                        
+                        # Convert to User object for validation
+                        try:
+                            user = User(**user_data)
+                            # Add username field for frontend convenience
+                            user_dict = user.__dict__
+                            user_dict['username'] = username
+                            filtered_users.append(user_dict)
+                        except Exception as e:
+                            print(f"Warning: Failed to parse user data: {str(e)}")
+                            continue
+
+            return {
+                "status": 200,
+                "message": f"Found {len(filtered_users)} user(s) matching '{search_query}'",
+                "data": filtered_users
+            }
+            
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to search users: {str(e)}"}
+

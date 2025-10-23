@@ -113,6 +113,9 @@ export const notificationUtils = {
     const iconMap = {
       'task_assigned': 'bi-person-check',
       'task_updated': 'bi-pencil-square',
+      'comment_mention': 'bi-at',
+      'comment_collaborator': 'bi-chat-dots',
+      'due_date_reminder': 'bi-clock',
       'general': 'bi-info-circle',
       'system': 'bi-gear'
     };
@@ -124,6 +127,9 @@ export const notificationUtils = {
     const colorMap = {
       'task_assigned': '#10b981', // green
       'task_updated': '#f59e0b',  // amber
+      'comment_mention': '#8b5cf6', // purple
+      'comment_collaborator': '#06b6d4', // cyan
+      'due_date_reminder': '#ef4444', // red
       'general': '#3b82f6',       // blue
       'system': '#6b7280'         // gray
     };
@@ -134,6 +140,56 @@ export const notificationUtils = {
   truncateText(text, maxLength = 100) {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
+  },
+
+  // Format notification type for display
+  formatNotificationType(type) {
+    const typeMap = {
+      'task_assigned': 'Task Assignment',
+      'task_updated': 'Task Update',
+      'comment_mention': 'Comment Mention',
+      'comment_collaborator': 'New Comment',
+      'due_date_reminder': 'Deadline Reminder',
+      'general': 'General',
+      'system': 'System'
+    };
+    return typeMap[type] || 'Notification';
+  },
+
+  // Get notification title based on type and content
+  getNotificationTitle(notification) {
+    const content = notification.notification || '';
+    const type = notification.notification_type;
+    
+    // Check for deadline reminder notifications first
+    if (type === 'due_date_reminder') {
+      return 'Deadline Reminder';
+    }
+    
+    // Check for comment notifications
+    if (type === 'comment_mention') {
+      return 'You Were Mentioned in a Comment';
+    } else if (type === 'comment_collaborator') {
+      return 'New Comment on Your Task';
+    }
+    
+    // Check for existing notification patterns
+    if (content.includes('Comment Mention Summary')) {
+      return 'You Were Mentioned in a Comment';
+    } else if (content.includes('New Comment Summary')) {
+      return 'New Comment on Your Task';
+    } else if (content.includes('Task Update Summary')) {
+      return 'A Task Has Been Updated';
+    } else if (content.includes('Project Assignment Summary')) {
+      return 'You Have Been Assigned as a Collaborator of a Project';
+    } else if (content.includes('added as a collaborator') || content.includes('Your Role: Collaborator')) {
+      return 'You Have Been Assigned as a Collaborator of a Task';
+    } else if (content.includes('assigned as the new owner') || content.includes('Your Role: Owner')) {
+      return 'You Have Been Assigned as the Owner of a Task';
+    }
+    
+    // Default fallback based on type
+    return this.formatNotificationType(type);
   }
 };
 

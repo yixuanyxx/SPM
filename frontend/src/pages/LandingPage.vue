@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router'
 import SideNavbar from '../components/SideNavbar.vue'
 import { sessionState } from '../services/session'
 import { logout } from '../services/auth'
-import { notificationStore, userPreferencesService } from '../services/notifications'
+import { notificationStore, userPreferencesService, notificationUtils } from '../services/notifications'
 import './taskview/taskview.css'
 
 const router = useRouter()
@@ -224,18 +224,8 @@ function formatNotificationText(text) {
 }
 
 function getNotificationTitle(notification) {
-  // Extract title from notification content
-  const content = notification.notification
-  if (content.includes('Task Update Summary')) {
-    return 'A Task Has Been Updated'
-  } else if (content.includes('Project Assignment Summary')) {
-    return 'You Have Been Assigned as a Collaborator of a Project'
-  } else if (content.includes('added as a collaborator') || (content.includes('Your Role: Collaborator'))) {
-    return 'You Have Been Assigned as a Collaborator of a Task'
-  } else if (content.includes('assigned as the new owner') || (content.includes('Your Role: Owner'))) {
-    return 'You Have Been Assigned as the Owner of a Task'
-  }
-  return 'Notification'
+  // Use the notification utilities function for consistent title handling
+  return notificationUtils.getNotificationTitle(notification)
 }
 
 function viewAllNotifications() {
