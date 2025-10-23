@@ -66,7 +66,7 @@ def get_user_by_userid(userid: int):
     """
     try:
         result = service.get_user_by_userid(userid)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -108,7 +108,7 @@ def update_user_by_userid(userid: int):
         
         # Call service to update user
         result = service.update_user_by_userid(userid, data)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         
@@ -194,7 +194,7 @@ def search_users_by_email():
             return jsonify({"message": "No search query provided", "data": [], "status": 400}), 400
 
         result = service.search_users_by_email(email_query)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         return jsonify(result), status_code
 
     except Exception as e:
@@ -231,7 +231,7 @@ def update_notification_preferences(userid: int):
         
         # Call service to update notification preferences
         result = service.update_notification_preferences(userid, data)
-        status_code = result.pop("status", 200)
+        status_code = result.get("status", 200)
         
         return jsonify(result), status_code
         

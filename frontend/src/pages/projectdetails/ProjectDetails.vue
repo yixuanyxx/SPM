@@ -8,7 +8,6 @@
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">
-          <i class="bi bi-arrow-clockwise spin"></i>
         </div>
         <p>Loading project details...</p>
       </div>

@@ -52,6 +52,11 @@ class UserService:
             # Return updated User object
             updated_user = User(**updated_user_data)
             return {"status": 200, "message": f"User {userid} updated successfully", "data": updated_user.__dict__}
+        except RuntimeError as e:
+            # Handle case where user was not found during update
+            if "not found" in str(e):
+                return {"status": 404, "message": f"User with userid {userid} not found"}
+            return {"status": 500, "message": f"Failed to update user: {str(e)}"}
         except Exception as e:
             return {"status": 500, "message": f"Failed to update user: {str(e)}"}
 

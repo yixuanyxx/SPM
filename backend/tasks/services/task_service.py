@@ -86,6 +86,8 @@ class TaskService:
         """
         Create a subtask and automatically update the parent task's subtasks list.
         """
+        print(f"DEBUG: manager_create_subtask called with payload: {payload}")
+        
         # Check that parent task exists
         parent_task_id = payload.get("parent_task")
         if not parent_task_id:
@@ -97,6 +99,7 @@ class TaskService:
         
         # Ensure type is set to subtask
         payload["type"] = "subtask"
+        print(f"DEBUG: manager_create_subtask - payload after type setting: {payload}")
         
         # Create the subtask using the regular create method
         result = self.manager_create(payload)
@@ -457,6 +460,8 @@ class TaskService:
         Create a subtask for staff and automatically add owner_id to collaborators list.
         Also updates the parent task's subtasks list.
         """
+        print(f"DEBUG: staff_create_subtask called with payload: {payload}")
+        
         # Check that parent task exists
         parent_task_id = payload.get("parent_task")
         if not parent_task_id:
@@ -481,6 +486,7 @@ class TaskService:
         # Update payload with modified collaborators and ensure type is subtask
         payload["collaborators"] = collaborators
         payload["type"] = "subtask"
+        print(f"DEBUG: staff_create_subtask - payload after adding owner: {payload}")
         
         # Create the subtask using the regular manager_create method
         result = self.manager_create(payload)
