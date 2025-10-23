@@ -192,7 +192,25 @@
               <option value="bi-weekly">Bi-Weekly</option>
               <option value="monthly">Monthly</option>
               <option value="yearly">Yearly</option>
+              <option value="custom">Custom</option>
             </select>
+          </div>
+
+          <div
+            v-if="newTask.recurrence_type === 'custom'"
+            class="form-group"
+          >
+            <label for="recurrence_interval_days">Repeat Every (Days)<span style="color: red">*</span></label>
+            <input
+              type="number"
+              id="recurrence_interval_days"
+              v-model.number="newTask.recurrence_interval_days"
+              min="1"
+              placeholder="Enter number of days (e.g. 10)"
+              :disabled="isLoading"
+              :required="newTask.recurrence_type === 'custom'"
+              class="form-input"
+            />
           </div>
 
           <div v-if="newTask.recurrence_type !== null" class="form-group">
@@ -282,7 +300,8 @@ export default {
         subtasks: [], 
         recurrence_type: null,      
         recurrence_end_date: null,
-        reminder_intervals: ""
+        recurrence_interval_days: null,
+        reminder_intervals: "" 
       },
       newAttachmentFile: null,
       isLoading: false,
@@ -444,6 +463,14 @@ export default {
         }
       }
 
+      if (
+        this.newTask.recurrence_type === "custom" &&
+        (!this.newTask.recurrence_interval_days || this.newTask.recurrence_interval_days < 1)
+      ) {
+        this.errorMessage = "Please enter a valid recurrence interval (in days) for custom recurrence.";
+        return;
+      }
+
       this.isLoading = true;
       this.errorMessage = "";
       this.successMessage = "";
@@ -497,6 +524,12 @@ export default {
             formData.append("recurrence_end_date", endUTC);
           } else {
             formData.append("recurrence_end_date", "");
+          }
+          if (this.newTask.recurrence_type === "custom" && this.newTask.recurrence_interval_days) {
+            formData.append(
+              "recurrence_interval_days",
+              this.newTask.recurrence_interval_days
+            );
           }
         } else {
           formData.append("recurrence_type", "None");
@@ -630,6 +663,7 @@ export default {
         subtasks: [], 
         recurrence_type: null, 
         recurrence_end_date: null,
+        recurrence_interval_days: null,
         reminder_intervals: ""
       };
       
