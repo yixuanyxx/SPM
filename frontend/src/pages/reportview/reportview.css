@@ -151,3 +151,13 @@ h1 {
 .report-form button:hover {
   background-color: #2563eb;
 }
+
+.report-status {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #f0f9ff;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  color: #1e40af;
+  text-align: center;
+}
