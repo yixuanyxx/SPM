@@ -877,7 +877,7 @@
             </label>
             <select v-model="selectedMemberFilter" class="filter-select">
               <option value="">All Members</option>
-              <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+              <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
                 {{ member.name }}
               </option>
             </select>
@@ -976,6 +976,71 @@ const appliedStatusFilters = ref([])
 const currentView = ref('week')
 const currentDate = ref(new Date())
 const selectedTask = ref(null)
+const showFilterPopup = ref(false) 
+const projects = ref([])
+const selectedProjectFilter = ref('')
+const selectedStatusFilters = ref([])
+
+const toggleFilterPopup = () => {
+  showFilterPopup.value = !showFilterPopup.value
+  if (showFilterPopup.value && projects.value.length === 0) fetchProjects()
+}
+
+const closeFilterPopup = () => (showFilterPopup.value = false)
+
+const clearFilters = () => {
+  selectedProjectFilter.value = ''
+  selectedStatusFilters.value = []
+  selectedMemberFilter.value = ''
+  appliedProjectFilter.value = ''
+  appliedStatusFilters.value = []
+  appliedMemberFilter.value = ''
+}
+
+const applyFilters = () => {
+  appliedProjectFilter.value = selectedProjectFilter.value
+  appliedStatusFilters.value = [...selectedStatusFilters.value]
+  appliedMemberFilter.value = selectedMemberFilter.value
+  closeFilterPopup()
+}
+
+const activeFilterCount = computed(() => {
+  let count = 0
+  if (appliedProjectFilter.value) count++
+  if (appliedStatusFilters.value.length > 0) count += appliedStatusFilters.value.length
+  if (appliedMemberFilter.value) count++
+  return count
+})
+
+
+const fetchProjects = async () => {
+  try {
+    if (!departmentMembers.value?.length) return
+
+    // Fetch projects for each team member
+    const projectPromises = departmentMembers.value.map(async member => {
+      const res = await fetch(`http://127.0.0.1:5001/projects/user/${member.userid}`)
+      if (!res.ok) return [] // skip if 404
+      const data = await res.json()
+      return Array.isArray(data.data)
+        ? data.data.map(p => ({ id: p.id, name: p.proj_name }))
+        : []
+    })
+
+    const projectsPerMember = await Promise.all(projectPromises)
+    // Flatten and remove duplicates
+    const allProjects = projectsPerMember.flat()
+    const uniqueProjects = Array.from(
+      new Map(allProjects.map(p => [p.id, p])).values()
+    )
+
+    projects.value = uniqueProjects
+  } catch (err) {
+    console.error('Error fetching projects:', err)
+    projects.value = []
+  }
+}
+
 
 // Get user data from session
 onMounted(async () => {

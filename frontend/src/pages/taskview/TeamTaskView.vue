@@ -997,10 +997,21 @@ const fetchUserDetails = async (userid) => {
 
 // Function to get user names for display
 const getUserName = (userid) => {
-  if (!userid) return 'Unknown User'
-  const user = users.value[userid]
-  return user?.name || `User ${userid}`
-}
+  if (!userid) return 'Unknown User';
+
+  // Check cached users first
+  if (users.value[userid]?.name) return users.value[userid].name;
+
+  // Fallback: search teamMembers array
+  const member = teamMembers.value.find(u => u.id === userid);
+  if (member?.name) {
+    // Cache it for future use
+    users.value[userid] = member;
+    return member.name;
+  }
+
+  return `User ${userid}`;
+};
 
 // Function to fetch all users mentioned in tasks
 const fetchTaskUsers = async () => {
