@@ -262,6 +262,7 @@ const userRole = ref('')
 const currentUserEmail = ref('')
 const currentUserId = ref(null)
 const subtasksSectionRef = ref(null)
+const isLoading = ref(false)
 
 // Get user role and email on component mount
 import { getCurrentUserData } from '../services/session.js'
@@ -441,7 +442,9 @@ const addSubtask = () => {
       isCreator: u.isCreator || false
     })),
     recurrence_type: currentSubtask.value.recurrence_type || null,
-    recurrence_interval_days: currentSubtask.value.recurrence_type === 'custom' ? currentSubtask.value.recurrence_interval_days : null,
+    recurrence_interval_days: (currentSubtask.value.recurrence_type === 'custom' && currentSubtask.value.recurrence_interval_days) 
+      ? parseInt(currentSubtask.value.recurrence_interval_days) 
+      : null,
     recurrence_end_date: currentSubtask.value.recurrence_type ? currentSubtask.value.recurrence_end_date : null,
     id: Date.now()
   }
@@ -549,7 +552,17 @@ const resetForm = () => {
     recurrence_interval_days: null,
     recurrence_end_date: null
   }
-  selectedCollaborators.value = []
+  // Only auto-add creator for staff
+  if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
+    selectedCollaborators.value = [{
+      userid: currentUserId.value,
+      email: currentUserEmail.value,
+      isCreator: true
+    }]
+  } else {
+    selectedCollaborators.value = []
+  }
+  
   collaboratorQuery.value = ''
   collaboratorSuggestions.value = []
   editingIndex.value = null
@@ -574,7 +587,7 @@ const openFormWithCreator = () => {
     console.log('Creator added:', selectedCollaborators.value)
   } else {
     selectedCollaborators.value = []
-    console.log('No creator added - role is:', userRole.value)
+    console.log('Manager/Director - no auto-collaborator. Role is:', userRole.value)
   }
   
   showSubtaskForm.value = true
@@ -587,7 +600,23 @@ const toggleSubtaskForm = () => {
     showErrors.value = false
     showSubtaskForm.value = false
   } else {
-    openFormWithCreator()
+    // When opening the form
+    console.log('🔍 TOGGLE FORM - User Role:', userRole.value)
+    console.log('🔍 TOGGLE FORM - Is Staff?', userRole.value === 'staff')
+    
+    if (userRole.value === 'staff' && currentUserEmail.value && currentUserId.value) {
+      selectedCollaborators.value = [{
+        userid: currentUserId.value,
+        email: currentUserEmail.value,
+        isCreator: true
+      }]
+      console.log('✅ Staff - Creator added as collaborator')
+    } else {
+      selectedCollaborators.value = []
+      console.log('✅ Manager/Director - No auto-collaborator')
+    }
+    showSubtaskForm.value = true
+    scrollToForm()
   }
 }
 

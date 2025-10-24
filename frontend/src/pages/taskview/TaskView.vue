@@ -304,6 +304,7 @@
         <SubtaskForm 
           v-model="currentSubtasks"
           :parent-task="selectedTask"
+          :autoOpen="false"
         />
       </div>
       
@@ -586,6 +587,7 @@ const openSubtaskModal = (task) => {
   currentSubtasks.value = [] // Reset subtasks form
   isSubtaskModalVisible.value = true
   console.log('Opened subtask modal for task:', task.id)
+  console.log('User role:', userRole.value) // Add this log
 }
 
 const closeSubtaskModal = () => {
@@ -604,14 +606,14 @@ const saveSubtasks = async () => {
     // Prepare subtask data with required fields
     const subtasksToSave = currentSubtasks.value.map((subtask, idx) => {
       console.log(`Processing subtask ${idx}:`, subtask)
-      console.log(`Subtask collaborators:`, subtask.collaborators)
+      console.log(`Subtask recurrence_type:`, subtask.recurrence_type)
+      console.log(`Subtask recurrence_interval_days:`, subtask.recurrence_interval_days)
+      console.log(`Subtask recurrence_end_date:`, subtask.recurrence_end_date)
       
-      // Extract collaborator IDs from the collaborators array
+      // Extract collaborator IDs
       let collaboratorIds = []
       if (subtask.collaborators && subtask.collaborators.length > 0) {
         collaboratorIds = subtask.collaborators.map(collab => {
-          console.log(`Processing collaborator:`, collab, `Type:`, typeof collab)
-          // Handle both formats: {userid, email} and just ID
           if (typeof collab === 'object' && collab.userid) {
             return parseInt(collab.userid)
           }
@@ -631,7 +633,10 @@ const saveSubtasks = async () => {
         type: 'subtask',
         parent_task: selectedTask.value.id,
         project_id: selectedTask.value.project_id || null,
-        collaborators: collaboratorIds
+        collaborators: collaboratorIds,
+        recurrence_type: subtask.recurrence_type || null,
+        recurrence_interval_days: subtask.recurrence_interval_days || null,
+        recurrence_end_date: subtask.recurrence_end_date || null
       }
     })
 
@@ -651,22 +656,32 @@ const saveSubtasks = async () => {
       
       console.log('Processing subtask:', subtaskData)
       
-      // Append all fields to FormData
+      // Append all fields to FormData - HANDLE RECURRENCE EXPLICITLY
       Object.keys(subtaskData).forEach(key => {
         if (key === 'collaborators' && Array.isArray(subtaskData[key])) {
-          // Convert collaborators array to comma-separated string
           if (subtaskData[key].length > 0) {
             const collaboratorsString = subtaskData[key].join(',')
             console.log('Appending collaborators string:', collaboratorsString)
             formData.append('collaborators', collaboratorsString)
           }
-        } else if (subtaskData[key] !== null && subtaskData[key] !== undefined && subtaskData[key] !== '') {
+        } 
+        // Handle recurrence fields explicitly - append even if null
+        else if (key === 'recurrence_type' || key === 'recurrence_interval_days' || key === 'recurrence_end_date') {
+          if (subtaskData[key] !== null && subtaskData[key] !== undefined && subtaskData[key] !== '') {
+            console.log(`Appending recurrence field ${key}:`, subtaskData[key])
+            formData.append(key, subtaskData[key])
+          } else {
+            console.log(`Skipping null/empty recurrence field ${key}`)
+          }
+        }
+        else if (subtaskData[key] !== null && subtaskData[key] !== undefined && subtaskData[key] !== '') {
           console.log(`Appending ${key}:`, subtaskData[key])
           formData.append(key, subtaskData[key])
         }
       })
 
-      console.log('FormData entries:')
+      // Debug: Log all FormData entries
+      console.log('FormData entries before sending:')
       Array.from(formData.entries()).forEach(([key, value]) => {
         console.log(`  ${key}:`, value)
       })

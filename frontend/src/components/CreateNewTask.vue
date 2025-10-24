@@ -599,9 +599,19 @@ export default {
                 status: subtask.status || 'Ongoing',
                 project_id: this.newTask.project_id || null,
                 parent_task: createdParentTask.id,
-                collaborators: subtaskCollaboratorIds.length > 0 ? subtaskCollaboratorIds.join(',') : ''
+                collaborators: subtaskCollaboratorIds.length > 0 ? subtaskCollaboratorIds.join(',') : '',
+                recurrence_type: subtask.recurrence_type || null,
+                // ✅ FIX: Check explicitly for null/undefined, not falsy values
+                recurrence_interval_days: (subtask.recurrence_interval_days !== null && subtask.recurrence_interval_days !== undefined) 
+                  ? parseInt(subtask.recurrence_interval_days) 
+                  : null,
+                recurrence_end_date: subtask.recurrence_end_date || null
               };
 
+              console.log(`Creating subtask ${index + 1}/${this.newTask.subtasks.length}:`, subtaskData);
+              console.log(`  -> Recurrence type: ${subtaskData.recurrence_type}`);
+              console.log(`  -> Recurrence interval days: ${subtaskData.recurrence_interval_days}`);
+              console.log(`  -> Recurrence end date: ${subtaskData.recurrence_end_date}`);
               console.log(`Creating subtask ${index + 1}/${this.newTask.subtasks.length}:`, subtaskData);
 
               const subtaskRes = await fetch(subtaskEndpoint, {
