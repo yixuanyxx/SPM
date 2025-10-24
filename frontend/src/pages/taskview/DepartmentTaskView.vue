@@ -653,7 +653,7 @@
                     <div 
                       v-for="task in getTasksForDateAndHour(currentDate, hour - 1)" 
                       :key="task.id"
-                      class="task-card"
+                      class="task-event"
                       :class="[getStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
                       @click="selectTask(task)"
                     >
@@ -766,9 +766,8 @@
                       @click.stop="selectTask(task)"
                     >
                       <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
-                      <div class="task-box-name">{{ task.task_name }}</div>
-                      <div class="task-box-status">{{ task.status }}</div>
-                      <div class="task-box-owner">{{ getUserName(task.owner_id) }}</div>
+                      <div class="task-box-name" :class="getStatusClass(task.status)">{{ task.task_name }}</div>
+                      <div class="task-box-status" :class="getStatusClass(task.status)">{{ task.status }}</div>
                     </div>
                   </div>
                 </div>
@@ -777,6 +776,162 @@
           </div>
         </div>
       </div>
+      </div>
+    </div>
+
+    <!-- Task Details Modal -->
+    <div v-if="selectedTask" class="task-modal-overlay" @click="closeTaskModal">
+      <div class="task-modal" @click.stop>
+        <div class="modal-header">
+          <h3>{{ selectedTask.task_name }}</h3>
+          <button @click="closeTaskModal" class="close-btn">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="task-details">
+            <div class="detail-row">
+              <span class="label">Status:</span>
+              <span class="value" :class="getTaskStatusClass(selectedTask.status)">
+                {{ selectedTask.status }}
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Priority:</span>
+              <span class="value">{{ selectedTask.priority || 'N/A' }}</span>
+            </div>
+            <div class="detail-row" v-if="selectedTask.owner_id">
+              <span class="label">Owner:</span>
+              <span class="value">{{ getUserName(selectedTask.owner_id) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Due Date:</span>
+              <span class="value">{{ formatDate(selectedTask.due_date, 'EEEE, MMMM d, yyyy') }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Time:</span>
+              <span class="value">{{ formatTime(selectedTask.due_date) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Description:</span>
+              <span class="value">{{ selectedTask.description || 'No description' }}</span>
+            </div>
+            <div class="detail-row" v-if="selectedTask.collaborators && selectedTask.collaborators.length > 0">
+              <span class="label">Collaborators:</span>
+              <span class="value">{{ getCollaboratorNames(selectedTask.collaborators) }}</span>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button @click="navigateToTask(selectedTask.id)" class="view-task-btn">
+              <i class="bi bi-arrow-right"></i>
+              View Task Details
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reschedule Modal -->
+    <div v-if="showRescheduleModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Reschedule Task</h3>
+        <p><strong>{{ selectedTaskForReschedule?.task_name }}</strong></p>
+
+        <label for="newDueDate">New Due Date:</label>
+        <input id="newDueDate" type="datetime-local" v-model="newDueDate" class="date-picker" :min="todayString" />
+
+        <div class="modal-actions">
+          <button class="confirm-btn" @click="confirmReschedule">Save</button>
+          <button class="cancel-btn" @click="closeRescheduleModal">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Popup -->
+    <div v-if="successMessage" class="success-popup">
+      {{ successMessage }}
+    </div>
+
+    <!-- Error Popup -->
+    <div v-if="errorMessage" class="error-popup">
+      <span>{{ errorMessage }}</span>
+      <button class="close-btn" @click="errorMessage = ''">&times;</button>
+    </div>
+
+    <!-- Filter Popup -->
+    <div v-if="showFilterPopup" class="filter-popup-overlay" @click="closeFilterPopup">
+      <div class="filter-popup" @click.stop>
+        <div class="filter-header">
+          <h3>Filter Tasks</h3>
+          <button @click="closeFilterPopup" class="close-btn">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      
+        <div class="filter-body">
+          <!-- Member Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-person"></i>
+              Member
+            </label>
+            <select v-model="selectedMemberFilter" class="filter-select">
+              <option value="">All Members</option>
+              <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                {{ member.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Project Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-folder"></i>
+              Project
+            </label>
+            <select v-model="selectedProjectFilter" class="filter-select">
+              <option value="">All Projects</option>
+              <option v-for="project in projects" :key="project.id" :value="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-check-circle"></i>
+              Status
+            </label>
+            <div class="status-checkboxes">
+              <label class="checkbox-label">
+                <input type="checkbox" value="Unassigned" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-unassigned"></span>
+               Unassigned
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Ongoing" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-ongoing"></span>
+                Ongoing
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Under Review" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-under-review"></span>
+                Under Review
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Completed" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-completed"></span>
+                Completed
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button @click="clearFilters" class="clear-btn">Clear All</button>
+          <button @click="applyFilters" class="apply-btn">Apply Filters</button>
+        </div>
       </div>
     </div>
   </div>
@@ -820,6 +975,7 @@ const appliedProjectFilter = ref('')
 const appliedStatusFilters = ref([])
 const currentView = ref('week')
 const currentDate = ref(new Date())
+const selectedTask = ref(null)
 
 // Get user data from session
 onMounted(async () => {
@@ -1406,20 +1562,36 @@ const formatDate = (date, formatStr = 'd MMM yyyy') => {
   if (!date) return ''
   const d = new Date(date)
 
-  // simple formatter
   const options = {}
-  if (formatStr === 'EEE') {
-    options.weekday = 'short'
-  } else if (formatStr === 'd') {
-    options.day = 'numeric'
-  } else if (formatStr === 'd MMM yyyy') {
-    options.day = 'numeric'
-    options.month = 'short'
-    options.year = 'numeric'
+
+  switch (formatStr) {
+    case 'EEE':
+      options.weekday = 'short'
+      break
+    case 'EEEE, MMMM d, yyyy':
+      options.weekday = 'long'
+      options.month = 'long'
+      options.day = 'numeric'
+      options.year = 'numeric'
+      break
+    case 'd':
+      options.day = 'numeric'
+      break
+    case 'd MMM yyyy':
+      options.day = 'numeric'
+      options.month = 'short'
+      options.year = 'numeric'
+      break
+    default:
+      options.day = 'numeric'
+      options.month = 'short'
+      options.year = 'numeric'
+      break
   }
 
   return d.toLocaleDateString('en-US', options)
 }
+
 
 const formatTime = (date) => {
   if (!date) return ''
@@ -1578,19 +1750,40 @@ const goToToday = () => {
 
 // Calendar computed properties
 const currentPeriodTitle = computed(() => {
-  switch (currentView.value) {
-    case 'day':
-      return formatDate(currentDate.value, 'EEEE, MMMM d, yyyy')
-    case 'week':
-      const weekStart = getWeekStart(currentDate.value)
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      return `${formatDate(weekStart, 'MMM d')} - ${formatDate(weekEnd, 'MMM d, yyyy')}`
-    case 'month':
-      return formatDate(currentDate.value, 'MMMM yyyy')
-    default:
-      return ''
+  const current = new Date(currentDate.value)
+
+  if (currentView.value === 'day') {
+    // Day view: Friday, October 24, 2025
+    return current.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
   }
+
+  if (currentView.value === 'week' && weekDays.value.length > 0) {
+    const start = new Date(weekDays.value[0].date)
+    const end = new Date(weekDays.value[weekDays.value.length - 1].date)
+
+    const startDay = start.getDate()
+    const endDay = end.getDate()
+    const startMonth = start.toLocaleString('default', { month: 'short' })
+    const endMonth = end.toLocaleString('default', { month: 'short' })
+    const startYear = start.getFullYear()
+    const endYear = end.getFullYear()
+
+    // Same year
+    if (startYear === endYear) {
+      return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${startYear}`
+    } else {
+      // Different years
+      return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`
+    }
+  }
+
+  // Month view fallback
+  return current.toLocaleString('default', { month: 'long', year: 'numeric' })
 })
 
 const weekDays = computed(() => {
@@ -1659,6 +1852,13 @@ const hasActiveFilters = computed(() =>
   appliedProjectFilter.value !== '' || appliedStatusFilters.value.length > 0 || appliedMemberFilter.value !== ''
 )
 
+const getCollaboratorNames = (collaborators) => {
+  if (!collaborators?.length) return ''
+  return collaborators
+    .map(id => getUserName(id))
+    .join(', ')
+}
+
 // Add a computed property for calendar-compatible tasks
 const calendarTasks = computed(() => {
   return displayedTasks.value.map(task => ({
@@ -1694,11 +1894,13 @@ const getTasksForDateAndHour = (date, hour) => {
   })
 }
 
-const selectedTask = ref(null)
-
 // Task modal and actions
 const selectTask = (task) => {
   selectedTask.value = task
+}
+
+const closeTaskModal = () => {
+  selectedTask.value = null
 }
 
 const selectDate = (date) => {
@@ -1804,6 +2006,22 @@ const markAsCompleted = async (task) => {
     showError('Error marking task as completed.');
   }
 };
+
+const getTaskStatusClass = (status) => {
+  if (!status) return ''
+  switch (status.toLowerCase()) {
+    case 'unassigned':
+      return 'status-unassigned'
+    case 'ongoing':
+      return 'status-ongoing'
+    case 'under review':
+      return 'status-under-review'
+    case 'completed':
+      return 'status-completed'
+    default:
+      return ''
+  }
+}
 
 </script>
 
@@ -2020,31 +2238,61 @@ const markAsCompleted = async (task) => {
   font-size: 1rem;
 }
 
-.task-item.ongoing { background: #fef3c7;
+.task-item.ongoing, 
+.task-box.ongoing 
+{ background: #fef3c7;
   color: #d97706; }
 
-.task-item.under-review { background: #e0e7ff;
+.task-item.under-review, 
+.task-box.under-review  
+{ background: #e0e7ff;
   color: #6366f1;}
 
-.task-item.completed { 
+.task-item.completed, 
+.task-box.completed
+{ 
   background: #d1fae5;
   color: #059669;
   opacity: 0.6;}
 
-.task-item.completed .task-title{
+.task-item.completed .task-title,
+.task-box-name.completed
+{
   text-decoration: line-through;
 }
 
-.task-item.unassigned { background: #f3f4f6;
+.task-item.unassigned, 
+.task-box.unassigned 
+{ background: #f3f4f6;
   color: #374151; }
-.task-card.overdue-task,
+
+.task-event.ongoing { background: #fef3c7;
+  color: #d97706; }
+
+.task-event.under-review { background: #e0e7ff;
+  color: #6366f1;}
+
+.task-event.completed { 
+  background: #d1fae5;
+  color: #059669;
+  opacity: 0.6;}
+
+.task-event.completed .task-title{
+  text-decoration: line-through;
+}
+
+.task-event.unassigned { background: #f3f4f6;
+  color: #374151; }
+
+.task-event.overdue-task,
 .task-item.overdue-task,
 .task-box.overdue-task {
   background-color:#fee2e2; ; 
   color: #dc2626; 
 }
 
-.task-status-badge {
+.task-status-badge,
+.task-box-status {
   font-size: 0.7rem;
   font-weight: 500;
   padding: 0.125rem 0.375rem;
@@ -2053,24 +2301,47 @@ const markAsCompleted = async (task) => {
   white-space: nowrap;
 }
 
-.task-status-badge.unassigned {
+.task-status-badge.unassigned,
+.task-box-status.unassigned {
   background: #6b7280;
   color: white;
 }
 
-.task-status-badge.ongoing {
+.task-status-badge.ongoing, 
+.task-box-status.ongoing {
   background: #d97706;
   color: white;
 }
 
-.task-status-badge.under-review {
+.task-status-badge.under-review,
+.task-box-status.under-review {
   background: #6366f1;
   color: white;
 }
 
-.task-status-badge.completed {
+.task-status-badge.completed, 
+.task-box-status.completed {
   background: #059669;
   color: white;
+}
+
+.view-task-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-task-btn:hover {
+  background: #2563eb;
 }
 
 @keyframes fadeInUp {
