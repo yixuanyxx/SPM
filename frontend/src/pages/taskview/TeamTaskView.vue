@@ -1469,19 +1469,40 @@ const goToToday = () => {
 
 // Calendar computed properties
 const currentPeriodTitle = computed(() => {
-  switch (currentView.value) {
-    case 'day':
-      return formatDate(currentDate.value, 'EEEE, MMMM d, yyyy')
-    case 'week':
-      const weekStart = getWeekStart(currentDate.value)
-      const weekEnd = new Date(weekStart)
-      weekEnd.setDate(weekStart.getDate() + 6)
-      return `${formatDate(weekStart, 'MMM d')} - ${formatDate(weekEnd, 'MMM d, yyyy')}`
-    case 'month':
-      return formatDate(currentDate.value, 'MMMM yyyy')
-    default:
-      return ''
+  const current = new Date(currentDate.value)
+
+  if (currentView.value === 'day') {
+    // Day view: Friday, October 24, 2025
+    return current.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
   }
+
+  if (currentView.value === 'week' && weekDays.value.length > 0) {
+    const start = new Date(weekDays.value[0].date)
+    const end = new Date(weekDays.value[weekDays.value.length - 1].date)
+
+    const startDay = start.getDate()
+    const endDay = end.getDate()
+    const startMonth = start.toLocaleString('default', { month: 'short' })
+    const endMonth = end.toLocaleString('default', { month: 'short' })
+    const startYear = start.getFullYear()
+    const endYear = end.getFullYear()
+
+    // Same year
+    if (startYear === endYear) {
+      return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${startYear}`
+    } else {
+      // Different years
+      return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`
+    }
+  }
+
+  // Month view fallback
+  return current.toLocaleString('default', { month: 'long', year: 'numeric' })
 })
 
 const weekDays = computed(() => {

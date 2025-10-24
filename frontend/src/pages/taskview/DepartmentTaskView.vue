@@ -36,6 +36,14 @@
               <i class="bi bi-list-task"></i>
               Task View
             </button>
+            <button 
+              class="view-toggle-btn" 
+              :class="{ active: viewMode === 'schedule' }"
+              @click="viewMode = 'schedule'"
+            >
+              <i class="bi bi-list-task"></i>
+              Schedule View
+            </button>
           </div>
         </div>
       </div>
@@ -380,7 +388,7 @@
       </div>
 
       <!-- Task View -->
-      <div v-else class="tasks-view">
+      <div v-if="viewMode === 'tasks'" class="tasks-view">
 
         <!-- Sort Controls -->
         <div class="sort-controls">
@@ -567,9 +575,366 @@
         </div>
         </div>
       </div>
+
+      <!-- Department Schedule View -->
+      <div v-if="viewMode === 'schedule'" class="department-schedule-view">
+        <div class="calendar-controls">
+          <div class="view-toggle">
+            <button 
+              v-for="view in calendarViews" 
+              :key="view.value"
+              @click="currentView = view.value"
+              :class="['view-btn', { active: currentView === view.value }]"
+            >
+              <i :class="view.icon"></i>
+              {{ view.label }}
+            </button>
+          </div>
+        
+          <div class="date-navigation">
+            <button @click="previousPeriod" class="nav-btn">
+              <i class="bi bi-chevron-left"></i>
+            </button>
+            <h2 class="current-period">{{ currentPeriodTitle }}</h2>
+            <button @click="nextPeriod" class="nav-btn">
+              <i class="bi bi-chevron-right"></i>
+            </button>
+          </div>
+        
+          <div class="action-buttons">
+            <button @click="toggleShowCompleted" class="toggle-completed-btn">
+              <i :class="showCompleted ? 'bi bi-eye-slash' : 'bi bi-eye'"></i>
+              {{ showCompleted ? 'Hide Completed' : 'Show Completed' }}
+            </button>
+            <button @click="toggleFilterPopup" class="filter-button">
+              <i class="bi bi-funnel"></i>
+              Filter
+              <span v-if="hasActiveFilters" class="filter-badge">{{ activeFilterCount }}</span>
+            </button>
+            <button @click="goToToday" class="today-button">
+              <i class="bi bi-calendar-check"></i>
+              Today
+            </button>
+          </div>
+        </div>
+
+        <!-- Calendar Content -->
+        <div class="calendar-container">
+          <!-- Loading State -->
+          <div v-if="isLoadingTasks" class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading team schedule...</p>
+          </div>
+        
+          <!-- Empty State -->
+          <div v-else-if="!isLoadingTasks && displayedTasks.length === 0" class="empty-state">
+            <div class="empty-icon">
+              <i class="bi bi-calendar-x"></i>
+            </div>
+            <h3>No tasks found</h3>
+            <p>{{ appliedMemberFilter.value ? 'This member has no scheduled tasks.' : 'Your team has no scheduled tasks.' }}</p>
+          </div>
+
+          <!-- Calendar Views -->
+          <div v-else>
+            <!-- Daily View -->
+            <div v-if="currentView === 'day'" class="daily-view">
+              <div class="day-header">
+                <h3>{{ formatDate(currentDate, 'EEEE, MMMM d, yyyy') }}</h3>
+                <div class="day-stats">
+                  <span class="task-count">{{ getTasksForDate(currentDate).length }} tasks</span>
+                </div>
+              </div>
+            
+              <div class="day-timeline">
+                <div v-for="hour in 24" :key="hour" class="time-slot">
+                  <div class="time-label">{{ formatHour(hour - 1) }}</div>
+                  <div class="time-content">
+                    <div 
+                      v-for="task in getTasksForDateAndHour(currentDate, hour - 1)" 
+                      :key="task.id"
+                      class="task-event"
+                      :class="[getStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                      @click="selectTask(task)"
+                    >
+                      <div v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</div>
+                      <div class="task-title">{{ task.task_name}}</div>
+                      <div class="task-meta">
+                        <div class="task-status-badge" :class="getStatusClass(task.status)">
+                          {{ task.status }}
+                        </div>
+                        <div class="task-time">{{ formatTime(task.due_date) }}</div>
+                        <div v-if="task.owner_id" class="task-owner">
+                          <i class="bi bi-person"></i>
+                          {{ getUserName(task.owner_id) }}
+                        </div>
+                      </div>
+                      <button 
+                        v-if="isTaskOverdue(task)&& task.owner_id === userId" 
+                        class="reschedule-btn" 
+                        @click.stop="openRescheduleModal(task)"
+                      >
+                        Reschedule
+                      </button>
+
+                      <button
+                        v-if="isTaskOverdue(task)&& task.owner_id === userId"
+                        @click="markAsCompleted(task)"
+                        class="btn-complete"
+                      >
+                        Mark as Completed
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Weekly View -->
+            <div v-if="currentView === 'week'" class="weekly-view">
+              <div class="week-header">
+                <div class="day-header" v-for="day in weekDays" :key="day.date">
+                  <div class="day-name">{{ formatDate(day.date, 'EEE') }}</div>
+                  <div class="day-number" :class="{ today: isToday(day.date) }">
+                    {{ formatDate(day.date, 'd') }}
+                  </div>
+                  <div class="day-tasks-count">{{ getTasksForDate(day.date).length }}</div>
+                </div>
+              </div>
+            
+              <div class="week-grid">
+                <div v-for="day in weekDays" :key="day.date" class="day-column">
+                  <div 
+                    v-for="task in getTasksForDate(day.date)" 
+                    :key="task.id"
+                    class="task-item"
+                    :class="[getStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                    @click="selectTask(task)"
+                  >
+                    <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
+                    <div class="task-title">{{ task.task_name }}</div>
+                    <div class="task-status-badge" :class="getStatusClass(task.status)">
+                      {{ task.status }}
+                    </div>
+                    <div class="task-time">{{ formatTime(task.due_date) }}</div>
+                    <div v-if="task.owner_id" class="task-owner">
+                      <i class="bi bi-person"></i>
+                      {{ getUserName(task.owner_id) }}
+                    </div>
+                    <button 
+                      v-if="isTaskOverdue(task)&& task.owner_id === userId" 
+                      class="reschedule-btn" 
+                      @click.stop="openRescheduleModal(task)"
+                    >
+                      Reschedule
+                    </button>
+
+                    <button
+                      v-if="isTaskOverdue(task)&& task.owner_id === userId"
+                      @click="markAsCompleted(task)"
+                      class="btn-complete"
+                    >
+                      Mark as Completed
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Monthly View -->
+            <div v-if="currentView === 'month'" class="monthly-view">
+              <div class="month-grid">
+                <div 
+                  v-for="day in monthDays" 
+                  :key="day.date" 
+                  class="month-day"
+                  :class="{ 
+                    'other-month': !day.isCurrentMonth,
+                    'today': isToday(day.date),
+                    'has-tasks': getTasksForDate(day.date).length > 0
+                  }"
+                  @click="selectDate(day.date)"
+                >
+                  <div class="day-number">{{ formatDate(day.date, 'd') }}</div>
+                  <div class="day-tasks">
+                    <div 
+                      v-for="task in getTasksForDate(day.date)" 
+                      :key="task.id"
+                      class="task-box"
+                      :class="[getStatusClass(task.status), { 'overdue-task': isTaskOverdue(task) }]"
+                      :title="`${task.task_name} - ${task.status} - ${getUserName(task.owner_id)}`"
+                      @click.stop="selectTask(task)"
+                    >
+                      <span v-if="isTaskOverdue(task)" class="overdue-badge">Overdue</span>
+                      <div class="task-box-name" :class="getStatusClass(task.status)">{{ task.task_name }}</div>
+                      <div class="task-box-status" :class="getStatusClass(task.status)">{{ task.status }}</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- Task Details Modal -->
+    <div v-if="selectedTask" class="task-modal-overlay" @click="closeTaskModal">
+      <div class="task-modal" @click.stop>
+        <div class="modal-header">
+          <h3>{{ selectedTask.task_name }}</h3>
+          <button @click="closeTaskModal" class="close-btn">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+        <div class="modal-content">
+          <div class="task-details">
+            <div class="detail-row">
+              <span class="label">Status:</span>
+              <span class="value" :class="getTaskStatusClass(selectedTask.status)">
+                {{ selectedTask.status }}
+              </span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Priority:</span>
+              <span class="value">{{ selectedTask.priority || 'N/A' }}</span>
+            </div>
+            <div class="detail-row" v-if="selectedTask.owner_id">
+              <span class="label">Owner:</span>
+              <span class="value">{{ getUserName(selectedTask.owner_id) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Due Date:</span>
+              <span class="value">{{ formatDate(selectedTask.due_date, 'EEEE, MMMM d, yyyy') }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Time:</span>
+              <span class="value">{{ formatTime(selectedTask.due_date) }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="label">Description:</span>
+              <span class="value">{{ selectedTask.description || 'No description' }}</span>
+            </div>
+            <div class="detail-row" v-if="selectedTask.collaborators && selectedTask.collaborators.length > 0">
+              <span class="label">Collaborators:</span>
+              <span class="value">{{ getCollaboratorNames(selectedTask.collaborators) }}</span>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button @click="navigateToTask(selectedTask.id)" class="view-task-btn">
+              <i class="bi bi-arrow-right"></i>
+              View Task Details
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reschedule Modal -->
+    <div v-if="showRescheduleModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Reschedule Task</h3>
+        <p><strong>{{ selectedTaskForReschedule?.task_name }}</strong></p>
+
+        <label for="newDueDate">New Due Date:</label>
+        <input id="newDueDate" type="datetime-local" v-model="newDueDate" class="date-picker" :min="todayString" />
+
+        <div class="modal-actions">
+          <button class="confirm-btn" @click="confirmReschedule">Save</button>
+          <button class="cancel-btn" @click="closeRescheduleModal">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Success Popup -->
+    <div v-if="successMessage" class="success-popup">
+      {{ successMessage }}
+    </div>
+
+    <!-- Error Popup -->
+    <div v-if="errorMessage" class="error-popup">
+      <span>{{ errorMessage }}</span>
+      <button class="close-btn" @click="errorMessage = ''">&times;</button>
+    </div>
+
+    <!-- Filter Popup -->
+    <div v-if="showFilterPopup" class="filter-popup-overlay" @click="closeFilterPopup">
+      <div class="filter-popup" @click.stop>
+        <div class="filter-header">
+          <h3>Filter Tasks</h3>
+          <button @click="closeFilterPopup" class="close-btn">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+      
+        <div class="filter-body">
+          <!-- Member Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-person"></i>
+              Member
+            </label>
+            <select v-model="selectedMemberFilter" class="filter-select">
+              <option value="">All Members</option>
+              <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                {{ member.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Project Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-folder"></i>
+              Project
+            </label>
+            <select v-model="selectedProjectFilter" class="filter-select">
+              <option value="">All Projects</option>
+              <option v-for="project in projects" :key="project.id" :value="project.id">
+                {{ project.name }}
+              </option>
+            </select>
+          </div>
+
+          <!-- Status Filter -->
+          <div class="filter-section">
+            <label class="filter-label">
+              <i class="bi bi-check-circle"></i>
+              Status
+            </label>
+            <div class="status-checkboxes">
+              <label class="checkbox-label">
+                <input type="checkbox" value="Unassigned" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-unassigned"></span>
+               Unassigned
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Ongoing" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-ongoing"></span>
+                Ongoing
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Under Review" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-under-review"></span>
+                Under Review
+              </label>
+              <label class="checkbox-label">
+                <input type="checkbox" value="Completed" v-model="selectedStatusFilters" />
+                <span class="status-indicator status-completed"></span>
+                Completed
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="filter-actions">
+          <button @click="clearFilters" class="clear-btn">Clear All</button>
+          <button @click="applyFilters" class="apply-btn">Apply Filters</button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 </template>
 
 <script setup>
@@ -578,6 +943,7 @@ import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
 import { getCurrentUserData } from '../../services/session.js'
 import "../taskview/taskview.css"
+import '../schedule/scheduleview.css'
 
 const activeFilter = ref('all')
 const sortBy = ref('due_date')
@@ -601,6 +967,15 @@ const departmentTeams = ref([])
 const teamStats = ref({}) // Store team statistics
 const isLoadingTasks = ref(false)
 const isLoadingTeams = ref(false)
+
+const showCompleted = ref(true)
+const selectedMemberFilter = ref('')     
+const appliedMemberFilter = ref('')
+const appliedProjectFilter = ref('')
+const appliedStatusFilters = ref([])
+const currentView = ref('week')
+const currentDate = ref(new Date())
+const selectedTask = ref(null)
 
 // Get user data from session
 onMounted(async () => {
@@ -663,6 +1038,7 @@ const fetchDepartmentMembers = async () => {
 
 // Function to fetch department teams (optimized for speed)
 const fetchDepartmentTeams = async () => {
+  isLoadingTeams.value = true
   if (!deptId.value) {
     console.log('No department ID available for teams')
     return
@@ -1077,6 +1453,17 @@ const viewMemberTasks = (memberId) => {
   selectedTaskMember.value = memberId.toString()
 }
 
+const viewMemberSchedule = (memberId) => {
+  viewMode.value = 'schedule'
+  selectedMemberFilter.value = memberId.toString()
+  appliedMemberFilter.value = memberId.toString()
+}
+
+const toggleShowCompleted = () => {
+  showCompleted.value = !showCompleted.value
+}
+
+
 const getWorkloadFilterLabel = (filter) => {
   const labels = {
     'low': 'Light Load',
@@ -1171,14 +1558,46 @@ const navigateToTask = (taskId) => {
   router.push(`/tasks/${taskId}`)
 }
 
-const formatDate = (dateString) => {
-  if (!dateString) return 'No date'
-  const date = new Date(dateString)
-  return date.toLocaleDateString('en-SG', { 
-    timeZone: 'Asia/Singapore',
-    month: 'short', 
-    day: 'numeric',
-    year: 'numeric'
+const formatDate = (date, formatStr = 'd MMM yyyy') => {
+  if (!date) return ''
+  const d = new Date(date)
+
+  const options = {}
+
+  switch (formatStr) {
+    case 'EEE':
+      options.weekday = 'short'
+      break
+    case 'EEEE, MMMM d, yyyy':
+      options.weekday = 'long'
+      options.month = 'long'
+      options.day = 'numeric'
+      options.year = 'numeric'
+      break
+    case 'd':
+      options.day = 'numeric'
+      break
+    case 'd MMM yyyy':
+      options.day = 'numeric'
+      options.month = 'short'
+      options.year = 'numeric'
+      break
+    default:
+      options.day = 'numeric'
+      options.month = 'short'
+      options.year = 'numeric'
+      break
+  }
+
+  return d.toLocaleDateString('en-US', options)
+}
+
+
+const formatTime = (date) => {
+  if (!date) return ''
+  const d = new Date(date)
+  return d.toLocaleTimeString('en-US', {
+    hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Singapore'
   })
 }
 
@@ -1282,6 +1701,328 @@ const memberTaskStats = computed(() => {
     unassigned: memberTasks.filter(task => task.status === 'Unassigned').length
   }
 })
+
+const calendarViews = [
+  { value: 'day', label: 'Day', icon: 'bi bi-calendar-day' },
+  { value: 'week', label: 'Week', icon: 'bi bi-calendar-week' },
+  { value: 'month', label: 'Month', icon: 'bi bi-calendar-month' }
+]
+
+const formatHour = (hour) => `${hour.toString().padStart(2, '0')}:00`
+
+const isToday = (date) => {
+  const today = new Date()
+  const d = new Date(date)
+  return d.toDateString() === today.toDateString()
+}
+
+const getWeekStart = (date) => {
+  const d = new Date(date)
+  const day = d.getDay()
+  const diff = d.getDate() - day
+  return new Date(d.setDate(diff))
+}
+
+// Calendar navigation
+const previousPeriod = () => {
+  if (currentView.value === 'day') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 1))
+  } else if (currentView.value === 'week') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() - 7))
+  } else if (currentView.value === 'month') {
+    currentDate.value = new Date(currentDate.value.setMonth(currentDate.value.getMonth() - 1))
+  }
+}
+
+const nextPeriod = () => {
+  if (currentView.value === 'day') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() + 1))
+  } else if (currentView.value === 'week') {
+    currentDate.value = new Date(currentDate.value.setDate(currentDate.value.getDate() + 7))
+  } else if (currentView.value === 'month') {
+    currentDate.value = new Date(currentDate.value.setMonth(currentDate.value.getMonth() + 1))
+  }
+}
+
+const goToToday = () => {
+  currentDate.value = new Date()
+}
+
+// Calendar computed properties
+const currentPeriodTitle = computed(() => {
+  const current = new Date(currentDate.value)
+
+  if (currentView.value === 'day') {
+    // Day view: Friday, October 24, 2025
+    return current.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+
+  if (currentView.value === 'week' && weekDays.value.length > 0) {
+    const start = new Date(weekDays.value[0].date)
+    const end = new Date(weekDays.value[weekDays.value.length - 1].date)
+
+    const startDay = start.getDate()
+    const endDay = end.getDate()
+    const startMonth = start.toLocaleString('default', { month: 'short' })
+    const endMonth = end.toLocaleString('default', { month: 'short' })
+    const startYear = start.getFullYear()
+    const endYear = end.getFullYear()
+
+    // Same year
+    if (startYear === endYear) {
+      return `${startDay} ${startMonth} - ${endDay} ${endMonth} ${startYear}`
+    } else {
+      // Different years
+      return `${startDay} ${startMonth} ${startYear} - ${endDay} ${endMonth} ${endYear}`
+    }
+  }
+
+  // Month view fallback
+  return current.toLocaleString('default', { month: 'long', year: 'numeric' })
+})
+
+const weekDays = computed(() => {
+  const weekStart = getWeekStart(currentDate.value)
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = new Date(weekStart)
+    date.setDate(weekStart.getDate() + i)
+    return { date }
+  })
+})
+
+const monthDays = computed(() => {
+  const year = currentDate.value.getFullYear()
+  const month = currentDate.value.getMonth()
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+
+  const startDate = new Date(firstDay)
+  startDate.setDate(startDate.getDate() - firstDay.getDay())
+  const endDate = new Date(lastDay)
+  endDate.setDate(endDate.getDate() + (6 - lastDay.getDay()))
+
+  const totalWeeks = Math.ceil((endDate - startDate) / (7 * 24 * 60 * 60 * 1000))
+  const totalDays = totalWeeks * 7
+
+  const days = []
+  const current = new Date(startDate)
+  for (let i = 0; i < totalDays; i++) {
+    days.push({ date: new Date(current), isCurrentMonth: current.getMonth() === month })
+    current.setDate(current.getDate() + 1)
+  }
+  return days
+})
+// Schedule view computed properties
+const displayedTasks = computed(() => {
+  let filtered = [...tasks.value]
+  
+  if (!showCompleted.value) {
+    filtered = filtered.filter(task => task.status?.toLowerCase() !== 'completed')
+  }
+  
+  if (appliedMemberFilter.value) {
+    const memberId = parseInt(appliedMemberFilter.value)
+    filtered = filtered.filter(task => 
+      task.owner_id === memberId || 
+      (task.collaborators && task.collaborators.includes(memberId))
+    )
+  }
+  
+  if (appliedProjectFilter.value) {
+    filtered = filtered.filter(task =>
+      String(task.project_id) === String(appliedProjectFilter.value)
+    )
+  }
+  
+  if (appliedStatusFilters.value.length > 0) {
+    filtered = filtered.filter(task =>
+      appliedStatusFilters.value.includes(task.status)
+    )
+  }
+  
+  return filtered
+})
+
+const hasActiveFilters = computed(() =>
+  appliedProjectFilter.value !== '' || appliedStatusFilters.value.length > 0 || appliedMemberFilter.value !== ''
+)
+
+const getCollaboratorNames = (collaborators) => {
+  if (!collaborators?.length) return ''
+  return collaborators
+    .map(id => getUserName(id))
+    .join(', ')
+}
+
+// Add a computed property for calendar-compatible tasks
+const calendarTasks = computed(() => {
+  return displayedTasks.value.map(task => ({
+    id: task.id,
+    title: task.task_name || 'No Title',
+    start: task.due_date ? new Date(task.due_date) : null,
+    end: task.due_date ? new Date(task.due_date) : null,
+    status: task.status,
+    owner_id: task.owner_id,
+    collaborators: task.collaborators || [],
+  }))
+})
+
+// Example: get tasks for a day
+const getTasksForDate = (date) => {
+  if (!date || !displayedTasks.value?.length) return []
+  const targetDateString = new Date(date).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
+
+  return displayedTasks.value.filter(task => {
+    if (!task.due_date) return false
+    const taskDateString = new Date(task.due_date).toLocaleDateString('en-CA', { timeZone: 'Asia/Singapore' })
+    return taskDateString === targetDateString
+  }).sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+}
+
+const getTasksForDateAndHour = (date, hour) => {
+  return getTasksForDate(date).filter(task => {
+    if (!task.due_date) return false
+    const h = parseInt(new Date(task.due_date).toLocaleTimeString('en-US', {
+      timeZone: 'Asia/Singapore', hour12: false, hour: '2-digit'
+    }))
+    return h === hour
+  })
+}
+
+// Task modal and actions
+const selectTask = (task) => {
+  selectedTask.value = task
+}
+
+const closeTaskModal = () => {
+  selectedTask.value = null
+}
+
+const selectDate = (date) => {
+  currentDate.value = new Date(date)
+  currentView.value = 'day'
+}
+
+// Reschedule functionality
+const openRescheduleModal = (task) => {
+  selectedTaskForReschedule.value = task
+  newDueDate.value = task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : todayString.value
+  showRescheduleModal.value = true
+}
+
+const closeRescheduleModal = () => {
+  showRescheduleModal.value = false
+  selectedTaskForReschedule.value = null
+  newDueDate.value = ''
+}
+
+const confirmReschedule = async () => {
+  if (!newDueDate.value) {
+    showError('Please select a new due date.')
+    return
+  }
+  
+  if (newDueDate.value < todayString.value) {
+    showError('Cannot reschedule to a date before today.')
+    return
+  }
+
+  try {
+    const utcDateString = new Date(newDueDate.value).toISOString()
+    const payload = {
+      task_id: selectedTaskForReschedule.value.id,
+      due_date: utcDateString
+    }
+
+    const res = await fetch('http://127.0.0.1:5002/tasks/update', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await res.json()
+
+    if (data.Code === 200) {
+      selectedTaskForReschedule.value.due_date = newDueDate.value
+      showSuccess('Task rescheduled successfully!')
+      await fetchTeamTasks() // Refresh tasks
+    } else {
+      showError(`Failed to reschedule: ${data.Message}`)
+    }
+  } catch (err) {
+    console.error(err)
+    showError('Error rescheduling task.')
+  } finally {
+    closeRescheduleModal()
+  }
+}
+
+const showSuccess = (msg) => {
+  successMessage.value = msg
+  setTimeout(() => (successMessage.value = ''), 3000)
+}
+
+const showError = (msg) => {
+  errorMessage.value = msg
+  setTimeout(() => (errorMessage.value = ''), 5000)
+}
+
+// Mark as Completed
+const markAsCompleted = async (task) => {
+  if (!task?.id) return;
+
+  const previousStatus = task.status;
+  task.status = 'Completed'; // optimistic update
+  showSuccess(`Task "${task.task_name}" marked as completed!`);
+
+  try {
+    const payload = {
+      task_id: task.id,
+      status: 'Completed'
+    };
+
+    const response = await fetch(`http://localhost:5002/tasks/update`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (data.Code !== 200) {
+      task.status = previousStatus; // revert if API fails
+      showError(`Failed to update task: ${data.Message || 'Unknown error'}`);
+    } else {
+      // ✅ Important: refresh the task list to reflect the next instance / updated status
+      await fetchTeamTasks();
+    }
+  } catch (err) {
+    task.status = previousStatus; // revert
+    console.error(err);
+    showError('Error marking task as completed.');
+  }
+};
+
+const getTaskStatusClass = (status) => {
+  if (!status) return ''
+  switch (status.toLowerCase()) {
+    case 'unassigned':
+      return 'status-unassigned'
+    case 'ongoing':
+      return 'status-ongoing'
+    case 'under review':
+      return 'status-under-review'
+    case 'completed':
+      return 'status-completed'
+    default:
+      return ''
+  }
+}
+
 </script>
 
 <style scoped>
@@ -1495,6 +2236,112 @@ const memberTaskStats = computed(() => {
 .empty-subtitle, .loading-text {
   color: #6b7280;
   font-size: 1rem;
+}
+
+.task-item.ongoing, 
+.task-box.ongoing 
+{ background: #fef3c7;
+  color: #d97706; }
+
+.task-item.under-review, 
+.task-box.under-review  
+{ background: #e0e7ff;
+  color: #6366f1;}
+
+.task-item.completed, 
+.task-box.completed
+{ 
+  background: #d1fae5;
+  color: #059669;
+  opacity: 0.6;}
+
+.task-item.completed .task-title,
+.task-box-name.completed
+{
+  text-decoration: line-through;
+}
+
+.task-item.unassigned, 
+.task-box.unassigned 
+{ background: #f3f4f6;
+  color: #374151; }
+
+.task-event.ongoing { background: #fef3c7;
+  color: #d97706; }
+
+.task-event.under-review { background: #e0e7ff;
+  color: #6366f1;}
+
+.task-event.completed { 
+  background: #d1fae5;
+  color: #059669;
+  opacity: 0.6;}
+
+.task-event.completed .task-title{
+  text-decoration: line-through;
+}
+
+.task-event.unassigned { background: #f3f4f6;
+  color: #374151; }
+
+.task-event.overdue-task,
+.task-item.overdue-task,
+.task-box.overdue-task {
+  background-color:#fee2e2; ; 
+  color: #dc2626; 
+}
+
+.task-status-badge,
+.task-box-status {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.task-status-badge.unassigned,
+.task-box-status.unassigned {
+  background: #6b7280;
+  color: white;
+}
+
+.task-status-badge.ongoing, 
+.task-box-status.ongoing {
+  background: #d97706;
+  color: white;
+}
+
+.task-status-badge.under-review,
+.task-box-status.under-review {
+  background: #6366f1;
+  color: white;
+}
+
+.task-status-badge.completed, 
+.task-box-status.completed {
+  background: #059669;
+  color: white;
+}
+
+.view-task-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.view-task-btn:hover {
+  background: #2563eb;
 }
 
 @keyframes fadeInUp {
