@@ -407,29 +407,29 @@ const addSubtask = () => {
     return
   }
 
-  const validateRecurrence = () => {
-    // Validate recurrence end date if set
-    if (currentSubtask.value.recurrence_type && currentSubtask.value.recurrence_end_date) {
-      const endDate = new Date(currentSubtask.value.recurrence_end_date)
-      const startDate = new Date(currentSubtask.value.due_date)
-      
-      if (endDate < startDate) {
-        showToast("Recurrence end date cannot be before the subtask's due date.", 'error')
-        return false
-      }
-    }
-
-      // Validate custom recurrence interval
-    if (
-      currentSubtask.value.recurrence_type === 'custom' &&
-      (!currentSubtask.value.recurrence_interval_days || currentSubtask.value.recurrence_interval_days < 1)
-    ) {
-      showToast('Please enter a valid recurrence interval (in days) for custom recurrence.', 'error')
+const validateRecurrence = () => {
+  // Validate recurrence end date if set
+  if (currentSubtask.value.recurrence_type && currentSubtask.value.recurrence_end_date) {
+    const endDate = new Date(currentSubtask.value.recurrence_end_date)
+    const startDate = new Date(currentSubtask.value.due_date)
+    
+    if (endDate < startDate) {
+      showToast("Recurrence end date cannot be before the subtask's due date.", 'error')
       return false
     }
-
-    return true
   }
+
+  // Validate custom recurrence interval
+  if (
+    currentSubtask.value.recurrence_type === 'custom' &&
+    (!currentSubtask.value.recurrence_interval_days || currentSubtask.value.recurrence_interval_days < 1)
+  ) {
+    showToast('Please enter a valid recurrence interval (in days) for custom recurrence.', 'error')
+    return false
+  }
+
+  return true
+}
 
   // Validate for duplicate subtask name
   const taskNameLower = currentSubtask.value.task_name.trim().toLowerCase()
