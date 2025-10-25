@@ -113,16 +113,30 @@ class ExportService:
                 # Tasks in this project
                 task_details = project.get('task_details', [])
                 if task_details:
-                    story.append(Paragraph(f"Tasks in {project_name} ({len(task_details)} tasks)", self.styles['Heading3']))
+                    story.append(Paragraph(f"Tasks in {project_name} ({len(task_details)} tasks) - ★ = You are owner/collaborator", self.styles['Heading3']))
                     
                     task_data = [['Task Name', 'Status', 'Owner', 'Collaborators', 'Due Date', 'Duration', 'Notes']]
                     
-                    for task in task_details:
+                    # Track which rows need highlighting
+                    highlighted_rows = []
+                    
+                    for task_idx, task in enumerate(task_details):
+                        # Check if user is owner or collaborator
+                        user_id = report_data.user_id
+                        owner_id = task.get('owner_id')
+                        collaborator_ids = task.get('collaborator_ids', []) or []
+                        
+                        is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
+                        
                         # Get task information
                         task_name = task.get('task_name', 'Unknown')
+                        if is_user_involved:
+                            task_name = f"★ {task_name}"
+                            highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
+                        
                         status = task.get('status', 'Unknown')
                         owner = task.get('owner_name', 'Unknown')
-                        collaborators = ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None"
+                        collaborators_display = ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None"
                         due_date = task.get('due_date', '')[:10] if task.get('due_date') else 'N/A'
                         
                         # Duration and status notes
@@ -143,14 +157,16 @@ class ExportService:
                             task_name,
                             status,
                             owner,
-                            collaborators,
+                            collaborators_display,
                             due_date,
                             duration_text,
                             notes_text
                         ])
                     
                     task_table = Table(task_data, colWidths=[1.5*inch, 0.8*inch, 0.8*inch, 1.2*inch, 0.8*inch, 0.6*inch, 1.3*inch])
-                    task_table.setStyle(TableStyle([
+                    
+                    # Build table style with highlighting for user's tasks
+                    table_style = [
                         ('BACKGROUND', (0, 0), (-1, 0), colors.darkgrey),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -162,7 +178,13 @@ class ExportService:
                         ('GRID', (0, 0), (-1, -1), 1, colors.black),
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP')
-                    ]))
+                    ]
+                    
+                    # Add yellow highlighting for rows where user is involved
+                    for row_idx in highlighted_rows:
+                        table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
+                    
+                    task_table.setStyle(TableStyle(table_style))
                     story.append(task_table)
                     story.append(Spacer(1, 20))
 
@@ -236,18 +258,32 @@ class ExportService:
                          task.get('status') in ['Under Review']]
         
         if critical_tasks:
-            story.append(Paragraph("Action Required - All Critical Tasks", self.heading_style))
+            story.append(Paragraph("Action Required - All Critical Tasks (★ = You are owner/collaborator)", self.heading_style))
             
             action_data = [['Task Name', 'Project', 'Priority', 'Status', 'Due Date', 'Action Needed']]
             
+            # Track which rows need highlighting
+            highlighted_rows = []
+            
             # Show ALL critical tasks, not limited to 8
-            for task in critical_tasks:
+            for task_idx, task in enumerate(critical_tasks):
+                # Check if user is owner or collaborator
+                user_id = report_data.user_id
+                owner_id = task.get('owner_id')
+                collaborator_ids = task.get('collaborator_ids', []) or []
+                
+                is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
+                
                 action_needed = "OVERDUE!" if task.get('is_overdue') else \
                                "Review Required" if task.get('status') == 'Under Review' else \
                                "High Priority" if task.get('priority') == 'High' else ""
                                
                 due_date = task.get('due_date', '')[:10] if task.get('due_date') else 'N/A'
                 task_name = task.get('task_name', 'Unknown')
+                if is_user_involved:
+                    task_name = f"★ {task_name}"
+                    highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
+                
                 project_name = task.get('project_name', 'No Project')
                 
                 action_data.append([
@@ -261,7 +297,9 @@ class ExportService:
             
             # Adjust table column widths to prevent truncation
             action_table = Table(action_data, colWidths=[2.2*inch, 1.3*inch, 0.7*inch, 0.8*inch, 0.7*inch, 1.0*inch])
-            action_table.setStyle(TableStyle([
+            
+            # Build table style with highlighting for user's tasks
+            table_style = [
                 ('BACKGROUND', (0, 0), (-1, 0), colors.red),
                 ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
                 ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -272,14 +310,20 @@ class ExportService:
                 ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
                 ('GRID', (0, 0), (-1, -1), 1, colors.black),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP')
-            ]))
+            ]
+            
+            # Add yellow highlighting for rows where user is involved
+            for row_idx in highlighted_rows:
+                table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
+            
+            action_table.setStyle(TableStyle(table_style))
             story.append(action_table)
             story.append(Spacer(1, 20))
 
         # Comprehensive Task Details - Complete Information with No Truncation
         task_details = getattr(report_data, 'task_details', [])
         if task_details:
-            story.append(Paragraph("Complete Task Portfolio & Performance Analysis", self.heading_style))
+            story.append(Paragraph("Complete Task Portfolio & Performance Analysis (★ = You are owner/collaborator)", self.heading_style))
             
             # Group tasks by status for organized viewing
             task_groups = {}
@@ -297,9 +341,22 @@ class ExportService:
                     # Comprehensive task table with all relevant details - no truncation
                     task_detail_data = [['Task Name', 'Project', 'Owner', 'Collaborators', 'Duration', 'Due Date', 'Completed', 'Status Notes']]
                     
-                    for task in tasks:
+                    # Track which rows need highlighting
+                    highlighted_rows = []
+                    
+                    for task_idx, task in enumerate(tasks):
+                        # Check if user is owner or collaborator
+                        user_id = report_data.user_id
+                        owner_id = task.get('owner_id')
+                        collaborator_ids = task.get('collaborator_ids', []) or []
+                        
+                        is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
+                        
                         # Get full task name - no truncation
                         task_name = task.get('task_name', 'Unknown')
+                        if is_user_involved:
+                            task_name = f"★ {task_name}"
+                            highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
                         
                         # Get project name
                         project_name = task.get('project_name', 'No Project')
@@ -308,10 +365,10 @@ class ExportService:
                         owner_name = task.get('owner_name', 'Unknown')
                         
                         # Get all collaborators (full list as requested)
-                        collaborators = task.get('collaborators', [])
+                        collaborators_list = task.get('collaborators', [])
                         collaborators_text = "None"
-                        if collaborators:
-                            collaborators_text = ", ".join(collaborators)
+                        if collaborators_list:
+                            collaborators_text = ", ".join(collaborators_list)
                         
                         # Get completion duration
                         completion_days = task.get('completion_days')
@@ -348,7 +405,9 @@ class ExportService:
                     
                     # Use wider table with proper column widths to prevent truncation
                     task_table = Table(task_detail_data, colWidths=[1.5*inch, 1.0*inch, 0.8*inch, 1.2*inch, 0.7*inch, 0.8*inch, 0.8*inch, 1.2*inch])
-                    task_table.setStyle(TableStyle([
+                    
+                    # Build table style with highlighting for user's tasks
+                    table_style = [
                         ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
                         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
                         ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
@@ -360,7 +419,13 @@ class ExportService:
                         ('GRID', (0, 0), (-1, -1), 1, colors.black),
                         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
                         ('VALIGN', (0, 0), (-1, -1), 'TOP')
-                    ]))
+                    ]
+                    
+                    # Add yellow highlighting for rows where user is involved
+                    for row_idx in highlighted_rows:
+                        table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
+                    
+                    task_table.setStyle(TableStyle(table_style))
                     story.append(task_table)
                     story.append(Spacer(1, 15))
 
@@ -659,7 +724,7 @@ class ExportService:
                     
                     # Add yellow highlighting for member's tasks
                     for row_idx in highlighted_rows:
-                        table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.yellow))
+                        table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
                         table_style.append(('TEXTCOLOR', (0, row_idx), (-1, row_idx), colors.black))
                     
                     task_table.setStyle(TableStyle(table_style))
@@ -667,11 +732,11 @@ class ExportService:
                     story.append(Spacer(1, 15))
 
     def export_personal_report_excel(self, report_data: ReportData) -> bytes:
-        """Export concise personal report as Excel with focused dashboards"""
+        """Export personal report as Excel with Dashboard and Projects with tasks"""
         buffer = io.BytesIO()
         
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            # Performance Dashboard Sheet
+            # ========== DASHBOARD SHEET ==========
             performance_data = []
             
             # KPI Section
@@ -709,90 +774,111 @@ class ExportService:
             dashboard_df = pd.DataFrame(performance_data, columns=['Metric', 'Value'])
             dashboard_df.to_excel(writer, sheet_name='Dashboard', index=False)
 
-            # Project Focus Sheet (Consolidated project info)
-            if report_data.project_stats:
-                project_focus_data = []
-                for project in report_data.project_stats:
-                    project_focus_data.append({
-                        'Project': project['project_name'],
-                        'Progress': f"{project['completed_tasks']}/{project['total_tasks']} ({project['completion_percentage']:.1f}%)",
-                        'Overdue': f"{project.get('overdue_tasks', 0)} ({project.get('overdue_percentage', 0):.1f}%)",
-                        'Ongoing': project.get('in_progress_tasks', 0),
-                        'Under Review': project.get('under_review_tasks', 0),
-                        'Avg Duration': f"{project['average_task_duration']:.1f} days" if project['average_task_duration'] else "N/A",
-                        'Est. Completion': project['projected_completion_date'] if project['projected_completion_date'] else "N/A",
-                        'Status': '🟢 On Track' if project['completion_percentage'] >= 70 and project.get('overdue_percentage', 0) < 20 else
-                                '🟡 At Risk' if project.get('overdue_percentage', 0) < 40 else '🔴 Critical'
-                    })
-                
-                project_focus_df = pd.DataFrame(project_focus_data)
-                project_focus_df.to_excel(writer, sheet_name='Projects', index=False)
-
-            # Action Items Sheet (Critical tasks only)
-            task_details = getattr(report_data, 'task_details', [])
-            critical_tasks = [task for task in task_details if 
-                             task.get('is_overdue') or 
-                             task.get('priority') == 'High' or 
-                             task.get('status') in ['Under Review']]
+            # ========== PROJECTS WITH TASKS SHEET ==========
+            # Get projects breakdown which contains both project stats and task details
+            projects_breakdown = getattr(report_data, 'projects_breakdown', [])
+            user_id = report_data.user_id
             
-            if critical_tasks:
-                action_items_data = []
-                for task in critical_tasks:
-                    action_items_data.append({
-                        'Task Name': task.get('task_name'),
-                        'Priority': task.get('priority'),
-                        'Status': task.get('status'),
-                        'Owner': task.get('owner_name', 'Unknown'),
-                        'Collaborators': ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None",
-                        'Due Date': task.get('due_date', '')[:10] if task.get('due_date') else '',
-                        'Days Overdue': task.get('days_overdue', 0) if task.get('is_overdue') else 0,
-                        'Action Required': 'OVERDUE!' if task.get('is_overdue') else 
-                                          'Review Required' if task.get('status') == 'Under Review' else 
-                                          'High Priority'
-                    })
+            if projects_breakdown:
+                all_project_data = []
                 
-                action_items_df = pd.DataFrame(action_items_data)
-                action_items_df.to_excel(writer, sheet_name='⚠️ Action Items', index=False)
-            
-            # Complete Task History Sheet (Who did what, when, how long)
-            if task_details:
-                comprehensive_task_data = []
-                for task in task_details:
-                    # Get completion duration
-                    completion_days = task.get('completion_days')
-                    duration_text = f"{completion_days} days" if completion_days else "Ongoing"
+                for project in projects_breakdown:
+                    # Project header
+                    all_project_data.append([f"PROJECT: {project.get('project_name', 'Unknown Project')}", '', '', '', '', '', '', '', '', ''])
+                    all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
                     
-                    # Get overdue status with details
-                    overdue_status = "No"
-                    overdue_details = ""
-                    if task.get('is_overdue'):
-                        days_overdue = task.get('days_overdue', 0)
-                        overdue_status = "Yes"
-                        overdue_details = f"{days_overdue} days overdue"
-                    elif task.get('status') == 'Completed':
-                        was_late = task.get('was_completed_late')
-                        overdue_status = "Completed Late" if was_late else "On Time"
-                        overdue_details = "Completed after due date" if was_late else "Completed on time"
-                    else:
-                        overdue_details = "On track"
+                    # Project-level metrics
+                    all_project_data.extend([
+                        ['Project Metrics', '', '', '', '', '', '', '', '', ''],
+                        ['Total Tasks in Project', project.get('total_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Completed Tasks', project.get('completed_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Ongoing Tasks', project.get('in_progress_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Under Review Tasks', project.get('under_review_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Overdue Tasks', project.get('overdue_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%", '', '', '', '', '', '', '', ''],
+                        ['Average Task Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A", '', '', '', '', '', '', '', ''],
+                        ['Projected Completion', project.get('projected_completion_date') if project.get('projected_completion_date') else "N/A", '', '', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '', '', '', '']
+                    ])
                     
-                    comprehensive_task_data.append({
-                        'Task Name': task.get('task_name'),
-                        'Status': task.get('status'),
-                        'Priority': task.get('priority'),
-                        'Task Owner': task.get('owner_name', 'Unknown'),
-                        'All Collaborators': ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None",
-                        'Created Date': task.get('created_at', '')[:10] if task.get('created_at') else '',
-                        'Due Date': task.get('due_date', '')[:10] if task.get('due_date') else '',
-                        'Completed Date': task.get('completed_at', '')[:10] if task.get('completed_at') else '',
-                        'Duration (Days)': duration_text,
-                        'Is Overdue': overdue_status,
-                        'Overdue Details': overdue_details,
-                        'Days Overdue': task.get('days_overdue', 0) if task.get('is_overdue') else 0
-                    })
+                    # ALL Tasks in this project
+                    project_tasks = project.get('task_details', [])
+                    if project_tasks:
+                        all_project_data.append(['ALL TASKS IN THIS PROJECT', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['(★ = You are owner or collaborator)', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
+                        
+                        # Task table headers
+                        all_project_data.append([
+                            'Task Name',
+                            'Status',
+                            'Priority',
+                            'Owner',
+                            'Collaborators',
+                            'Created Date',
+                            'Due Date',
+                            'Completed Date',
+                            'Duration',
+                            'You Involved'
+                        ])
+                        
+                        # Add all tasks
+                        for task in project_tasks:
+                            # Check if user is owner or collaborator
+                            owner_id = task.get('owner_id')
+                            collaborator_ids = task.get('collaborator_ids', []) or []
+                            is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
+                            
+                            # Get owner name
+                            owner_name = task.get('owner_name', 'Unknown')
+                            
+                            # Get collaborators - use collaborators field which has names
+                            collaborators = task.get('collaborators', []) or []
+                            collab_str = ', '.join(collaborators) if collaborators else 'None'
+                            
+                            # Duration calculation
+                            completion_days = task.get('completion_days')
+                            duration_text = f"{completion_days} days" if completion_days else "Ongoing"
+                            
+                            # Mark task name with star if user is involved
+                            task_name = task.get('task_name', 'Unknown Task')
+                            if is_user_involved:
+                                task_name = f"★ {task_name}"
+                            
+                            all_project_data.append([
+                                task_name,
+                                task.get('status', 'Unknown'),
+                                task.get('priority', 'Normal'),
+                                owner_name,
+                                collab_str,
+                                task.get('created_at', '')[:10] if task.get('created_at') else 'N/A',
+                                task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
+                                task.get('completed_at', '')[:10] if task.get('completed_at') else 'N/A',
+                                duration_text,
+                                '★ YES' if is_user_involved else 'No'
+                            ])
+                        
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
                 
-                comprehensive_df = pd.DataFrame(comprehensive_task_data)
-                comprehensive_df.to_excel(writer, sheet_name='Complete Task History', index=False)
+                # Create DataFrame and write to Excel
+                projects_df = pd.DataFrame(all_project_data)
+                projects_df.to_excel(writer, sheet_name='Projects & Tasks', index=False, header=False)
+                
+                # Apply highlighting to rows where user is involved
+                worksheet = writer.sheets['Projects & Tasks']
+                from openpyxl.styles import PatternFill
+                highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                
+                # Go through rows and highlight where user is involved
+                for row_idx, row_data in enumerate(all_project_data, start=1):
+                    if len(row_data) > 0 and isinstance(row_data[0], str):
+                        # Check if this is a task row with user involvement
+                        if row_data[0].startswith('★'):
+                            # Highlight entire row
+                            for col_idx in range(1, 11):  # 10 columns
+                                cell = worksheet.cell(row=row_idx, column=col_idx)
+                                cell.fill = highlight_fill
 
         buffer.seek(0)
         return buffer.getvalue()
@@ -905,7 +991,7 @@ class ExportService:
                     team_df.to_excel(writer, sheet_name=team_header_sheet, index=False)
                     continue
                 
-                sheet_name = f"Member {member_idx} - {member.user_name[:18]}"  # Limit name length for Excel
+                sheet_name = f"{member.user_name[:18]}"  # Limit name length for Excel
                 
                 # Member Info Section
                 member_info_data = []

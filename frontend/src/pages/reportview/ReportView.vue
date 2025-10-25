@@ -124,7 +124,8 @@ const generateReport = async () => {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `${currentReportType.value}_report_${startDate}_to_${endDate}.${format}`
+    const fileExtension = format === 'excel' ? 'xlsx' : format
+    link.download = `${currentReportType.value}_report_${startDate}_to_${endDate}.${fileExtension}`
     link.click()
     window.URL.revokeObjectURL(url)
     

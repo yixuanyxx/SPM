@@ -384,6 +384,7 @@ class ReportService:
                     'owner_id': owner_id,
                     'owner_name': owner_name,
                     'collaborators': collaborator_names,
+                    'collaborator_ids': collaborators,  # Keep the original IDs for highlighting logic
                     'created_at': created_at,
                     'due_date': due_date,
                     'completed_at': completed_at,
@@ -455,6 +456,8 @@ class ReportService:
                 'project_name': project_breakdown['project_name'],
                 'total_tasks': project_breakdown['total_tasks'],
                 'completed_tasks': project_breakdown['completed_tasks'],
+                'in_progress_tasks': project_breakdown['in_progress_tasks'],
+                'under_review_tasks': project_breakdown['under_review_tasks'],
                 'overdue_tasks': project_breakdown['overdue_tasks'],
                 'completion_percentage': project_breakdown['completion_percentage'],
                 'overdue_percentage': project_breakdown['overdue_percentage'],
