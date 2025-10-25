@@ -55,7 +55,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         """Clean up test data from the database."""
         try:
             # Delete test comments for common test task IDs
-            test_task_ids = [13, 14, 999]  # Common test task IDs
+            test_task_ids = [139, 148, 999]  # Common test task IDs
             deleted_count = 0
             
             for task_id in test_task_ids:
@@ -91,7 +91,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # Make request with required fields
         response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Test User",
             "user_role": "manager",
@@ -104,7 +104,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         self.assertEqual(data["Code"], 201)
         self.assertIn("Comment created! Comment ID:", data["Message"])
         self.assertIn("data", data)
-        self.assertEqual(data["data"]["task_id"], 13)
+        self.assertEqual(data["data"]["task_id"], 139)
         self.assertEqual(data["data"]["user_id"], 297)
         self.assertEqual(data["data"]["content"], "This is a test comment")
 
@@ -115,7 +115,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # Make request with only required fields
         response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "Minimal comment"
         })
@@ -124,7 +124,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         self.assertEqual(response.status_code, 201)
         data = json.loads(response.data)
         self.assertEqual(data["Code"], 201)
-        self.assertEqual(data["data"]["task_id"], 13)
+        self.assertEqual(data["data"]["task_id"], 139)
         self.assertEqual(data["data"]["user_id"], 297)
         self.assertEqual(data["data"]["content"], "Minimal comment")
 
@@ -145,7 +145,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
     def test_create_comment_missing_user_id(self):
         """Test comment creation fails when user_id is missing."""
         response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "content": "Test comment"
             # user_id is missing
         })
@@ -159,7 +159,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
     def test_create_comment_missing_content(self):
         """Test comment creation fails when content is missing."""
         response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297
             # content is missing
         })
@@ -178,7 +178,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         unicode_content = "Comment with unicode: 你好世界 🌍 émojis"
         response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": unicode_content
         })
@@ -198,21 +198,21 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create some comments for the task
         comment1_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "First comment"
         })
         self.assertEqual(comment1_response.status_code, 201)
         
         comment2_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "Second comment"
         })
         self.assertEqual(comment2_response.status_code, 201)
         
         # Make request
-        response = self.client.get('/comments/task/13')
+        response = self.client.get('/comments/task/139')
         
         # Assertions
         self.assertEqual(response.status_code, 200)
@@ -245,7 +245,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Test User",
             "content": "Test comment"
@@ -295,7 +295,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment with all fields
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Test User",
             "user_role": "manager",
@@ -318,7 +318,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         # Verify all fields are present
         comment_data = data["data"]
         self.assertEqual(comment_data["id"], comment_id)
-        self.assertEqual(comment_data["task_id"], 13)
+        self.assertEqual(comment_data["task_id"], 139)
         self.assertEqual(comment_data["user_id"], 297)
         self.assertEqual(comment_data["user_name"], "Test User")
         self.assertEqual(comment_data["user_role"], "manager")
@@ -334,7 +334,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment with unicode content
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Unicode User",
             "content": unicode_content
@@ -361,7 +361,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment with long content
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Long Content User",
             "content": long_content
@@ -389,7 +389,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment with special characters
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "user_name": "Special User",
             "content": special_content
@@ -446,7 +446,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "Original content"
         })
@@ -473,7 +473,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "Original content"
         })
@@ -515,7 +515,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # First, create a comment
         create_response = self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
             "content": "Comment to delete"
         })
@@ -602,7 +602,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
         created_comment_ids = []
         for comment_data in comments_data:
             response = self.client.post('/comments/create', json={
-                "task_id": 13,
+                "task_id": 139,
                 **comment_data
             })
             self.assertEqual(response.status_code, 201)
@@ -610,7 +610,7 @@ class TestCommentControllerIntegration(unittest.TestCase):
             created_comment_ids.append(data["data"]["id"])
         
         # Retrieve all comments for the task
-        response = self.client.get('/comments/task/13')
+        response = self.client.get('/comments/task/139')
         self.assertEqual(response.status_code, 200)
         data = json.loads(response.data)
         self.assertEqual(data["Code"], 200)
@@ -628,30 +628,30 @@ class TestCommentControllerIntegration(unittest.TestCase):
         
         # Create comments for different tasks
         self.client.post('/comments/create', json={
-            "task_id": 13,
+            "task_id": 139,
             "user_id": 297,
-            "content": "Comment for task 13"
+            "content": "Comment for task 139"
         })
         
         self.client.post('/comments/create', json={
-            "task_id": 14,
+            "task_id": 148,
             "user_id": 297,
-            "content": "Comment for task 14"
+            "content": "Comment for task 148"
         })
         
         # Get comments for task 1
-        response1 = self.client.get('/comments/task/13')
+        response1 = self.client.get('/comments/task/139')
         self.assertEqual(response1.status_code, 200)
         data1 = json.loads(response1.data)
         self.assertEqual(len(data1["data"]), 1)
-        self.assertEqual(data1["data"][0]["content"], "Comment for task 13")
+        self.assertEqual(data1["data"][0]["content"], "Comment for task 139")
         
         # Get comments for task 2
-        response2 = self.client.get('/comments/task/14')
+        response2 = self.client.get('/comments/task/148')
         self.assertEqual(response2.status_code, 200)
         data2 = json.loads(response2.data)
         self.assertEqual(len(data2["data"]), 1)
-        self.assertEqual(data2["data"][0]["content"], "Comment for task 14")
+        self.assertEqual(data2["data"][0]["content"], "Comment for task 148")
 
 
 if __name__ == "__main__":
