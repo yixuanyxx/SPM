@@ -739,6 +739,155 @@ const saveSubtasks = async () => {
   }
 }
 
+// const newTaskFile = ref(null)
+// const handleFileUpload = (event) => {
+//   const file = event.target.files[0]
+//   if (file && file.type === "application/pdf") {
+//     newTaskFile.value = file
+//   } else {
+//     alert("Only PDF files are allowed")
+//     event.target.value = null
+//     newTaskFile.value = null
+//   }
+// }
+
+// const newTask = ref({
+//   owner_id: null, // Will be set when userId is available
+//   task_name: '',
+//   description: '',
+//   type: 'parent',
+//   due_date: '',
+//   priority: '5',
+//   status: 'Ongoing',
+//   project_id: '',
+//   collaborators: '',
+//   parent_task: '',
+//   subtasks: [], 
+// })
+
+// // Watch for userId changes and update newTask.owner_id
+// watch(userId, (newUserId) => {
+//   if (newUserId) {
+//     newTask.value.owner_id = newUserId
+//   }
+// }, { immediate: true })
+
+// const isFormValid = computed(() => {
+//   return newTask.value.task_name.trim() !== '' &&
+//          newTask.value.description.trim() !== '' &&
+//          newTask.value.due_date.trim() !== ''   
+// })
+
+// // send POST to backend
+// const submitNewTask = async () => {
+//   if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
+//     alert('Please fill out all required fields: Task Name, Description, and Due Date.')
+//     return
+//   }
+//   try {
+//     // Directors and managers use the manager endpoint (owner only, no auto-collaborator addition)
+//     // Staff uses the staff endpoint (automatically adds owner as collaborator)
+//     let endpoint = (userRole.value === 'manager' || userRole.value === 'director')
+//       ? 'http://localhost:5002/tasks/manager-task/create'
+//       : 'http://localhost:5002/tasks/staff-task/create'
+
+//     // Use FormData to handle file uploads properly
+//     const formData = new FormData()
+    
+//     // Add all task fields to FormData
+//     formData.append('owner_id', newTask.value.owner_id)
+//     formData.append('task_name', newTask.value.task_name)
+//     formData.append('description', newTask.value.description)
+//     formData.append('type', newTask.value.type)
+//     formData.append('due_date', newTask.value.due_date)
+//     formData.append('priority', newTask.value.priority)
+//     formData.append('status', newTask.value.status)
+    
+//     if (newTask.value.project_id) {
+//       formData.append('project_id', newTask.value.project_id)
+//     }
+    
+//     if (newTask.value.parent_task) {
+//       formData.append('parent_task', newTask.value.parent_task)
+//     }
+    
+//     // Add collaborators as comma-separated string with role-based logic
+//     const collaboratorIds = selectedCollaborators.value.map(user => parseInt(user.userid))
+    
+//     // Role-based owner inclusion in collaborators:
+//     // - Staff: Include owner as collaborator
+//     // - Manager/Director: Owner only, NOT in collaborators
+//     if (userRole.value === 'staff') {
+//       // For staff, ensure owner is always included in collaborators
+//       if (!collaboratorIds.includes(newTask.value.owner_id)) {
+//         collaboratorIds.push(newTask.value.owner_id)
+//         console.log('Added staff owner to collaborators')
+//       }
+//     }
+    
+//     // Only append collaborators if there are any
+//     if (collaboratorIds.length > 0) {
+//       const collaboratorString = collaboratorIds.join(',')
+//       console.log('Appending collaborators string:', collaboratorString)
+//       formData.append('collaborators', collaboratorString)
+//     } else {
+//       console.log('No collaborators to append - skipping collaborators field entirely')
+//     }
+  
+//     // Add subtasks - send as JSON if backend expects subtask objects
+//     if (newTask.value.subtasks && newTask.value.subtasks.length > 0) {
+//       formData.append('subtasks', JSON.stringify(newTask.value.subtasks))
+//     }
+    
+//     // Add the actual file for upload
+//     if (newTaskFile.value) {
+//       formData.append('attachment', newTaskFile.value)
+//     }
+
+//     const response = await fetch(endpoint, {
+//       method: 'POST',
+//       body: formData  // Don't set Content-Type header - browser will set it automatically with boundary
+//     })
+
+//     const data = await response.json()
+
+//     if (response.ok && data.Code === 201) {
+//       tasks.value.push(data.data)
+//       // reset form
+//       newTask.value = {
+//         owner_id: userId.value,
+//         task_name: '',
+//         description: '',
+//         type: 'parent',
+//         due_date: '',
+//         priority: '5',
+//         status: 'Ongoing',
+//         project_id: '',
+//         collaborators: '',
+//         parent_task: '',
+//         subtasks: [],
+//       }
+//       selectedCollaborators.value = []
+//       newTaskFile.value = null
+//       // Clear the file input element
+//       const fileInput = document.querySelector('input[type="file"]')
+//       if (fileInput) {
+//         fileInput.value = ''
+//       }
+//       showCreateModal.value = false
+//       showSuccessMessage.value = true
+//       setTimeout(() => {
+//         showSuccessMessage.value = false
+//       }, 3000)
+//     } else {
+//       alert('Failed: ' + data.Message)
+//     }
+//   } catch (err) {
+//     console.error(err)
+//     alert('Error creating task')
+//   }
+// }
+
 const toggleSortOrder = () => {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
 }
