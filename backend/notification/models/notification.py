@@ -32,18 +32,33 @@ class Notification:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Notification':
         """Create Notification object from dictionary with proper type conversion"""
+        # Helper function to safely convert to int
+        def safe_int(value, default=0):
+            if value is None:
+                return default
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                return default
+        
+        # Helper function to safely convert to string
+        def safe_str(value, default=''):
+            if value is None:
+                return default
+            return str(value)
+        
         # Create notification instance
         notification = cls(
-            userid=int(data.get('userid', 0)),
-            notification=str(data.get('notification', '')),
-            created_at=str(data.get('created_at', datetime.now(UTC).isoformat())),
+            userid=safe_int(data.get('userid'), 0),
+            notification=safe_str(data.get('notification'), ''),
+            created_at=safe_str(data.get('created_at'), datetime.now(UTC).isoformat()),
             is_read=bool(data.get('is_read', False)),
-            notification_type=str(data.get('notification_type', 'general')),
-            related_task_id=int(data['related_task_id']) if data.get('related_task_id') is not None else None
+            notification_type=safe_str(data.get('notification_type'), 'general'),
+            related_task_id=safe_int(data.get('related_task_id')) if data.get('related_task_id') is not None else None
         )
         
         # Set ID if provided (since it's init=False)
         if 'id' in data and data['id'] is not None:
-            notification.id = int(data['id'])
+            notification.id = safe_int(data['id'])
             
         return notification
