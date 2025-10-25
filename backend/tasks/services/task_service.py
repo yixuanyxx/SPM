@@ -97,16 +97,39 @@ class TaskService:
         if not parent_task:
             raise ValueError(f"Parent task with ID {parent_task_id} not found")
         
+        # Get the owner_id
+        owner_id = payload.get("owner_id")
+        if not owner_id:
+            raise ValueError("owner_id is required")
+        
+        # Set collaborators to null if not defined in request body
+        if "collaborators" not in payload:
+            payload["collaborators"] = None
+        
         # Ensure type is set to subtask
         payload["type"] = "subtask"
         print(f"DEBUG: manager_create_subtask - payload after type setting: {payload}")
         
-        # Create the subtask using the regular create method
-        result = self.manager_create(subtask_payload)
+        # Check for uniqueness per owner: task_name
+        existing = self.repo.find_by_owner_and_name(payload["owner_id"], payload["task_name"])
+        if existing:
+            return {"__status": 200, "Message": f"Task '{payload['task_name']}' already exists for this user.", "data": existing}
+
+        # Use the new Task.from_dict constructor for proper type handling
+        task = Task.from_dict(payload)
+
+        # Convert to dictionary for database insertion (excludes id=None)
+        data = task.to_dict()
+        data.pop("id", None)
+
+        created = self.repo.insert_task(data)
+        
+        # Trigger collaborator notifications after successful task creation
+        self._trigger_collaborator_notifications(created.get('id'), payload)
         
         # If subtask was successfully created, update the parent
-        if result.get("__status") == 201 and result.get("data", {}).get("id"):
-            subtask_id = result["data"]["id"]
+        if created.get('id'):
+            subtask_id = created.get('id')
             try:
                 # Add this subtask to the parent's subtasks list
                 self.repo.add_subtask_to_parent(parent_task_id, subtask_id)
@@ -114,7 +137,7 @@ class TaskService:
                 # Log the error but don't fail the subtask creation
                 print(f"Warning: Failed to update parent task {parent_task_id} with subtask {subtask_id}: {e}")
         
-        return result
+        return {"__status": 201, "Message": f"Task created! Task ID: {created.get('id')}", "data": created}
 
     def update_task_by_id(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
