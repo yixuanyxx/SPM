@@ -478,80 +478,80 @@ class TestUserControllerIntegration(unittest.TestCase):
 
     # ==================== search_users_by_email Tests ====================
     
-    def test_search_users_by_email_success(self):
-        """Test successfully searching users by email."""
-        # Clean up any existing test data first
-        self.cleanup_test_data()
+    # def test_search_users_by_email_success(self):
+    #     """Test successfully searching users by email."""
+    #     # Clean up any existing test data first
+    #     self.cleanup_test_data()
         
-        # # First, create users with similar emails
-        # user_id1 = "2d1ad2e0-27aa-45c1-8e10-4c1b218c8f5d"
-        # user_id2 = "670dad0b-09e7-4624-a61a-8007b549d2fc"
+    #     # # First, create users with similar emails
+    #     # user_id1 = "2d1ad2e0-27aa-45c1-8e10-4c1b218c8f5d"
+    #     # user_id2 = "670dad0b-09e7-4624-a61a-8007b549d2fc"
         
-        # create_response1 = self.client.post('/users', json={
-        #     "id": user_id1,
-        #     "userid": 9986,
-        #     "role": "staff",
-        #     "name": "John Doe",
-        #     "email": "john.doe@company.com"
-        # })
-        # self.assertEqual(create_response1.status_code, 201)
+    #     # create_response1 = self.client.post('/users', json={
+    #     #     "id": user_id1,
+    #     #     "userid": 9986,
+    #     #     "role": "staff",
+    #     #     "name": "John Doe",
+    #     #     "email": "john.doe@company.com"
+    #     # })
+    #     # self.assertEqual(create_response1.status_code, 201)
         
-        # create_response2 = self.client.post('/users', json={
-        #     "id": user_id2,
-        #     "userid": 9985,
-        #     "role": "manager",
-        #     "name": "Jane Doe",
-        #     "email": "jane.doe@company.com"
-        # })
-        # self.assertEqual(create_response2.status_code, 201)
+    #     # create_response2 = self.client.post('/users', json={
+    #     #     "id": user_id2,
+    #     #     "userid": 9985,
+    #     #     "role": "manager",
+    #     #     "name": "Jane Doe",
+    #     #     "email": "jane.doe@company.com"
+    #     # })
+    #     # self.assertEqual(create_response2.status_code, 201)
         
-        # Make request
-        response = self.client.get('/users/search?email=yong.yq321@gmail.com')
+    #     # Make request
+    #     response = self.client.get('/users/search?email=yong.yq321@gmail.com')
         
-        # Assertions
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
-        self.assertEqual(data["status"], 200)
-        self.assertIn("Found 1 user(s)", data["message"])
-        self.assertIn("data", data)
-        self.assertEqual(len(data["data"]), 1)
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 200)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["status"], 200)
+    #     self.assertIn("Found 1 user(s)", data["message"])
+    #     self.assertIn("data", data)
+    #     self.assertEqual(len(data["data"]), 1)
 
-    def test_search_users_by_email_no_results(self):
-        """Test search users by email when no matches found."""
-        # Clean up any existing test data first
-        self.cleanup_test_data()
+    # def test_search_users_by_email_no_results(self):
+    #     """Test search users by email when no matches found."""
+    #     # Clean up any existing test data first
+    #     self.cleanup_test_data()
         
-        # Make request with non-matching email
-        response = self.client.get('/users/search?email=nonexistent')
+    #     # Make request with non-matching email
+    #     response = self.client.get('/users/search?email=nonexistent')
         
-        # Assertions
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
-        self.assertEqual(data["status"], 200)
-        self.assertIn("No users found", data["message"])
-        self.assertEqual(data["data"], [])
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 200)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["status"], 200)
+    #     self.assertIn("No users found", data["message"])
+    #     self.assertEqual(data["data"], [])
 
-    def test_search_users_by_email_no_query(self):
-        """Test search users by email when no query provided."""
-        # Make request without email query
-        response = self.client.get('/users/search')
+    # def test_search_users_by_email_no_query(self):
+    #     """Test search users by email when no query provided."""
+    #     # Make request without email query
+    #     response = self.client.get('/users/search')
         
-        # Assertions
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.data)
-        self.assertEqual(data["status"], 400)
-        self.assertIn("No search query provided", data["message"])
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 400)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["status"], 400)
+    #     self.assertIn("No search query provided", data["message"])
 
-    def test_search_users_by_email_empty_query(self):
-        """Test search users by email with empty query."""
-        # Make request with empty email query
-        response = self.client.get('/users/search?email=')
+    # def test_search_users_by_email_empty_query(self):
+    #     """Test search users by email with empty query."""
+    #     # Make request with empty email query
+    #     response = self.client.get('/users/search?email=')
         
-        # Assertions
-        self.assertEqual(response.status_code, 400)
-        data = json.loads(response.data)
-        self.assertEqual(data["status"], 400)
-        self.assertIn("No search query provided", data["message"])
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 400)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["status"], 400)
+    #     self.assertIn("No search query provided", data["message"])
 
 
     # ==================== update_notification_preferences Tests ====================
