@@ -46,3 +46,34 @@
 2025-10-23 01:44:50,404 - deadline_reminder_scheduler - INFO - ================================================================================
 2025-10-23 01:47:10,555 - deadline_reminder_scheduler - INFO - Sending reminder for task 1760 (3 days before due)
 2025-10-23 01:47:15,225 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 1760: Deadline reminder notifications sent to all collaborators
+2025-10-26 01:21:13,194 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:21:17,320 - deadline_reminder_scheduler - ERROR - Tasks API connection failed: HTTPConnectionPool(host='localhost', port=5002): Max retries exceeded with url: /tasks/upcoming-deadlines (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x0000017E4960F530>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+2025-10-26 01:21:17,321 - deadline_reminder_scheduler - WARNING - Make sure the tasks service is running on port 5002
+2025-10-26 01:21:59,835 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:22:03,976 - deadline_reminder_scheduler - ERROR - Tasks API connection failed: HTTPConnectionPool(host='localhost', port=5002): Max retries exceeded with url: /tasks/upcoming-deadlines (Caused by NewConnectionError('<urllib3.connection.HTTPConnection object at 0x000001C8B4C3EB40>: Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it'))
+2025-10-26 01:22:03,976 - deadline_reminder_scheduler - WARNING - Make sure the tasks service is running on port 5002
+2025-10-26 01:22:48,531 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:22:51,385 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 404)
+2025-10-26 01:22:54,177 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-26 01:32:50,176 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:32:52,372 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 404)
+2025-10-26 01:32:55,183 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-26 01:33:31,400 - deadline_reminder_scheduler - INFO - Sending reminder for task 15 (5 days before due)
+2025-10-26 01:33:36,862 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 15: Deadline reminder notifications sent to all collaborators
+2025-10-26 01:43:42,244 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:43:44,515 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 404)
+2025-10-26 01:43:47,357 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-26 01:44:24,259 - deadline_reminder_scheduler - INFO - Sending reminder for task 15 (0.003472222222222222 days before due)
+2025-10-26 01:44:29,765 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 15: Deadline reminder notifications sent to all collaborators
+2025-10-26 01:44:37,036 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:44:39,216 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 404)
+2025-10-26 01:44:41,377 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-26 01:48:00,051 - deadline_reminder_scheduler - INFO - Testing connections...
+2025-10-26 01:48:02,248 - deadline_reminder_scheduler - INFO - Tasks API connection successful (status: 404)
+2025-10-26 01:48:04,454 - deadline_reminder_scheduler - INFO - Notification API connection successful (status: 404)
+2025-10-26 01:48:37,770 - deadline_reminder_scheduler - INFO - Sending reminder for task 15 (0.003472222222222222 days before due)
+2025-10-26 01:48:41,685 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 15: Deadline reminder notifications sent to all collaborators
+2025-10-26 01:51:11,693 - deadline_reminder_scheduler - INFO - Sending reminder for task 15 (0.001388888888888889 days before due)
+2025-10-26 01:51:16,122 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 15: Deadline reminder notifications sent to all collaborators
+2025-10-26 01:52:16,126 - deadline_reminder_scheduler - INFO - Sending reminder for task 15 (0.0006944444444444445 days before due)
+2025-10-26 01:52:20,084 - deadline_reminder_scheduler - INFO - Reminder sent successfully for task 15: Deadline reminder notifications sent to all collaborators
