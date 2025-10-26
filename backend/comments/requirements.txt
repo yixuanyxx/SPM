@@ -4,3 +4,4 @@ python-dotenv
 supabase
 python-dateutil
 unittest-xml-reporting>=3.2.0 
+requests

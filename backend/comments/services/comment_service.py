@@ -84,10 +84,16 @@ class CommentService:
             print(f"Error fetching task collaborators for task {task_id}: {e}")
             return []
 
-    def _send_mention_notifications(self, mentions: List[str], commenter_name: str, task_id: int, task_title: str, comment_content: str):
+    def _send_mention_notifications(self, mentions: List[str], commenter_name: str, task_id: int, task_title: str, comment_content: str, commenter_id: int):
         """
         Send notifications to mentioned users using structured format.
         """
+        # Fetch the commenter's actual name from the database
+        commenter_user_data = self._get_user_data(commenter_id)
+        actual_commenter_name = commenter_name
+        if commenter_user_data and commenter_user_data.get('name'):
+            actual_commenter_name = commenter_user_data['name']
+        
         for username in mentions:
             user = self._get_user_by_username(username)
             if user:
@@ -96,7 +102,7 @@ class CommentService:
                                            json={
                                                "task_id": task_id,
                                                "mentioned_user_id": user['userid'],
-                                               "commenter_name": commenter_name,
+                                               "commenter_name": actual_commenter_name,
                                                "comment_content": comment_content,
                                                "task_name": task_title
                                            })
@@ -109,6 +115,12 @@ class CommentService:
         """
         Send notifications to task collaborators (excluding the commenter) using structured format.
         """
+        # Fetch the commenter's actual name from the database
+        commenter_user_data = self._get_user_data(commenter_id)
+        actual_commenter_name = commenter_name
+        if commenter_user_data and commenter_user_data.get('name'):
+            actual_commenter_name = commenter_user_data['name']
+        
         # Exclude the commenter from notifications
         collaborators_to_notify = [cid for cid in collaborator_ids if cid != commenter_id]
         
@@ -118,7 +130,7 @@ class CommentService:
                                        json={
                                            "task_id": task_id,
                                            "collaborator_user_id": user_id,
-                                           "commenter_name": commenter_name,
+                                           "commenter_name": actual_commenter_name,
                                            "comment_content": comment_content,
                                            "task_name": task_title
                                        })
@@ -150,7 +162,7 @@ class CommentService:
             
             # If there are mentions, send mention notifications only
             if mentions:
-                self._send_mention_notifications(mentions, commenter_name, task_id, task_title, comment_content)
+                self._send_mention_notifications(mentions, commenter_name, task_id, task_title, comment_content, commenter_id)
             else:
                 # No mentions, send collaborator notifications to all collaborators
                 self._send_collaborator_notifications(collaborators, commenter_name, task_id, task_title, comment_content, commenter_id)

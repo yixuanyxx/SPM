@@ -121,59 +121,45 @@
 
           <!-- Collaborators Section -->
           <div class="form-group">
-            <label>Collaborators</label>
-            <div class="collaborator-management">
-              <!-- Add Collaborator Input -->
-              <div class="add-collaborator">
-                <input 
-                  type="text"
-                  v-model="collaboratorQuery"
-                  placeholder="Search by email to add collaborators..."
-                  class="form-input"
-                  :disabled="isLoading"
-                />
-                <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
-                  <li 
-                    v-for="user in collaboratorSuggestions" 
-                    :key="user.id"
-                    @click="addCollaborator(user)"
-                    class="suggestion-item"
-                  >
-                    <div class="user-info">
-                      <span class="user-name">{{ user.name }}</span>
-                      <span class="user-email">{{ user.email }}</span>
-                      <span class="user-role">{{ user.role }}</span>
-                    </div>
-                  </li>
-                </ul>
-              </div>
+            <label>Collaborators (emails)</label>
+            <div class="autocomplete">
+              <input 
+                type="text"
+                v-model="collaboratorQuery"
+                placeholder="Type email..."
+                class="form-input"
+                :disabled="isLoading"
+              />
 
-              <!-- Current Collaborators -->
-              <div class="current-collaborators">
-                <div v-if="selectedCollaborators.length === 0" class="no-collaborators">
-                  No collaborators assigned
-                </div>
-                <div
-                  v-for="collaborator in selectedCollaborators"
-                  :key="collaborator.id"
-                  class="collaborator-item"
+              <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
+                <li 
+                  v-for="user in collaboratorSuggestions" 
+                  :key="user.id"
+                  @click="addCollaborator(user)"
+                  class="suggestion-item"
                 >
-                  <div class="collaborator-info">
-                    <span class="collaborator-name">{{ collaborator.name }}</span>
-                    <span class="collaborator-email">{{ collaborator.email }}</span>
-                    <span class="role-badge" :class="collaborator.role">{{ collaborator.role }}</span>
-                    <span v-if="collaborator.userid == editedTask.owner_id" class="owner-badge">Owner</span>
-                  </div>
-                  <button
-                    v-if="collaborator.userid != editedTask.owner_id"
-                    type="button"
+                  {{ user.email }}
+                </li>
+              </ul>
+
+              <div class="selected-collaborators">
+                <span 
+                  v-for="(collaborator, index) in selectedCollaborators" 
+                  :key="index"
+                  :class="['selected-email', { 'owner-locked': collaborator.userid == editedTask.owner_id }]"
+                >
+                  {{ collaborator.email }}
+                  <i 
+                    v-if="collaborator.userid == editedTask.owner_id"
+                    class="bi bi-lock-fill"
+                    title="Task owner (cannot be removed)"
+                  ></i>
+                  <i 
+                    v-else
+                    class="bi bi-x" 
                     @click="removeCollaborator(collaborator)"
-                    class="remove-btn"
-                    :disabled="isLoading"
-                  >
-                    <i class="bi bi-x"></i>
-                  </button>
-                </div>
+                  ></i>
+                </span>
               </div>
             </div>
           </div>
@@ -438,11 +424,26 @@ export default {
       },
       immediate: true
     },
-    collaboratorQuery: {
-      handler(query) {
-        this.fetchCollaboratorSuggestions(query);
-      },
-      immediate: false
+    async collaboratorQuery(query) {
+      if (!query) {
+        this.collaboratorSuggestions = [];
+        return;
+      }
+
+      try {
+        const res = await fetch(`http://localhost:5003/users/search?q=${encodeURIComponent(query)}`);
+        if (!res.ok) throw new Error('Failed to fetch user emails');
+        const data = await res.json();
+        
+        // Filter out already selected collaborators
+        const selectedIds = this.selectedCollaborators.map(c => c.userid);
+        this.collaboratorSuggestions = (data.data || []).filter(user => 
+          !selectedIds.includes(user.userid)
+        );
+      } catch (err) {
+        console.error(err);
+        this.collaboratorSuggestions = [];
+      }
     }
   },
   methods: {
@@ -566,29 +567,6 @@ export default {
       }
     },
 
-    async fetchCollaboratorSuggestions(query) {
-      if (!query || query.length < 2) {
-        this.collaboratorSuggestions = [];
-        return;
-      }
-
-      try {
-        const response = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`);
-        if (!response.ok) throw new Error('Failed to fetch user suggestions');
-        
-        const data = await response.json();
-        const allUsers = data.data || [];
-        
-        // Filter out already selected collaborators
-        const selectedIds = this.selectedCollaborators.map(c => c.userid);
-        this.collaboratorSuggestions = allUsers.filter(user => 
-          !selectedIds.includes(user.userid)
-        ).slice(0, 10); // Limit to 10 suggestions
-      } catch (error) {
-        console.error('Error fetching collaborator suggestions:', error);
-        this.collaboratorSuggestions = [];
-      }
-    },
 
     addCollaborator(user) {
       if (!this.selectedCollaborators.find(c => c.userid === user.userid)) {
@@ -599,6 +577,14 @@ export default {
     },
 
     removeCollaborator(user) {
+      // Prevent removal if owner
+      if (user.userid == this.editedTask.owner_id) {
+        this.errorMessage = "Cannot remove task owner from collaborators";
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 2000);
+        return;
+      }
       this.selectedCollaborators = this.selectedCollaborators.filter(c => c.userid !== user.userid);
     },
 
@@ -1592,16 +1578,8 @@ export default {
 }
 
 /* Collaborator Management Styles */
-.collaborator-management {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1rem;
-  background-color: #f9fafb;
-}
-
-.add-collaborator {
+.autocomplete {
   position: relative;
-  margin-bottom: 1rem;
 }
 
 .suggestions-list {
@@ -1618,13 +1596,14 @@ export default {
   z-index: 10;
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 4px 0 0 0;
 }
 
 .suggestion-item {
   padding: 0.75rem;
   cursor: pointer;
   border-bottom: 1px solid #f3f4f6;
+  transition: background-color 0.2s;
 }
 
 .suggestion-item:hover {
@@ -1635,93 +1614,46 @@ export default {
   border-bottom: none;
 }
 
-.user-info {
+.selected-collaborators {
   display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
 }
 
-.user-name {
-  font-weight: 500;
-  color: #111827;
-}
-
-.user-email {
-  font-size: 0.875rem;
-  color: #6b7280;
-}
-
-.user-role {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  text-transform: capitalize;
-}
-
-.current-collaborators {
-  min-height: 100px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.no-collaborators {
-  text-align: center;
-  color: #6b7280;
-  font-style: italic;
-  padding: 2rem;
-}
-
-.collaborator-item {
-  display: flex;
+.selected-email {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem;
-  border-radius: 6px;
-  background-color: white;
-  border: 1px solid #e5e7eb;
-  margin-bottom: 0.5rem;
-}
-
-.collaborator-item:last-child {
-  margin-bottom: 0;
-}
-
-.collaborator-info {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex: 1;
-}
-
-.collaborator-name {
-  font-weight: 500;
-  color: #111827;
-}
-
-.collaborator-email {
+  gap: 0.5rem;
+  background-color: #dbeafe;
+  color: #1e40af;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
   font-size: 0.875rem;
-  color: #6b7280;
 }
 
-.remove-btn {
-  background: none;
-  border: none;
-  color: #ef4444;
+.selected-email.owner-locked {
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fbbf24;
+}
+
+.selected-email i {
   cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  font-weight: bold;
 }
 
-.remove-btn:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
-}
-
-.remove-btn:disabled {
-  opacity: 0.5;
+.selected-email.owner-locked i.bi-lock-fill {
   cursor: not-allowed;
+  font-size: 0.75rem;
+}
+
+.selected-email i:hover {
+  color: #1e3a8a;
+}
+
+.selected-email.owner-locked i.bi-lock-fill:hover {
+  color: #92400e;
 }
 
 /* Attachment Management Styles */
