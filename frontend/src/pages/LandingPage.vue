@@ -343,7 +343,7 @@ async function markAsUnread(notification) {
         <div class="tasks-container" style="margin-top: 1rem;">
           <div class="notifications-header">
             <h3 class="notifications-heading">Latest Notifications</h3>
-            <button v-if="notifications.length > 5" class="view-all-btn" @click="viewAllNotifications">
+            <button class="view-all-btn" @click="viewAllNotifications">
               <i class="bi bi-list-ul"></i> View All Notifications
             </button>
           </div>
