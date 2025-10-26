@@ -856,6 +856,11 @@ class TaskService:
         """
         Automatically generate the next task occurrence based on recurrence frequency.
         Keeps timezone-awareness intact and ensures next due date > completed_at.
+
+        When the completed task is a parent that has subtasks, this will create NEW
+        subtask rows (copies of the originals with new ids) and set the new parent's
+        'subtasks' column to exactly the list of newly-created subtask ids.
+        The previous subtask rows are NOT re-attached.
         """
         print(f"⚙️ Generating next occurrence for task {completed_task.get('id')} "
             f"with recurrence_type={completed_task.get('recurrence_type')}")
@@ -886,7 +891,6 @@ class TaskService:
         except Exception:
             completed_at = datetime.now(timezone.utc)
 
-        # --- Use timezone-aware now() as fallback ---
         now_aware = datetime.now(timezone.utc)
 
         # --- Determine base date ---
@@ -904,17 +908,14 @@ class TaskService:
 
         if rec_type == "daily":
             next_due_date = base_date + timedelta(days=1)
-
         elif rec_type == "weekly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=1)
-
         elif rec_type == "bi-weekly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date += timedelta(weeks=2)
-
         elif rec_type == "monthly":
             original_day = due_date.day
             next_due_date = due_date
@@ -925,25 +926,20 @@ class TaskService:
                 last_day = calendar.monthrange(year, month)[1]
                 day = min(original_day, last_day)
                 next_due_date = next_due_date.replace(year=year, month=month, day=day)
-
         elif rec_type == "yearly":
             next_due_date = due_date
             while next_due_date <= completed_at:
                 next_due_date = next_due_date.replace(year=next_due_date.year + 1)
-
         elif rec_type == "custom":
-            interval = completed_task.get("recurrence_interval_days")
             try:
-                interval = int(interval)
+                interval = int(recurrence_interval_days) if recurrence_interval_days else None
             except (TypeError, ValueError):
                 interval = None
-
             if interval and interval > 0:
                 next_due_date = base_date + timedelta(days=interval)
             else:
-                print(f"⚠️ Invalid custom recurrence interval for task {completed_task.get('id')} (interval={interval})")
+                print(f"⚠️ Invalid custom recurrence interval for task {completed_task.get('id')}")
                 return
-
         else:
             print(f"⚠️ Unsupported recurrence type '{recurrence_type}'")
             return
@@ -961,30 +957,118 @@ class TaskService:
                 print(f"⚠️ Could not parse recurrence_end_date '{recurrence_end_date}'")
 
         # --- Prepare new task payload ---
-        task_payload = copy.deepcopy(completed_task)
-        task_payload.pop("id", None)
-        task_payload["status"] = "Ongoing"
-        task_payload["completed_at"] = None
-        task_payload["created_at"] = now_aware.isoformat()
-        task_payload["due_date"] = next_due_date.isoformat()
-        task_payload["type"] = completed_task.get("type", "parent")
-        task_payload["recurrence_type"] = recurrence_type
-        task_payload["recurrence_end_date"] = recurrence_end_date
-        task_payload["recurrence_interval_days"] = recurrence_interval_days
+        new_task_payload = copy.deepcopy(completed_task)
+        new_task_payload.pop("id", None)
+        new_task_payload["status"] = "Ongoing"
+        new_task_payload["completed_at"] = None
+        new_task_payload["created_at"] = now_aware.isoformat()
+        new_task_payload["due_date"] = next_due_date.isoformat()
+        new_task_payload["recurrence_type"] = recurrence_type
+        new_task_payload["recurrence_end_date"] = recurrence_end_date
+        new_task_payload["recurrence_interval_days"] = recurrence_interval_days
 
-        if completed_task.get("type") == "subtask":
-            task_payload["parent_task"] = completed_task.get("parent_task")
-
-        # --- Insert new recurring task ---
         try:
-            created = self.repo.insert_task(task_payload)
-            print(f"✅ Created recurring task {created.get('id')} for recurrence '{recurrence_type}'")
-            if task_payload.get("type") == "subtask" and task_payload.get("parent_task"):
-                self.repo.add_subtask_to_parent(task_payload["parent_task"], created["id"])
-            return created
+            # ------------------------------
+            # Case 1: Parent recurring task
+            # ------------------------------
+            if completed_task.get("type") != "subtask":
+                created_parent = self.repo.insert_task(new_task_payload)
+                if not created_parent:
+                    print(f"❌ Could not insert new recurring parent task for {completed_task.get('id')}")
+                    return None
+
+                new_parent_id = created_parent.get("id")
+                print(f"✅ Created new parent occurrence {new_parent_id} for recurrence '{recurrence_type}'")
+
+                # Clone subtasks (if any)
+                seen_subtask_names = set()
+                new_subtask_ids = []
+
+                original_subtask_ids = completed_task.get("subtasks") or []
+
+                for orig_id in original_subtask_ids:
+                    orig = self.repo.get_task(orig_id)
+                    if not orig:
+                        print(f"⚠️ Original subtask {orig_id} not found, skipping")
+                        continue
+
+                    sub_name = orig.get("task_name")
+                    if sub_name in seen_subtask_names:
+                        print(f"ℹ️ Skipping duplicate subtask '{sub_name}'")
+                        continue
+
+                    seen_subtask_names.add(sub_name)
+
+                    # Clone subtask
+                    new_sub = copy.deepcopy(orig)
+                    new_sub.pop("id", None)
+                    new_sub["status"] = "Ongoing"
+                    new_sub["completed_at"] = None
+                    new_sub["created_at"] = now_aware.isoformat()
+                    new_sub["parent_task"] = new_parent_id
+
+                    # Adjust due date relative to parent
+                    try:
+                        if orig.get("due_date") and completed_task.get("due_date"):
+                            orig_due = dateparser.parse(orig["due_date"])
+                            parent_due = dateparser.parse(completed_task["due_date"])
+                            offset = orig_due - parent_due
+                            new_sub["due_date"] = (next_due_date + offset).isoformat()
+                        else:
+                            new_sub["due_date"] = next_due_date.isoformat()
+                    except Exception:
+                        new_sub["due_date"] = next_due_date.isoformat()
+
+                    inserted_sub = self.repo.insert_task(new_sub)
+                    if inserted_sub:
+                        new_subtask_ids.append(inserted_sub.get("id"))
+                        print(f"   ✅ Created new subtask {inserted_sub.get('id')} (from {orig_id})")
+
+                     # Adjust recurrence end date relative to parent
+                    try:
+                        if orig.get("recurrence_end_date") and completed_task.get("recurrence_end_date"):
+                            orig_end = dateparser.parse(orig["recurrence_end_date"])
+                            parent_end = dateparser.parse(completed_task["recurrence_end_date"])
+                            if orig_end and parent_end:
+                                end_offset = orig_end - parent_end
+                                new_parent_end = dateparser.parse(recurrence_end_date) if recurrence_end_date else None
+                                if new_parent_end:
+                                    new_end = new_parent_end + end_offset
+                                    new_sub["recurrence_end_date"] = new_end.isoformat()
+                                else:
+                                    new_sub["recurrence_end_date"] = None
+                            else:
+                                new_sub["recurrence_end_date"] = orig.get("recurrence_end_date")
+                        else:
+                            new_sub["recurrence_end_date"] = orig.get("recurrence_end_date")
+                    except Exception:
+                        new_sub["recurrence_end_date"] = orig.get("recurrence_end_date")
+
+                # Update parent with only unique subtasks
+                self.repo.update_task(new_parent_id, {"subtasks": new_subtask_ids})
+                print(f"   ✅ Updated parent {new_parent_id} with subtasks {new_subtask_ids}")
+
+            # ------------------------------
+            # Case 2: Standalone subtask recurring
+            # ------------------------------
+            else:
+                new_sub = copy.deepcopy(completed_task)
+                new_sub.pop("id", None)
+                new_sub["status"] = "Ongoing"
+                new_sub["completed_at"] = None
+                new_sub["created_at"] = now_aware.isoformat()
+                new_sub["due_date"] = next_due_date.isoformat()
+
+                inserted_sub = self.repo.insert_task(new_sub)
+                self.repo.add_subtask_to_parent(inserted_sub["parent_task"], inserted_sub["id"])
+                if inserted_sub:
+                    print(f"✅ Created new subtask occurrence {inserted_sub.get('id')} for completed subtask {completed_task.get('id')}")
+                return inserted_sub
+
         except Exception as e:
             print(f"❌ Failed to create recurring task: {e}")
             return None
+
         
     def _prepare_subtask_payload(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """
