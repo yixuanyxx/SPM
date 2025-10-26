@@ -296,8 +296,10 @@ const handleCardClick = (project) => {
 const getMyTasks = (tasks) => {
   if (!tasks) return []
   return tasks.filter(task => {
-    // Check if the current user is assigned to this task
-    return task.collaborators && task.collaborators.includes(parseInt(userId))
+    // Check if the current user is assigned to this task OR is the owner
+    const isCollaborator = task.collaborators && task.collaborators.includes(parseInt(userId))
+    const isOwner = task.owner_id && parseInt(task.owner_id) === parseInt(userId)
+    return isCollaborator || isOwner
   })
 }
 
