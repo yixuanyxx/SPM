@@ -462,7 +462,9 @@ const validateRecurrence = () => {
   const newSubtask = { 
     task_name: currentSubtask.value.task_name,
     description: currentSubtask.value.description,
-    due_date: currentSubtask.value.due_date,
+    due_date: currentSubtask.value.due_date
+      ? new Date(currentSubtask.value.due_date).toISOString()
+      : null,
     priority: parseInt(currentSubtask.value.priority),
     status: currentSubtask.value.status,
     collaborators: selectedCollaborators.value.map(u => ({
