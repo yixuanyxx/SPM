@@ -164,93 +164,13 @@
             </button>
           </div>
 
-          <!-- Create Task Modal -->
-          <div v-if="showCreateModal" class="modal-overlay">
-            <div class="modal-content">
-              <h2>Create New Task for {{ project.proj_name }}</h2>
-
-              <label>Task Name* </label>
-              <input v-model="newTask.task_name" placeholder="Enter task name" required/>
-
-              <label>Description* </label>
-              <textarea v-model="newTask.description" placeholder="Enter description" required></textarea>
-
-              <label>Due Date* </label>
-              <input type="datetime-local" v-model="newTask.due_date" required/>
-
-              <div class="form-group mt-4">
-                <label for="priority">Priority Level: {{ newTask.priority }}</label>
-                <div class="priority-slider-container">
-                  <input
-                    id="priority"
-                    type="range"
-                    min="1"
-                    max="10"
-                    v-model="newTask.priority"
-                    class="priority-slider"
-                  />
-                </div>
-              </div>
-
-              <label>Status</label>
-              <select v-model="newTask.status">
-                <option value="Unassigned">Unassigned</option>
-                <option value="Ongoing">Ongoing</option>
-                <option value="Under Review">Under Review</option>
-                <option value="Completed">Completed</option>
-              </select>
-
-              <label>Collaborators (emails)</label>
-              <div class="autocomplete">
-                <input 
-                  type="text"
-                  v-model="collaboratorQuery"
-                  placeholder="Type email..."
-                />
-
-                <ul v-if="collaboratorSuggestions.length > 0" class="suggestions-list">
-                  <li 
-                    v-for="user in collaboratorSuggestions" 
-                    :key="user.id"
-                    @click="addCollaborator(user)"
-                  >
-                    {{ user.email }}
-                  </li>
-                </ul>
-
-                <div class="selected-collaborators">
-                  <span 
-                    v-for="user in selectedCollaborators" 
-                    :key="user.id" 
-                    class="selected-email"
-                  >
-                    {{ user.email }} <i class="bi bi-x" @click="removeCollaborator(user)"></i>
-                  </span>
-                </div>
-              </div>
-
-              <label>Attach PDF</label>
-              <input type="file" @change="handleFileUpload" accept="application/pdf" />
-
-              <div class="modal-actions">
-                <button @click="submitNewTask" :disabled="isCreatingTask">
-                  <i v-if="isCreatingTask" class="bi bi-arrow-repeat spin"></i>
-                  {{ isCreatingTask ? 'Creating...' : 'Create' }}
-                </button>
-                <button @click="closeCreateTaskModal" :disabled="isCreatingTask">Cancel</button>
-              </div>
-
-              <!-- Error Popup -->
-              <div v-if="showErrorPopup" class="error-popup">
-                <p>{{ errorMessage }}</p>
-                <button @click="showErrorPopup = false" class="btn-close">
-                  <i class="bi bi-x"></i>
-                </button>
-              </div>
-            </div>
-          </div>
-
-
+          <!-- Create Task Modal Component -->
+          <CreateNewTask
+            :isVisible="showCreateModal"
+            :projectId="project?.id"
+            @close="handleCloseCreateTask"
+            @task-created="handleTaskCreated"
+          />
 
           <!-- Edit Project Component -->
           <EditProject
@@ -273,6 +193,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getCurrentUserData } from '../../services/session.js'
 import SideNavbar from '../../components/SideNavbar.vue'
 import EditProject from '../../components/EditProject.vue'
+import CreateNewTask from '../../components/CreateNewTask.vue'
 import '../projectdetails/projectdetails.css'
 
 const route = useRoute()
@@ -283,38 +204,16 @@ const loading = ref(true)
 const error = ref(null)
 const showCreateModal = ref(false)
 const showEditProject = ref(false)
-const newTaskFile = ref(null)
 const showErrorPopup = ref(false)
 const errorMessage = ref('')
 const userId = ref(getCurrentUserData().userid)
 const userRole = ref(getCurrentUserData().role?.toLowerCase())
-const users = ref({}) // Add this with your other refs
-
-// Create Task Modal Variables
-const collaboratorQuery = ref('')
-const collaboratorSuggestions = ref([])
-const selectedCollaborators = ref([])
-const isCreatingTask = ref(false)
-
-// Add the new task form data
-const newTask = ref({
-  owner_id: userId.value,
-  task_name: '',
-  description: '',
-  type: 'parent',
-  due_date: '',
-  priority: '5',
-  status: 'Ongoing',
-  project_id: '', // Will be set automatically
-  collaborators: [],
-})
-
+const users = ref({})
 
 onMounted(async () => {
   await fetchProjectDetails()
 })
 
-// Watch for route parameter changes to reload project details
 watch(() => route.params.id, async (newId, oldId) => {
   if (newId && newId !== oldId) {
     await fetchProjectDetails()
@@ -328,12 +227,10 @@ const fetchProjectDetails = async () => {
     
     const projectId = route.params.id
     
-    // Validate project ID
     if (!projectId || isNaN(projectId)) {
       throw new Error('Invalid project ID')
     }
     
-    // Fetch project details
     const projectResponse = await fetch(`http://localhost:5001/projects/${projectId}`)
     if (!projectResponse.ok) {
       if (projectResponse.status === 404) {
@@ -346,26 +243,21 @@ const fetchProjectDetails = async () => {
     }
     const projectData = await projectResponse.json()
     
-    // Validate project data
     if (!projectData || (!projectData.data && !projectData.proj_name)) {
       throw new Error('Invalid project data received')
     }
     
-    // Get initial project data
     project.value = {
       ...(projectData.data || projectData),
       tasks: []
     }
     
-    // Ensure required fields exist
     if (!project.value.proj_name) {
       throw new Error('Project name is missing')
     }
 
-    // Fetch all user details
     await fetchProjectUsers()
     
-    // Fetch tasks for this project
     try {
       const tasksResponse = await fetch(`http://localhost:5002/tasks/project/${projectId}`)
       const tasksData = await tasksResponse.json()
@@ -375,7 +267,6 @@ const fetchProjectDetails = async () => {
       project.value.tasks = []
     }
     
-    // Sync all task collaborators with project collaborators
     await syncAllTaskCollaborators()
     
   } catch (err) {
@@ -413,110 +304,34 @@ const getCompletedTasksCount = (tasks) => {
   return tasks.filter(task => task.status === 'Completed').length
 }
 
-const handleFileUpload = (event) => {
-  const file = event.target.files[0]
-  if (file && file.type === "application/pdf") {
-    newTaskFile.value = file
-    errorMessage.value = ''
-  } else {
-    errorMessage.value = "Only PDF files are allowed"
-    showErrorPopup.value = true
-    event.target.value = null
-    newTaskFile.value = null
-  }
+// Task Creation Handlers
+const handleCloseCreateTask = () => {
+  showCreateModal.value = false
 }
 
-const addCollaborator = (user) => {
-  if (!selectedCollaborators.value.find(u => u.id === user.id)) {
-    selectedCollaborators.value.push(user)
-  }
-  collaboratorQuery.value = ''
-  collaboratorSuggestions.value = []
-}
-
-const removeCollaborator = (user) => {
-  selectedCollaborators.value = selectedCollaborators.value.filter(u => u.id !== user.id)
-}
-
-// Watch for collaborator query changes
-watch(collaboratorQuery, async (query) => {
-  if (!query) {
-    collaboratorSuggestions.value = []
-    return
-  }
-
-  try {
-    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`)
-    if (!res.ok) throw new Error('Failed to fetch user emails')
-    const data = await res.json()
-    collaboratorSuggestions.value = data.data || []
-  } catch (err) {
-    console.error(err)
-    collaboratorSuggestions.value = []
-  }
-})
-
-const submitNewTask = async () => {
-  if (!newTask.value.task_name || !newTask.value.description || !newTask.value.due_date) {
-    errorMessage.value = 'Please fill out all required fields'
-    showErrorPopup.value = true
-    return
-  }
-
-  isCreatingTask.value = true
-  try {
-    const endpoint = (userRole.value === 'manager' || userRole.value === 'director')
-      ? 'http://localhost:5002/tasks/manager-task/create'
-      : 'http://localhost:5002/tasks/staff-task/create'
-
-    const formData = new FormData()
-    
-    // Add task data
-    Object.keys(newTask.value).forEach(key => {
-      if (key === 'project_id') {
-        formData.append(key, project.value.id) // Use current project ID
-      } else {
-        formData.append(key, newTask.value[key])
-      }
-    })
-
-    // Add collaborators
-    const collaboratorIds = selectedCollaborators.value.map(user => user.userid)
-    if (userRole.value === 'staff' && !collaboratorIds.includes(userId.value)) {
-      collaboratorIds.push(userId.value)
+const handleTaskCreated = async (newTask) => {
+  console.log('Task created:', newTask)
+  
+  // Extract collaborator IDs from the created task
+  let collaboratorIds = []
+  if (newTask.collaborators) {
+    if (Array.isArray(newTask.collaborators)) {
+      collaboratorIds = newTask.collaborators.map(id => parseInt(id))
+    } else if (typeof newTask.collaborators === 'string') {
+      collaboratorIds = newTask.collaborators.split(',').map(id => parseInt(id.trim()))
     }
-    if (collaboratorIds.length > 0) {
-      formData.append('collaborators', collaboratorIds.join(','))
-    }
-
-    // Add file if present
-    if (newTaskFile.value) {
-      formData.append('attachment', newTaskFile.value)
-    }
-
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      body: formData
-    })
-
-    const data = await response.json()
-
-    if (response.ok && data.Code === 201) {
-      // Update project collaborators with task collaborators
-      await updateProjectCollaborators(collaboratorIds)
-      
-      // Refresh project details to show new task and updated collaborators
-      await fetchProjectDetails()
-      closeCreateTaskModal()
-    } else {
-      throw new Error(data.Message || 'Failed to create task')
-    }
-  } catch (error) {
-    errorMessage.value = error.message
-    showErrorPopup.value = true
-  } finally {
-    isCreatingTask.value = false
   }
+  
+  // Update project collaborators with task collaborators
+  if (collaboratorIds.length > 0) {
+    await updateProjectCollaborators(collaboratorIds)
+  }
+  
+  // Refresh project details to show the new task and updated collaborators
+  await fetchProjectDetails()
+  
+  // Close the modal
+  showCreateModal.value = false
 }
 
 // Edit Project methods
@@ -529,59 +344,28 @@ const closeEditProject = () => {
 }
 
 const handleProjectUpdate = async (updateData) => {
-  // Refresh project details to show updated data
   await fetchProjectDetails()
   closeEditProject()
 }
 
-// Create Task Modal Methods
-const resetCreateTaskForm = () => {
-  newTask.value = {
-    owner_id: userId.value,
-    task_name: '',
-    description: '',
-    type: 'parent',
-    due_date: '',
-    priority: '5',
-    status: 'Ongoing',
-    project_id: '',
-    collaborators: [],
-  }
-  selectedCollaborators.value = []
-  collaboratorQuery.value = ''
-  collaboratorSuggestions.value = []
-  newTaskFile.value = null
-  errorMessage.value = ''
-  showErrorPopup.value = false
-  isCreatingTask.value = false
-}
-
-const closeCreateTaskModal = () => {
-  showCreateModal.value = false
-  resetCreateTaskForm()
-}
-
-// Update the fetchProjectUsers function
+// User management
 const fetchProjectUsers = async () => {
   const userIds = new Set()
   
-  // Collect all unique user IDs from project
   if (project.value.owner_id) userIds.add(project.value.owner_id)
   if (project.value.collaborators) {
     project.value.collaborators.forEach(id => userIds.add(id))
   }
   
-  // Fetch user details for all unique IDs
   const fetchPromises = Array.from(userIds).map(userid => fetchUserDetails(userid))
   const results = await Promise.all(fetchPromises)
   console.log(`Fetched ${results.filter(r => r !== null).length} users out of ${userIds.size}`)
 }
 
-// Update the fetchUserDetails function
 const fetchUserDetails = async (userid) => {
   if (!userid) return null
   if (users.value[userid]) {
-    return users.value[userid] // Return cached user
+    return users.value[userid]
   }
   
   try {
@@ -605,15 +389,13 @@ const fetchUserDetails = async (userid) => {
   return null
 }
 
-
-// Add this helper method
 const getUserName = (userid) => {
   if (!userid) return 'Unknown User'
   const user = users.value[userid]
   return user?.name || 'Unknown User'
 }
 
-// Add this method with your other methods
+// Project collaborator management
 const updateProjectCollaborators = async (taskCollaboratorIds) => {
   if (!taskCollaboratorIds || taskCollaboratorIds.length === 0) return
 
@@ -621,12 +403,10 @@ const updateProjectCollaborators = async (taskCollaboratorIds) => {
     const projectCollaborators = project.value.collaborators || []
     const projectOwnerId = parseInt(project.value.owner_id)
     
-    // Convert to Set for efficient comparison
     const projectCollaboratorsSet = new Set(
       projectCollaborators.map(collab => parseInt(collab))
     )
     
-    // Find collaborators that need to be added
     const newCollaborators = taskCollaboratorIds.filter(
       collabId => {
         const id = parseInt(collabId)
@@ -639,7 +419,6 @@ const updateProjectCollaborators = async (taskCollaboratorIds) => {
     console.log('New collaborators to add:', newCollaborators)
 
     if (newCollaborators.length > 0) {
-      // Update the project with new collaborators
       const updateResponse = await fetch(`http://localhost:5001/projects/update`, {
         method: 'PATCH',
         headers: {
@@ -657,7 +436,6 @@ const updateProjectCollaborators = async (taskCollaboratorIds) => {
 
       console.log('Project collaborators updated successfully')
       
-      // Fetch user details for new collaborators
       await Promise.all(newCollaborators.map(id => fetchUserDetails(id)))
     }
   } catch (error) {
@@ -665,14 +443,12 @@ const updateProjectCollaborators = async (taskCollaboratorIds) => {
   }
 }
 
-// Add this method to sync all task collaborators with project collaborators
 const syncAllTaskCollaborators = async () => {
   if (!project.value.tasks || project.value.tasks.length === 0) return
 
   try {
     const allTaskCollaborators = new Set()
     
-    // Collect all unique collaborators and owners from all tasks
     project.value.tasks.forEach(task => {
       if (task.collaborators) {
         task.collaborators.forEach(collab => allTaskCollaborators.add(parseInt(collab)))
@@ -689,7 +465,6 @@ const syncAllTaskCollaborators = async () => {
       projectCollaborators.map(collab => parseInt(collab))
     )
 
-    // Find collaborators that need to be added
     const newCollaborators = Array.from(allTaskCollaborators).filter(
       collabId => !projectCollaboratorsSet.has(collabId) && collabId !== projectOwnerId
     )
@@ -715,10 +490,8 @@ const syncAllTaskCollaborators = async () => {
 
       console.log('All task collaborators synced with project')
       
-      // Update local project data
       project.value.collaborators = [...projectCollaborators, ...newCollaborators]
       
-      // Fetch user details for new collaborators
       await Promise.all(newCollaborators.map(id => fetchUserDetails(id)))
     }
   } catch (error) {
