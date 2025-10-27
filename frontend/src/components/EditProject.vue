@@ -131,7 +131,7 @@ watch(collaboratorQuery, async (query) => {
   }
 
   try {
-    const res = await fetch(`http://localhost:5003/users/search?email=${encodeURIComponent(query)}`)
+    const res = await fetch(`http://localhost:5003/users/search?q=${encodeURIComponent(query)}`)
     if (!res.ok) throw new Error('Failed to fetch user emails')
     const data = await res.json()
     collaboratorSuggestions.value = data.data || []
