@@ -28,6 +28,7 @@
                       <option value="staff">Staff</option>
                       <option value="manager">Manager</option>
                       <option value="director">Director</option>
+                      <option value="managing_director">Managing Director</option>
                     </select>
                   </div>
                   <div v-if="role === 'staff' || role === 'manager'">

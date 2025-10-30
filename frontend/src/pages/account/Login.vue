@@ -99,7 +99,7 @@ async function onLogin() {
       // Query the user table for the actual userid and role
       const { data: userData, error: userError } = await supabase
         .from('user')
-        .select('userid, role, name')
+        .select('userid, role, name, team_id, dept_id')
         .eq('id', data.user.id)
         .single();
 
@@ -118,6 +118,8 @@ async function onLogin() {
       // Store the actual database values
       localStorage.setItem('userId', userData.userid.toString());
       localStorage.setItem('userRole', userData.role || 'staff');
+      localStorage.setItem('userTeam', userData.team_id);
+      localStorage.setItem('userDept', userData.dept_id);
     } else {
       throw new Error('No user data received from login');
     }
