@@ -62,7 +62,7 @@
             <div class="nav-icon">
               <i class="bi bi-folder"></i>
             </div>
-            <span class="nav-text">Projects</span>
+            <span class="nav-text"> My Projects</span>
           </router-link>
         </div>
 
