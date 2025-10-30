@@ -39,6 +39,15 @@
         >
           View Department Report
         </button>
+
+        <!-- Company Report Button (Visible only to users with team_id 9) -->
+        <button 
+          v-if="teamId === 9 || (userRole === 'director' && deptId === 5) || userRole === 'managing_director'" 
+          class="report-btn company-report-btn" 
+          @click="showReportForm('company')"
+        >
+          View Company Report
+        </button>
       </div>
 
       <!-- Dynamic Report Form -->
@@ -46,10 +55,23 @@
         <h3>Generate {{ currentReportType }} Report</h3>
         <form @submit.prevent="generateReport">
           <label for="start-date">Start Date:</label>
-          <input type="date" id="start-date" v-model="reportForm.startDate" />
+          <input 
+            type="date" 
+            id="start-date" 
+            v-model="reportForm.startDate" 
+            :max="todayDate"
+            required
+          />
 
           <label for="end-date">End Date:</label>
-          <input type="date" id="end-date" v-model="reportForm.endDate" />
+          <input 
+            type="date" 
+            id="end-date" 
+            v-model="reportForm.endDate" 
+            :max="todayDate"
+            :min="reportForm.startDate"
+            required
+          />
 
           <label for="export-format">Export Format:</label>
           <select id="export-format" v-model="reportForm.format">
@@ -62,7 +84,10 @@
       </div>
 
       <!-- Report Status Message -->
-      <div v-if="reportStatus" class="report-status">
+      <div 
+        v-if="reportStatus" 
+        :class="['report-status', reportStatusClass]"
+      >
         <p>{{ reportStatus }}</p>
       </div>
     </div>
@@ -70,19 +95,59 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import SideNavbar from '../../components/SideNavbar.vue'
 import '../reportview/reportview.css'
 import { useRouter } from 'vue-router'
+import { getCurrentUserData } from '../../services/session.js'
 
 const router = useRouter()
 
-// State
-const userId = localStorage.getItem('spm_userid')
-const userRole = localStorage.getItem('spm_role')?.toLowerCase()
+// State - Initialize as refs
+const userId = ref(null)
+const userRole = ref('')
+const teamId = ref(null)
+const deptId = ref(null)
 const currentReportType = ref(null)
 const reportForm = ref({ startDate: '', endDate: '', format: 'pdf' })
 const reportStatus = ref('')
+
+// Get user data from session on mount
+onMounted(async () => {
+  const userData = getCurrentUserData()
+  userRole.value = userData.role?.toLowerCase() || ''
+  userId.value = parseInt(userData.userid) || null
+  
+
+  // Get user's team_id
+  if (userId.value) {
+    try {
+      const response = await fetch(`http://localhost:5003/users/${userId.value}`)
+      if (response.ok) {
+        const data = await response.json()
+        teamId.value = data.data?.team_id
+        deptId.value = data.data?.dept_id
+      } else {
+        console.error('Failed to fetch user details:', response.status)
+      }
+    } catch (error) {
+      console.error('Error fetching user details:', error)
+    }
+  } else {
+    console.log('No user ID found in session')
+  }
+  
+
+})
+
+// Get today's date in YYYY-MM-DD format
+const todayDate = computed(() => {
+  const today = new Date()
+  const year = today.getFullYear()
+  const month = String(today.getMonth() + 1).padStart(2, '0')
+  const day = String(today.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+})
 
 // Show the form for the selected report type
 const showReportForm = (reportType) => {
@@ -97,7 +162,31 @@ const generateReport = async () => {
     const { startDate, endDate, format } = reportForm.value
     
     if (!startDate || !endDate) {
-      alert('Please select both start and end dates')
+      reportStatus.value = 'Please select both start and end dates'
+      setTimeout(() => {
+        reportStatus.value = ''
+      }, 3000)
+      return
+    }
+
+    // Validate that end date is not before start date
+    if (new Date(endDate) < new Date(startDate)) {
+      reportStatus.value = 'End date cannot be before start date'
+      setTimeout(() => {
+        reportStatus.value = ''
+      }, 3000)
+      return
+    }
+
+    // Validate that dates are not in the future
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    
+    if (new Date(startDate) > today || new Date(endDate) > today) {
+      reportStatus.value = 'Dates cannot be in the future'
+      setTimeout(() => {
+        reportStatus.value = ''
+      }, 3000)
       return
     }
     
@@ -105,11 +194,13 @@ const generateReport = async () => {
     let endpoint = ''
 
     if (currentReportType.value === 'personal') {
-      endpoint = `http://localhost:5007/reports/personal/${userId}`
+      endpoint = `http://localhost:5007/reports/personal/${userId.value}`
     } else if (currentReportType.value === 'team') {
-      endpoint = `http://localhost:5007/reports/team/${userId}`
+      endpoint = `http://localhost:5007/reports/team/${userId.value}`
     } else if (currentReportType.value === 'department') {
-      endpoint = `http://localhost:5007/reports/department/${userId}`
+      endpoint = `http://localhost:5007/reports/department/${userId.value}`
+    } else if (currentReportType.value === 'company') {
+      endpoint = `http://localhost:5007/reports/company/${userId.value}`
     }
 
     console.log(`Generating report: ${endpoint}?${queryParams}`)
@@ -143,6 +234,13 @@ const generateReport = async () => {
     }, 5000)
   }
 }
+
+const reportStatusClass = computed(() => {
+  if (reportStatus.value.includes('successfully')) return 'success'
+  if (reportStatus.value.includes('Failed') || reportStatus.value.includes('cannot')) return 'error'
+  if (reportStatus.value.includes('Generating')) return 'loading'
+  return ''
+})
 </script>
 
 

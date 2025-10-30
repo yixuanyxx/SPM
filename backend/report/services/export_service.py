@@ -192,247 +192,157 @@ class ExportService:
         buffer.seek(0)
         return buffer.getvalue()
 
-        # Project Focus & Critical Tasks - Comprehensive Information
-        if report_data.project_stats:
-            story.append(Paragraph("Project Portfolio & Task Distribution", self.heading_style))
-            
-            # Show all projects, not just top 3
-            for project in report_data.project_stats:
-                project_name = project.get('project_name', 'Unknown Project')
-                project_status = "On Track" if project['completion_percentage'] >= 70 and project.get('overdue_percentage', 0) < 20 else \
-                                "At Risk" if project.get('overdue_percentage', 0) < 40 else "Critical"
-                
-                story.append(Paragraph(f"{project_name} | Status: {project_status}", self.styles['Heading3']))
-                
-                # Comprehensive project information
-                project_summary = [
-                    ['Tasks Progress', f"{project['completed_tasks']}/{project['total_tasks']} tasks completed ({project['completion_percentage']:.0f}%)"],
-                    ['Task Status Distribution', f"Ongoing: {project.get('in_progress_tasks', 0)}, Under Review: {project.get('under_review_tasks', 0)}"],
-                    ['Overdue Tasks', f"{project.get('overdue_tasks', 0)} tasks" + (f" ({project.get('overdue_percentage', 0):.0f}%)" if project.get('overdue_tasks', 0) > 0 else " (None)")],
-                    ['Late Completions', f"{project.get('late_completions', 0)} tasks"],
-                    ['On-Time Completion Rate', f"{project.get('on_time_completion_rate', 0):.1f}%"],
-                ]
-                
-                if project.get('average_task_duration'):
-                    project_summary.append(['Average Task Duration', f"{project['average_task_duration']:.1f} days"])
-                
-                if project.get('projected_completion_date') and project['projected_completion_date'] != 'Completed':
-                    project_summary.append(['Estimated Completion', project['projected_completion_date'][:10]])
-                elif project['projected_completion_date'] == 'Completed':
-                    project_summary.append(['Status', 'Project Completed'])
-                
-                # Show team members working on this project
-                task_assignees = project.get('task_assignees', {})
-                if task_assignees:
-                    assignee_names = []
-                    for assignee_info in task_assignees.values():
-                        name = assignee_info.get('owner_name', 'Unknown')
-                        task_count = len(assignee_info.get('tasks', []))
-                        assignee_names.append(f"{name} ({task_count} tasks)")
-                    
-                    if len(assignee_names) <= 3:
-                        assignees_text = ", ".join(assignee_names)
-                    else:
-                        assignees_text = ", ".join(assignee_names[:3]) + f" and {len(assignee_names) - 3} others"
-                    
-                    project_summary.append(['Team Members', assignees_text])
-                
-                proj_table = Table(project_summary, colWidths=[1.8*inch, 4.2*inch])
-                proj_table.setStyle(TableStyle([
-                    ('BACKGROUND', (0, 0), (0, -1), colors.lightcyan),
-                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                    ('FONTNAME', (0, 0), (-1, -1), 'Helvetica'),
-                    ('FONTSIZE', (0, 0), (-1, -1), 9),
-                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                    ('VALIGN', (0, 0), (-1, -1), 'TOP')
-                ]))
-                story.append(proj_table)
-                story.append(Spacer(1, 12))
+    def export_personal_report_excel(self, report_data: ReportData) -> bytes:
+        """Export personal report as Excel with Dashboard and Projects with tasks"""
+        buffer = io.BytesIO()
         
-        # Critical Tasks & Action Items - Complete list with full information
-        task_details = getattr(report_data, 'task_details', [])
-        critical_tasks = [task for task in task_details if 
-                         task.get('is_overdue') or 
-                         task.get('priority') == 'High' or 
-                         task.get('status') in ['Under Review']]
-        
-        if critical_tasks:
-            story.append(Paragraph("Action Required - All Critical Tasks (★ = You are owner/collaborator)", self.heading_style))
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            # ========== DASHBOARD SHEET ==========
+            performance_data = []
             
-            action_data = [['Task Name', 'Project', 'Priority', 'Status', 'Due Date', 'Action Needed']]
+            # KPI Section
+            performance_data.extend([
+                ['PERFORMANCE DASHBOARD', ''],
+                ['Name', report_data.user_name],
+                ['Role', report_data.user_role.capitalize() if report_data.user_role else 'Unknown'],
+                ['', ''],
+                ['KEY METRICS', ''],
+                ['Task Completion Rate', f"{report_data.completion_percentage:.1f}%"],
+                ['Tasks Completed', f"{report_data.completed_tasks}/{report_data.total_tasks}"],
+                ['Overdue Tasks', f"{getattr(report_data, 'overdue_tasks', 0)} ({getattr(report_data, 'overdue_percentage', 0):.1f}%)"],
+                ['Active Projects', str(report_data.total_projects)],
+                ['Avg Task Duration', f"{report_data.average_task_duration:.1f} days" if report_data.average_task_duration else "N/A"],
+                ['', ''],
+                ['TASK STATUS BREAKDOWN', '']
+            ])
             
-            # Track which rows need highlighting
-            highlighted_rows = []
+            # Task status breakdown
+            for status, count in report_data.task_stats.items():
+                performance_data.append([f"{status} Tasks", str(count)])
             
-            # Show ALL critical tasks, not limited to 8
-            for task_idx, task in enumerate(critical_tasks):
-                # Check if user is owner or collaborator
-                user_id = report_data.user_id
-                owner_id = task.get('owner_id')
-                collaborator_ids = task.get('collaborator_ids', []) or []
-                
-                is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
-                
-                action_needed = "OVERDUE!" if task.get('is_overdue') else \
-                               "Review Required" if task.get('status') == 'Under Review' else \
-                               "High Priority" if task.get('priority') == 'High' else ""
-                               
-                due_date = task.get('due_date', '')[:10] if task.get('due_date') else 'N/A'
-                task_name = task.get('task_name', 'Unknown')
-                if is_user_involved:
-                    task_name = f"★ {task_name}"
-                    highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
-                
-                project_name = task.get('project_name', 'No Project')
-                
-                action_data.append([
-                    task_name,  # Don't truncate task names
-                    project_name,
-                    task.get('priority', 'Normal'),
-                    task.get('status', 'Unknown'),
-                    due_date,
-                    action_needed
-                ])
+            # Performance indicators
+            performance_data.extend([
+                ['', ''],
+                ['PERFORMANCE INDICATORS', ''],
+                ['Overall Status', 
+                 '🟢 Excellent' if report_data.completion_percentage >= 80 and getattr(report_data, 'overdue_percentage', 0) < 15 else
+                 '🟡 Good' if report_data.completion_percentage >= 60 else '🔴 Needs Improvement'],
+                ['Efficiency Rating',
+                 '🟢 High' if report_data.average_task_duration and report_data.average_task_duration <= 5 else
+                 '🟡 Medium' if report_data.average_task_duration and report_data.average_task_duration <= 10 else '🔴 Low']
+            ])
             
-            # Adjust table column widths to prevent truncation
-            action_table = Table(action_data, colWidths=[2.2*inch, 1.3*inch, 0.7*inch, 0.8*inch, 0.7*inch, 1.0*inch])
-            
-            # Build table style with highlighting for user's tasks
-            table_style = [
-                ('BACKGROUND', (0, 0), (-1, 0), colors.red),
-                ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 8),
-                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                ('FONTSIZE', (0, 1), (-1, -1), 8),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                ('VALIGN', (0, 0), (-1, -1), 'TOP')
-            ]
-            
-            # Add yellow highlighting for rows where user is involved
-            for row_idx in highlighted_rows:
-                table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
-            
-            action_table.setStyle(TableStyle(table_style))
-            story.append(action_table)
-            story.append(Spacer(1, 20))
+            dashboard_df = pd.DataFrame(performance_data, columns=['Metric', 'Value'])
+            dashboard_df.to_excel(writer, sheet_name='Dashboard', index=False)
 
-        # Comprehensive Task Details - Complete Information with No Truncation
-        task_details = getattr(report_data, 'task_details', [])
-        if task_details:
-            story.append(Paragraph("Complete Task Portfolio & Performance Analysis (★ = You are owner/collaborator)", self.heading_style))
+            # ========== PROJECTS WITH TASKS SHEET ==========
+            # Get projects breakdown which contains both project stats and task details
+            projects_breakdown = getattr(report_data, 'projects_breakdown', [])
+            user_id = report_data.user_id
             
-            # Group tasks by status for organized viewing
-            task_groups = {}
-            for task in task_details:
-                status = task.get('status', 'Unknown')
-                if status not in task_groups:
-                    task_groups[status] = []
-                task_groups[status].append(task)
-            
-            # Display each status group with complete information
-            for status, tasks in task_groups.items():
-                if tasks:
-                    story.append(Paragraph(f"{status} Tasks ({len(tasks)})", self.styles['Heading3']))
+            if projects_breakdown:
+                all_project_data = []
+                
+                for project in projects_breakdown:
+                    # Project header
+                    all_project_data.append([f"PROJECT: {project.get('project_name', 'Unknown Project')}", '', '', '', '', '', '', '', '', ''])
+                    all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
                     
-                    # Comprehensive task table with all relevant details - no truncation
-                    task_detail_data = [['Task Name', 'Project', 'Owner', 'Collaborators', 'Duration', 'Due Date', 'Completed', 'Status Notes']]
+                    # Project-level metrics
+                    all_project_data.extend([
+                        ['Project Metrics', '', '', '', '', '', '', '', '', ''],
+                        ['Total Tasks in Project', project.get('total_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Completed Tasks', project.get('completed_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Ongoing Tasks', project.get('in_progress_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Under Review Tasks', project.get('under_review_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Overdue Tasks', project.get('overdue_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%", '', '', '', '', '', '', '', ''],
+                        ['Average Task Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A", '', '', '', '', '', '', '', ''],
+                        ['Projected Completion', project.get('projected_completion_date') if project.get('projected_completion_date') else "N/A", '', '', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '', '', '', '']
+                    ])
                     
-                    # Track which rows need highlighting
-                    highlighted_rows = []
-                    
-                    for task_idx, task in enumerate(tasks):
-                        # Check if user is owner or collaborator
-                        user_id = report_data.user_id
-                        owner_id = task.get('owner_id')
-                        collaborator_ids = task.get('collaborator_ids', []) or []
+                    # ALL Tasks in this project
+                    project_tasks = project.get('task_details', [])
+                    if project_tasks:
+                        all_project_data.append(['ALL TASKS IN THIS PROJECT', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['(★ = You are owner or collaborator)', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
                         
-                        is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
-                        
-                        # Get full task name - no truncation
-                        task_name = task.get('task_name', 'Unknown')
-                        if is_user_involved:
-                            task_name = f"★ {task_name}"
-                            highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
-                        
-                        # Get project name
-                        project_name = task.get('project_name', 'No Project')
-                        
-                        # Get owner name
-                        owner_name = task.get('owner_name', 'Unknown')
-                        
-                        # Get all collaborators (full list as requested)
-                        collaborators_list = task.get('collaborators', [])
-                        collaborators_text = "None"
-                        if collaborators_list:
-                            collaborators_text = ", ".join(collaborators_list)
-                        
-                        # Get completion duration
-                        completion_days = task.get('completion_days')
-                        duration_text = f"{completion_days} days" if completion_days else "Ongoing"
-                        
-                        # Get due date
-                        due_date = task.get('due_date', '')[:10] if task.get('due_date') else 'N/A'
-                        
-                        # Get completion date
-                        completed_date = task.get('completed_at', '')[:10] if task.get('completed_at') else 'N/A'
-                        
-                        # Status notes
-                        status_notes = []
-                        if task.get('is_overdue'):
-                            days_overdue = task.get('days_overdue', 0)
-                            status_notes.append(f"Overdue by {days_overdue} days")
-                        if task.get('was_completed_late'):
-                            status_notes.append("Completed late")
-                        if task.get('priority') == 'High':
-                            status_notes.append("High priority")
-                        
-                        status_notes_text = "; ".join(status_notes) if status_notes else "On track"
-                        
-                        task_detail_data.append([
-                            task_name,
-                            project_name,
-                            owner_name,
-                            collaborators_text,
-                            duration_text,
-                            due_date,
-                            completed_date,
-                            status_notes_text
+                        # Task table headers
+                        all_project_data.append([
+                            'Task Name',
+                            'Status',
+                            'Priority',
+                            'Owner',
+                            'Collaborators',
+                            'Created Date',
+                            'Due Date',
+                            'Completed Date',
+                            'Duration',
+                            'You Involved'
                         ])
-                    
-                    # Use wider table with proper column widths to prevent truncation
-                    task_table = Table(task_detail_data, colWidths=[1.5*inch, 1.0*inch, 0.8*inch, 1.2*inch, 0.7*inch, 0.8*inch, 0.8*inch, 1.2*inch])
-                    
-                    # Build table style with highlighting for user's tasks
-                    table_style = [
-                        ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
-                        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                        ('FONTSIZE', (0, 0), (-1, 0), 8),
-                        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-                        ('FONTSIZE', (0, 1), (-1, -1), 7),
-                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
-                        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-                        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-                        ('VALIGN', (0, 0), (-1, -1), 'TOP')
-                    ]
-                    
-                    # Add yellow highlighting for rows where user is involved
-                    for row_idx in highlighted_rows:
-                        table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
-                    
-                    task_table.setStyle(TableStyle(table_style))
-                    story.append(task_table)
-                    story.append(Spacer(1, 15))
+                        
+                        # Add all tasks
+                        for task in project_tasks:
+                            # Check if user is owner or collaborator
+                            owner_id = task.get('owner_id')
+                            collaborator_ids = task.get('collaborator_ids', []) or []
+                            is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
+                            
+                            # Get owner name
+                            owner_name = task.get('owner_name', 'Unknown')
+                            
+                            # Get collaborators - use collaborators field which has names
+                            collaborators = task.get('collaborators', []) or []
+                            collab_str = ', '.join(collaborators) if collaborators else 'None'
+                            
+                            # Duration calculation
+                            completion_days = task.get('completion_days')
+                            duration_text = f"{completion_days} days" if completion_days else "Ongoing"
+                            
+                            # Mark task name with star if user is involved
+                            task_name = task.get('task_name', 'Unknown Task')
+                            if is_user_involved:
+                                task_name = f"★ {task_name}"
+                            
+                            all_project_data.append([
+                                task_name,
+                                task.get('status', 'Unknown'),
+                                task.get('priority', 'Normal'),
+                                owner_name,
+                                collab_str,
+                                task.get('created_at', '')[:10] if task.get('created_at') else 'N/A',
+                                task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
+                                task.get('completed_at', '')[:10] if task.get('completed_at') else 'N/A',
+                                duration_text,
+                                '★ YES' if is_user_involved else 'No'
+                            ])
+                        
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
+                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
+                
+                # Create DataFrame and write to Excel
+                projects_df = pd.DataFrame(all_project_data)
+                projects_df.to_excel(writer, sheet_name='Projects & Tasks', index=False, header=False)
+                
+                # Apply highlighting to rows where user is involved
+                worksheet = writer.sheets['Projects & Tasks']
+                from openpyxl.styles import PatternFill
+                highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                
+                # Go through rows and highlight where user is involved
+                for row_idx, row_data in enumerate(all_project_data, start=1):
+                    if len(row_data) > 0 and isinstance(row_data[0], str):
+                        # Check if this is a task row with user involvement
+                        if row_data[0].startswith('★'):
+                            # Highlight entire row
+                            for col_idx in range(1, 11):  # 10 columns
+                                cell = worksheet.cell(row=row_idx, column=col_idx)
+                                cell.fill = highlight_fill
 
-        doc.build(story)
         buffer.seek(0)
         return buffer.getvalue()
-
 
     def export_team_report_pdf(self, manager_report: ReportData = None, team_report: TeamReportData = None, detailed_workload: Dict[str, Any] = None) -> bytes:
         """Export team report with overview section and detailed member sections showing all project tasks with highlighting"""
@@ -495,51 +405,77 @@ class ExportService:
         is_department_report = team_report.dept_name and not team_report.team_name
         
         if is_department_report:
-            # Group members by team
+            # Separate directors (no team_id) from team-based members
+            directors = [m for m in team_report.member_reports if not getattr(m, 'team_id', None)]
+            team_members = [m for m in team_report.member_reports if getattr(m, 'team_id', None)]
+
+            # ======== DIRECTOR SECTION ========
+            if directors:
+                story.append(Paragraph("DIRECTOR", ParagraphStyle(
+                    'DirectorHeader',
+                    parent=getSampleStyleSheet()['Heading1'],
+                    fontSize=18,
+                    textColor=colors.darkblue,
+                    spaceAfter=12
+                )))
+                story.append(Spacer(1, 6))
+                for idx, director in enumerate(directors, 1):
+                    if idx > 1:
+                        story.append(Spacer(1, 20))
+                    self._add_member_section_to_pdf(story, director, idx, team_project_stats, is_department_report)
+
+                story.append(PageBreak())
+
+            # ======== TEAM BREAKDOWN SECTION ========
+            story.append(Paragraph("TEAM BREAKDOWN", ParagraphStyle(
+                'TeamBreakdownHeader',
+                parent=getSampleStyleSheet()['Heading1'],
+                fontSize=18,
+                textColor=colors.darkred,
+                spaceAfter=20
+            )))
+
+            # Group remaining members by team_id
             teams_dict = {}
-            for member in team_report.member_reports:
+            for member in team_members:
                 team_id = getattr(member, 'team_id', None)
-                team_name = getattr(member, 'team_name', None)
-                
-                # Handle missing team info
-                if not team_id:
-                    team_id = 'no_team'
-                    team_name = 'No Team Assigned'
-                elif not team_name:
-                    # If team_id exists but team_name is None, use fallback
-                    team_name = f'Team {team_id}'
-                
-                if team_id not in teams_dict:
-                    teams_dict[team_id] = {
-                        'team_name': team_name,
-                        'members': []
-                    }
+                team_name = getattr(member, 'team_name', f"Team {team_id}" if team_id else "NA")
+                teams_dict.setdefault(team_id, {'team_name': team_name, 'members': []})
                 teams_dict[team_id]['members'].append(member)
-            
-            # Process each team with its members
+
+            # Process each team
             for team_idx, (team_id, team_data) in enumerate(teams_dict.items()):
                 if team_idx > 0:
                     story.append(PageBreak())
-                
-                # Team header for department reports
-                team_header = Paragraph(f"TEAM: {team_data['team_name']}", 
-                                       ParagraphStyle('TeamHeader',
-                                                    parent=getSampleStyleSheet()['Heading1'],
-                                                    fontSize=18,
-                                                    textColor=colors.darkred,
-                                                    spaceAfter=20))
+
+                # Team header
+                team_header = Paragraph(f"TEAM: {team_data['team_name']}", ParagraphStyle(
+                    'TeamHeader',
+                    parent=getSampleStyleSheet()['Heading2'],
+                    fontSize=16,
+                    textColor=colors.darkred,
+                    spaceAfter=15
+                ))
                 story.append(team_header)
-                story.append(Spacer(1, 10))
-                
-                # Process members in this team
-                for local_member_idx, member in enumerate(team_data['members'], 1):
-                    if local_member_idx > 1:
-                        story.append(Spacer(1, 30))  # Space between members in same team
-                    
-                    # Process this member (inline member processing)
-                    self._add_member_section_to_pdf(story, member, local_member_idx, team_project_stats, is_department_report)
+                story.append(Spacer(1, 8))
+
+                # Members in this team
+                for local_idx, member in enumerate(team_data['members'], 1):
+                    if local_idx > 1:
+                        story.append(Spacer(1, 20))
+                    self._add_member_section_to_pdf(story, member, local_idx, team_project_stats, is_department_report)
+
         else:
             # Regular team report - process members directly
+            if not team_report.member_reports:
+                # No members in team
+                story.append(Paragraph("No members in this team", 
+                                     ParagraphStyle('NoMembers',
+                                                  parent=getSampleStyleSheet()['Normal'],
+                                                  fontSize=11,
+                                                  textColor=colors.grey,
+                                                  spaceAfter=15)))
+            
             for member_idx, member in enumerate(team_report.member_reports, 1):
                 if member_idx > 1:
                     story.append(PageBreak())  # New page for each member in team reports
@@ -574,7 +510,7 @@ class ExportService:
             team_name = getattr(member, 'team_name', None)
             if not team_name:
                 team_id = getattr(member, 'team_id', None)
-                team_name = f'Team {team_id}' if team_id else 'No Team Assigned'
+                team_name = f'Team {team_id}' if team_id else 'NA'
             member_info.append(['Team', team_name])
         
         member_info.extend([
@@ -731,160 +667,8 @@ class ExportService:
                     story.append(task_table)
                     story.append(Spacer(1, 15))
 
-    def export_personal_report_excel(self, report_data: ReportData) -> bytes:
-        """Export personal report as Excel with Dashboard and Projects with tasks"""
-        buffer = io.BytesIO()
-        
-        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-            # ========== DASHBOARD SHEET ==========
-            performance_data = []
-            
-            # KPI Section
-            performance_data.extend([
-                ['PERFORMANCE DASHBOARD', ''],
-                ['Name', report_data.user_name],
-                ['Role', report_data.user_role.capitalize() if report_data.user_role else 'Unknown'],
-                ['', ''],
-                ['KEY METRICS', ''],
-                ['Task Completion Rate', f"{report_data.completion_percentage:.1f}%"],
-                ['Tasks Completed', f"{report_data.completed_tasks}/{report_data.total_tasks}"],
-                ['Overdue Tasks', f"{getattr(report_data, 'overdue_tasks', 0)} ({getattr(report_data, 'overdue_percentage', 0):.1f}%)"],
-                ['Active Projects', str(report_data.total_projects)],
-                ['Avg Task Duration', f"{report_data.average_task_duration:.1f} days" if report_data.average_task_duration else "N/A"],
-                ['', ''],
-                ['TASK STATUS BREAKDOWN', '']
-            ])
-            
-            # Task status breakdown
-            for status, count in report_data.task_stats.items():
-                performance_data.append([f"{status} Tasks", str(count)])
-            
-            # Performance indicators
-            performance_data.extend([
-                ['', ''],
-                ['PERFORMANCE INDICATORS', ''],
-                ['Overall Status', 
-                 '🟢 Excellent' if report_data.completion_percentage >= 80 and getattr(report_data, 'overdue_percentage', 0) < 15 else
-                 '🟡 Good' if report_data.completion_percentage >= 60 else '🔴 Needs Improvement'],
-                ['Efficiency Rating',
-                 '🟢 High' if report_data.average_task_duration and report_data.average_task_duration <= 5 else
-                 '🟡 Medium' if report_data.average_task_duration and report_data.average_task_duration <= 10 else '🔴 Low']
-            ])
-            
-            dashboard_df = pd.DataFrame(performance_data, columns=['Metric', 'Value'])
-            dashboard_df.to_excel(writer, sheet_name='Dashboard', index=False)
-
-            # ========== PROJECTS WITH TASKS SHEET ==========
-            # Get projects breakdown which contains both project stats and task details
-            projects_breakdown = getattr(report_data, 'projects_breakdown', [])
-            user_id = report_data.user_id
-            
-            if projects_breakdown:
-                all_project_data = []
-                
-                for project in projects_breakdown:
-                    # Project header
-                    all_project_data.append([f"PROJECT: {project.get('project_name', 'Unknown Project')}", '', '', '', '', '', '', '', '', ''])
-                    all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
-                    
-                    # Project-level metrics
-                    all_project_data.extend([
-                        ['Project Metrics', '', '', '', '', '', '', '', '', ''],
-                        ['Total Tasks in Project', project.get('total_tasks', 0), '', '', '', '', '', '', '', ''],
-                        ['Completed Tasks', project.get('completed_tasks', 0), '', '', '', '', '', '', '', ''],
-                        ['Ongoing Tasks', project.get('in_progress_tasks', 0), '', '', '', '', '', '', '', ''],
-                        ['Under Review Tasks', project.get('under_review_tasks', 0), '', '', '', '', '', '', '', ''],
-                        ['Overdue Tasks', project.get('overdue_tasks', 0), '', '', '', '', '', '', '', ''],
-                        ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%", '', '', '', '', '', '', '', ''],
-                        ['Average Task Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A", '', '', '', '', '', '', '', ''],
-                        ['Projected Completion', project.get('projected_completion_date') if project.get('projected_completion_date') else "N/A", '', '', '', '', '', '', '', ''],
-                        ['', '', '', '', '', '', '', '', '', '']
-                    ])
-                    
-                    # ALL Tasks in this project
-                    project_tasks = project.get('task_details', [])
-                    if project_tasks:
-                        all_project_data.append(['ALL TASKS IN THIS PROJECT', '', '', '', '', '', '', '', '', ''])
-                        all_project_data.append(['(★ = You are owner or collaborator)', '', '', '', '', '', '', '', '', ''])
-                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
-                        
-                        # Task table headers
-                        all_project_data.append([
-                            'Task Name',
-                            'Status',
-                            'Priority',
-                            'Owner',
-                            'Collaborators',
-                            'Created Date',
-                            'Due Date',
-                            'Completed Date',
-                            'Duration',
-                            'You Involved'
-                        ])
-                        
-                        # Add all tasks
-                        for task in project_tasks:
-                            # Check if user is owner or collaborator
-                            owner_id = task.get('owner_id')
-                            collaborator_ids = task.get('collaborator_ids', []) or []
-                            is_user_involved = (owner_id == user_id) or (user_id in collaborator_ids)
-                            
-                            # Get owner name
-                            owner_name = task.get('owner_name', 'Unknown')
-                            
-                            # Get collaborators - use collaborators field which has names
-                            collaborators = task.get('collaborators', []) or []
-                            collab_str = ', '.join(collaborators) if collaborators else 'None'
-                            
-                            # Duration calculation
-                            completion_days = task.get('completion_days')
-                            duration_text = f"{completion_days} days" if completion_days else "Ongoing"
-                            
-                            # Mark task name with star if user is involved
-                            task_name = task.get('task_name', 'Unknown Task')
-                            if is_user_involved:
-                                task_name = f"★ {task_name}"
-                            
-                            all_project_data.append([
-                                task_name,
-                                task.get('status', 'Unknown'),
-                                task.get('priority', 'Normal'),
-                                owner_name,
-                                collab_str,
-                                task.get('created_at', '')[:10] if task.get('created_at') else 'N/A',
-                                task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
-                                task.get('completed_at', '')[:10] if task.get('completed_at') else 'N/A',
-                                duration_text,
-                                '★ YES' if is_user_involved else 'No'
-                            ])
-                        
-                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
-                        all_project_data.append(['', '', '', '', '', '', '', '', '', ''])
-                
-                # Create DataFrame and write to Excel
-                projects_df = pd.DataFrame(all_project_data)
-                projects_df.to_excel(writer, sheet_name='Projects & Tasks', index=False, header=False)
-                
-                # Apply highlighting to rows where user is involved
-                worksheet = writer.sheets['Projects & Tasks']
-                from openpyxl.styles import PatternFill
-                highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                
-                # Go through rows and highlight where user is involved
-                for row_idx, row_data in enumerate(all_project_data, start=1):
-                    if len(row_data) > 0 and isinstance(row_data[0], str):
-                        # Check if this is a task row with user involvement
-                        if row_data[0].startswith('★'):
-                            # Highlight entire row
-                            for col_idx in range(1, 11):  # 10 columns
-                                cell = worksheet.cell(row=row_idx, column=col_idx)
-                                cell.fill = highlight_fill
-
-        buffer.seek(0)
-        return buffer.getvalue()
-
     def export_team_report_excel(self, manager_report: ReportData = None, team_report: TeamReportData = None, detailed_workload: Dict[str, Any] = None) -> bytes:
-        """Export team report with Overview tab and individual member tabs showing all project tasks with highlighting"""
+        """Export team report with Overview tab and separate tabs for directors and teams showing members, projects, and tasks"""
         buffer = io.BytesIO()
         
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -895,9 +679,9 @@ class ExportService:
             dashboard_data.extend([
                 ['TEAM PERFORMANCE DASHBOARD', ''],
                 ['Department' if team_report.dept_name and not team_report.team_name else 'Team', 
-                 team_report.dept_name or team_report.team_name or 'Unknown'],
+                team_report.dept_name or team_report.team_name or 'Unknown'],
                 ['Department Size' if team_report.dept_name and not team_report.team_name else 'Team Size', 
-                 len(team_report.member_reports)],
+                len(team_report.member_reports)],
                 ['', ''],
                 ['TEAM METRICS', ''],
                 ['Total Tasks', team_report.total_team_tasks],
@@ -908,8 +692,8 @@ class ExportService:
                 ['', ''],
                 ['PERFORMANCE RATING', ''],
                 ['Team Status', 
-                 '🟢 High Performing' if team_report.team_completion_percentage >= 75 and getattr(team_report, 'team_overdue_percentage', 0) < 20 else
-                 '🟡 Moderate Performance' if team_report.team_completion_percentage >= 50 else '🔴 Needs Improvement']
+                '🟢 High Performing' if team_report.team_completion_percentage >= 75 and getattr(team_report, 'team_overdue_percentage', 0) < 20 else
+                '🟡 Moderate Performance' if team_report.team_completion_percentage >= 50 else '🔴 Needs Improvement']
             ])
             
             # Task status breakdown
@@ -922,210 +706,257 @@ class ExportService:
             dashboard_df = pd.DataFrame(dashboard_data, columns=['Metric', 'Value'])
             dashboard_df.to_excel(writer, sheet_name='Overview', index=False)
             
-            # ========== TEAM MEMBER TABS (One per member) ==========
-            # Get enriched project stats from team report
+            # ========== DETECT IF DEPARTMENT REPORT ==========
+            is_department_report = team_report.dept_name and not team_report.team_name
             team_project_stats = getattr(team_report, 'team_project_stats', [])
             
-            # Detect if this is a department report
-            is_department_report = team_report.dept_name and not team_report.team_name
+            from openpyxl.styles import PatternFill
+            yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
             
-            # Group members by team if this is a department report
-            members_to_process = []
             if is_department_report:
-                # Group members by team_id
+                # Separate directors and team members
+                directors = [m for m in team_report.member_reports if not getattr(m, 'team_id', None)]
+                team_members = [m for m in team_report.member_reports if getattr(m, 'team_id', None)]
+                
+                # ========== DIRECTORS TAB ==========
+                if directors:
+                    director_rows = []
+                    director_rows.extend([
+                        ['DIRECTORS', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '']
+                    ])
+                    
+                    for director in directors:
+                        director_rows.extend([
+                            [f"DIRECTOR: {director.user_name}", '', '', '', '', '', ''],
+                            ['Role', director.user_role.capitalize() if director.user_role else 'Unknown'],
+                            ['Total Projects', director.total_projects],
+                            ['Total Tasks', director.total_tasks],
+                            ['Completed Tasks', director.completed_tasks],
+                            ['Completion Rate', f"{director.completion_percentage:.1f}%"],
+                            ['Overdue Tasks', getattr(director, 'overdue_tasks', 0)],
+                            ['Average Duration', f"{director.average_task_duration:.1f} days" if director.average_task_duration else 'N/A'],
+                            ['', '', '', '', '', '', '']
+                        ])
+                        
+                        # Get projects for this director
+                        director_user_id = director.user_id
+                        for project in team_project_stats:
+                            member_involvement = project.get('member_involvement', {})
+                            if director_user_id in member_involvement:
+                                project_name = project.get('project_name', 'Unknown Project')
+                                director_rows.extend([
+                                    [f"PROJECT: {project_name}", '', '', '', '', '', ''],
+                                    ['Total Tasks', project.get('total_tasks', 0)],
+                                    ['Completed', project.get('completed_tasks', 0)],
+                                    ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%"],
+                                    ['Overdue', project.get('overdue_tasks', 0)],
+                                    ['Avg Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A"],
+                                    ['Projected Completion', project.get('projected_completion_date', 'N/A')],
+                                    ['', '', '', '', '', '', ''],
+                                    ['TASKS (★ = Director is owner/collaborator)', '', '', '', '', '', ''],
+                                    ['Task Name', 'Status', 'Priority', 'Owner', 'Collaborators', 'Due Date', 'Duration']
+                                ])
+                                
+                                all_tasks = project.get('all_tasks', [])
+                                involved_task_ids = member_involvement[director_user_id]['involved_tasks']
+                                
+                                for task in all_tasks:
+                                    task_id = task.get('id')
+                                    is_involved = task_id in involved_task_ids
+                                    
+                                    task_name = task.get('task_name', 'Unknown')
+                                    if is_involved:
+                                        task_name = f"★ {task_name}"
+                                    
+                                    collab_names = task.get('collaborator_names', [])
+                                    collab_str = ', '.join(collab_names) if collab_names else 'None'
+                                    
+                                    completion_days = task.get('completion_days')
+                                    duration_text = f"{completion_days}d" if completion_days else "Ongoing"
+                                    
+                                    director_rows.append([
+                                        task_name,
+                                        task.get('status', 'Unknown'),
+                                        task.get('priority', 'Normal'),
+                                        task.get('owner_name', 'Unknown'),
+                                        collab_str,
+                                        task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
+                                        duration_text
+                                    ])
+                                
+                                director_rows.extend([['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']])
+                    
+                    # Write directors tab
+                    director_df = pd.DataFrame(director_rows)
+                    director_df.to_excel(writer, sheet_name='Directors', index=False, header=False)
+                    
+                    # Highlight rows with ★
+                    worksheet = writer.sheets['Directors']
+                    for idx, row in enumerate(director_rows, start=1):
+                        if row and isinstance(row[0], str) and row[0].startswith('★'):
+                            for col in range(1, 8):
+                                worksheet.cell(row=idx, column=col).fill = yellow_fill
+                
+                # ========== GROUP MEMBERS BY TEAM ==========
                 teams_dict = {}
-                for member in team_report.member_reports:
+                for member in team_members:
                     team_id = getattr(member, 'team_id', None)
-                    team_name = getattr(member, 'team_name', None)
-                    
-                    # Handle missing team info
-                    if not team_id:
-                        team_id = 'no_team'
-                        team_name = 'No Team Assigned'
-                    elif not team_name:
-                        # If team_id exists but team_name is None, use fallback
-                        team_name = f'Team {team_id}'
-                    
+                    team_name = getattr(member, 'team_name', f"Team {team_id}" if team_id else "NA")
                     if team_id not in teams_dict:
-                        teams_dict[team_id] = {
-                            'team_name': team_name,
-                            'members': []
-                        }
+                        teams_dict[team_id] = {'team_name': team_name, 'members': []}
                     teams_dict[team_id]['members'].append(member)
                 
-                # Process teams in order, adding team headers
+                # ========== CREATE TEAM TABS ==========
                 for team_id, team_data in teams_dict.items():
-                    # Add a team header placeholder with member list
-                    members_to_process.append({
-                        'is_team_header': True,
-                        'team_name': team_data['team_name'],
-                        'team_members': team_data['members']  # Pass the actual members
-                    })
-                    # Add team members
-                    members_to_process.extend(team_data['members'])
-            else:
-                # Regular team report - just process members as-is
-                members_to_process = team_report.member_reports
+                    team_name = team_data['team_name']
+                    sheet_name = team_name[:31]
+                    team_rows = []
+                    
+                    team_rows.extend([
+                        [f"TEAM: {team_name}", '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '']
+                    ])
+                    
+                    for member in team_data['members']:
+                        team_rows.extend([
+                            [f"MEMBER: {member.user_name}", '', '', '', '', '', ''],
+                            ['Role', member.user_role.capitalize() if member.user_role else 'Unknown'],
+                            ['Total Projects', member.total_projects],
+                            ['Total Tasks', member.total_tasks],
+                            ['Completed Tasks', member.completed_tasks],
+                            ['Completion Rate', f"{member.completion_percentage:.1f}%"],
+                            ['Overdue Tasks', getattr(member, 'overdue_tasks', 0)],
+                            ['Average Duration', f"{member.average_task_duration:.1f} days" if member.average_task_duration else 'N/A'],
+                            ['', '', '', '', '', '', '']
+                        ])
+                        
+                        # Get projects for this member
+                        member_user_id = member.user_id
+                        for project in team_project_stats:
+                            member_involvement = project.get('member_involvement', {})
+                            if member_user_id in member_involvement:
+                                project_name = project.get('project_name', 'Unknown Project')
+                                team_rows.extend([
+                                    [f"PROJECT: {project_name}", '', '', '', '', '', ''],
+                                    ['Total Tasks', project.get('total_tasks', 0)],
+                                    ['Completed', project.get('completed_tasks', 0)],
+                                    ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%"],
+                                    ['Overdue', project.get('overdue_tasks', 0)],
+                                    ['Avg Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A"],
+                                    ['Projected Completion', project.get('projected_completion_date', 'N/A')],
+                                    ['', '', '', '', '', '', ''],
+                                    ['TASKS (★ = Member is owner/collaborator)', '', '', '', '', '', ''],
+                                    ['Task Name', 'Status', 'Priority', 'Owner', 'Collaborators', 'Due Date', 'Duration']
+                                ])
+                                
+                                all_tasks = project.get('all_tasks', [])
+                                involved_task_ids = member_involvement[member_user_id]['involved_tasks']
+                                
+                                for task in all_tasks:
+                                    task_id = task.get('id')
+                                    is_involved = task_id in involved_task_ids
+                                    
+                                    task_name = task.get('task_name', 'Unknown')
+                                    if is_involved:
+                                        task_name = f"★ {task_name}"
+                                    
+                                    collab_names = task.get('collaborator_names', [])
+                                    collab_str = ', '.join(collab_names) if collab_names else 'None'
+                                    
+                                    completion_days = task.get('completion_days')
+                                    duration_text = f"{completion_days}d" if completion_days else "Ongoing"
+                                    
+                                    team_rows.append([
+                                        task_name,
+                                        task.get('status', 'Unknown'),
+                                        task.get('priority', 'Normal'),
+                                        task.get('owner_name', 'Unknown'),
+                                        collab_str,
+                                        task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
+                                        duration_text
+                                    ])
+                                
+                                team_rows.extend([['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']])
+                        
+                        team_rows.extend([['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']])
+                    
+                    # Write team tab
+                    team_df = pd.DataFrame(team_rows)
+                    team_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+                    
+                    # Highlight rows with ★
+                    worksheet = writer.sheets[sheet_name]
+                    for idx, row in enumerate(team_rows, start=1):
+                        if row and isinstance(row[0], str) and row[0].startswith('★'):
+                            for col in range(1, 8):
+                                worksheet.cell(row=idx, column=col).fill = yellow_fill
             
-            for member_idx, member in enumerate(members_to_process, 1):
-                # Skip team headers in member processing (we'll create a sheet for them)
-                if isinstance(member, dict) and member.get('is_team_header'):
-                    # Create a team header sheet with member list
-                    team_header_sheet = f"TEAM - {member['team_name'][:20]}"
-                    team_header_data = [
-                        [f"TEAM: {member['team_name']}", ''],
-                        ['', ''],
-                        ['Team Members:', ''],
-                        ['', '']
-                    ]
-                    
-                    # Add list of team members
-                    team_members = member.get('team_members', [])
-                    for idx, team_member in enumerate(team_members, 1):
-                        team_header_data.append([
-                            f"{idx}. {team_member.user_name}",
-                            team_member.user_role.capitalize() if team_member.user_role else 'Unknown'
-                        ])
-                    
-                    team_df = pd.DataFrame(team_header_data, columns=['Member', 'Role'])
-                    team_df.to_excel(writer, sheet_name=team_header_sheet, index=False)
-                    continue
-                
-                sheet_name = f"{member.user_name[:18]}"  # Limit name length for Excel
-                
-                # Member Info Section
-                member_info_data = []
-                
-                # Add team info for department reports
-                if is_department_report:
-                    team_name = getattr(member, 'team_name', None)
-                    if not team_name:
-                        team_id = getattr(member, 'team_id', None)
-                        team_name = f'Team {team_id}' if team_id else 'No Team Assigned'
+            else:
+                # ========== REGULAR TEAM REPORT (NOT DEPARTMENT) ==========
+                # Keep original single-member-per-tab format for regular teams
+                for member_idx, member in enumerate(team_report.member_reports, 1):
+                    sheet_name = f"{member.user_name[:18]}"
+                    member_info_data = []
                     
                     member_info_data.extend([
                         [f'MEMBER {member_idx}: {member.user_name}', '', '', '', '', '', '', '', '', ''],
-                        ['Team', team_name, '', '', '', '', '', '', '', ''],
                         ['Role', member.user_role.capitalize() if member.user_role else 'Unknown', '', '', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '', '', '', ''],
+                        ['MEMBER PERFORMANCE', '', '', '', '', '', '', '', '', ''],
+                        ['Total Projects', member.total_projects, '', '', '', '', '', '', '', ''],
+                        ['Total Tasks', member.total_tasks, '', '', '', '', '', '', '', ''],
+                        ['Completed Tasks', member.completed_tasks, '', '', '', '', '', '', '', ''],
+                        ['Completion Rate', f"{member.completion_percentage:.1f}%", '', '', '', '', '', '', '', ''],
+                        ['Overdue Tasks', getattr(member, 'overdue_tasks', 0), '', '', '', '', '', '', '', ''],
+                        ['Average Task Duration', f"{member.average_task_duration:.1f} days" if member.average_task_duration else "N/A", '', '', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '', '', '', ''],
+                        ['', '', '', '', '', '', '', '', '', '']
                     ])
-                else:
-                    member_info_data.extend([
-                        [f'MEMBER {member_idx}: {member.user_name}', '', '', '', '', '', '', '', '', ''],
-                        ['Role', member.user_role.capitalize() if member.user_role else 'Unknown', '', '', '', '', '', '', '', ''],
-                    ])
-                
-                member_info_data.extend([
-                    ['', '', '', '', '', '', '', '', '', ''],
-                    ['MEMBER PERFORMANCE', '', '', '', '', '', '', '', '', ''],
-                    ['Total Projects', member.total_projects, '', '', '', '', '', '', '', ''],
-                    ['Total Tasks', member.total_tasks, '', '', '', '', '', '', '', ''],
-                    ['Completed Tasks', member.completed_tasks, '', '', '', '', '', '', '', ''],
-                    ['Completion Rate', f"{member.completion_percentage:.1f}%", '', '', '', '', '', '', '', ''],
-                    ['Overdue Tasks', getattr(member, 'overdue_tasks', 0), '', '', '', '', '', '', '', ''],
-                    ['Average Task Duration', f"{member.average_task_duration:.1f} days" if member.average_task_duration else "N/A", '', '', '', '', '', '', '', ''],
-                    ['', '', '', '', '', '', '', '', '', ''],
-                    ['', '', '', '', '', '', '', '', '', '']
-                ])
-                
-                # Projects this member is involved in
-                member_user_id = member.user_id
-                member_projects = []
-                
-                for project in team_project_stats:
-                    project_id = project.get('project_id')
-                    member_involvement = project.get('member_involvement', {})
                     
-                    # Check if this member is involved in the project
-                    if member_user_id in member_involvement:
-                        involved_task_ids = member_involvement[member_user_id]['involved_tasks']
-                        
-                        # Get all tasks for this project
-                        all_project_tasks = project.get('all_tasks', [])
-                        
-                        # Add project header
-                        member_info_data.append([f"PROJECT: {project.get('project_name', 'Unknown Project')}", '', '', '', '', '', '', '', '', ''])
-                        member_info_data.append(['', '', '', '', '', '', '', '', '', ''])
-                        
-                        # Project-level metrics
-                        member_info_data.extend([
-                            ['Project Metrics', '', '', '', '', '', '', '', '', ''],
-                            ['Total Tasks in Project', project.get('total_tasks', 0), '', '', '', '', '', '', '', ''],
-                            ['Completed Tasks', project.get('completed_tasks', 0), '', '', '', '', '', '', '', ''],
-                            ['Ongoing Tasks', project.get('in_progress_tasks', 0), '', '', '', '', '', '', '', ''],
-                            ['Under Review Tasks', project.get('under_review_tasks', 0), '', '', '', '', '', '', '', ''],
-                            ['Overdue Tasks', project.get('overdue_tasks', 0), '', '', '', '', '', '', '', ''],
-                            ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%", '', '', '', '', '', '', '', ''],
-                            ['Average Task Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A", '', '', '', '', '', '', '', ''],
-                            ['Projected Completion', project.get('projected_completion_date') if project.get('projected_completion_date') else "Completion date cannot be projected", '', '', '', '', '', '', '', ''],
-                            ['', '', '', '', '', '', '', '', '', '']
-                        ])
-                        
-                        # ALL Tasks in this project (with highlighting)
-                        if all_project_tasks:
-                            member_info_data.append(['ALL TASKS IN THIS PROJECT', '', '', '', '', '', '', '', '', ''])
-                            member_info_data.append(['(★ = This member is owner or collaborator)', '', '', '', '', '', '', '', '', ''])
-                            member_info_data.append(['', '', '', '', '', '', '', '', '', ''])
+                    member_user_id = member.user_id
+                    for project in team_project_stats:
+                        member_involvement = project.get('member_involvement', {})
+                        if member_user_id in member_involvement:
+                            involved_task_ids = member_involvement[member_user_id]['involved_tasks']
+                            all_project_tasks = project.get('all_tasks', [])
                             
-                            # Task table headers
-                            member_info_data.append([
-                                'Task Name',
-                                'Status',
-                                'Priority',
-                                'Owner',
-                                'Collaborators',
-                                'Created Date',
-                                'Due Date',
-                                'Completed Date',
-                                'Duration',
-                                'Member Involved'
+                            member_info_data.append([f"PROJECT: {project.get('project_name', 'Unknown Project')}", '', '', '', '', '', '', '', '', ''])
+                            member_info_data.append(['', '', '', '', '', '', '', '', '', ''])
+                            member_info_data.extend([
+                                ['Project Metrics', '', '', '', '', '', '', '', '', ''],
+                                ['Total Tasks in Project', project.get('total_tasks', 0), '', '', '', '', '', '', '', ''],
+                                ['Completed Tasks', project.get('completed_tasks', 0), '', '', '', '', '', '', '', ''],
+                                ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%", '', '', '', '', '', '', '', ''],
+                                ['Overdue Tasks', project.get('overdue_tasks', 0), '', '', '', '', '', '', '', ''],
+                                ['Average Task Duration', f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A", '', '', '', '', '', '', '', ''],
+                                ['Projected Completion', project.get('projected_completion_date', 'N/A'), '', '', '', '', '', '', '', ''],
+                                ['', '', '', '', '', '', '', '', '', ''],
+                                ['ALL TASKS IN THIS PROJECT', '', '', '', '', '', '', '', '', ''],
+                                ['(★ = This member is owner or collaborator)', '', '', '', '', '', '', '', '', ''],
+                                ['', '', '', '', '', '', '', '', '', ''],
+                                ['Task Name', 'Status', 'Priority', 'Owner', 'Collaborators', 'Created Date', 'Due Date', 'Completed Date', 'Duration', 'Member Involved']
                             ])
                             
-                            # Add all tasks
                             for task in all_project_tasks:
                                 task_id = task.get('id')
                                 is_member_involved = task_id in involved_task_ids
                                 
-                                # Get owner name - NO TRUNCATION
-                                owner_id = task.get('owner_id')
-                                owner_name = task.get('owner_name', 'Unknown')
-                                
-                                # Get collaborators - show ALL names from collaborator_names field
-                                collab_names = task.get('collaborator_names', [])
-                                if not collab_names:
-                                    # Fallback: try to build from collaborators IDs
-                                    collaborators = task.get('collaborators', []) or []
-                                    if isinstance(collaborators, list) and collaborators:
-                                        collab_names = [f'User {c}' for c in collaborators]
-                                
-                                collab_str = ', '.join(collab_names) if collab_names else 'None'
-                                
-                                # Duration calculation
-                                completion_days = task.get('completion_days')
-                                if not completion_days:
-                                    # Calculate if needed
-                                    created_at = task.get('created_at')
-                                    completed_at = task.get('completed_at')
-                                    if created_at and completed_at:
-                                        try:
-                                            from dateutil import parser as dateparser
-                                            created_date = dateparser.parse(created_at)
-                                            completed_date = dateparser.parse(completed_at)
-                                            completion_days = (completed_date - created_date).days
-                                        except:
-                                            completion_days = None
-                                
-                                duration_text = f"{completion_days} days" if completion_days else "Ongoing"
-                                
-                                # Mark task name with star if member is involved
                                 task_name = task.get('task_name', 'Unknown Task')
                                 if is_member_involved:
                                     task_name = f"★ {task_name}"
+                                
+                                collab_names = task.get('collaborator_names', [])
+                                collab_str = ', '.join(collab_names) if collab_names else 'None'
+                                
+                                completion_days = task.get('completion_days')
+                                duration_text = f"{completion_days} days" if completion_days else "Ongoing"
                                 
                                 member_info_data.append([
                                     task_name,
                                     task.get('status', 'Unknown'),
                                     task.get('priority', 'Normal'),
-                                    owner_name,
+                                    task.get('owner_name', 'Unknown'),
                                     collab_str,
                                     task.get('created_at', '')[:10] if task.get('created_at') else 'N/A',
                                     task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
@@ -1134,30 +965,494 @@ class ExportService:
                                     '★ YES' if is_member_involved else 'No'
                                 ])
                             
-                            member_info_data.append(['', '', '', '', '', '', '', '', '', ''])
-                            member_info_data.append(['', '', '', '', '', '', '', '', '', ''])
-                
-                # Create DataFrame and write to Excel
-                member_df = pd.DataFrame(member_info_data)
-                member_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
-                
-                # Apply formatting - highlight member involved tasks
-                worksheet = writer.sheets[sheet_name]
-                from openpyxl.styles import PatternFill, Font
-                
-                # Yellow fill for highlighted rows
-                highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
-                bold_font = Font(bold=True)
-                
-                # Go through rows and highlight where member is involved
-                for row_idx, row_data in enumerate(member_info_data, start=1):
-                    if len(row_data) > 0 and isinstance(row_data[0], str):
-                        # Check if this is a task row with member involvement
-                        if row_data[0].startswith('★'):
-                            # Highlight entire row
-                            for col_idx in range(1, 11):  # 10 columns
+                            member_info_data.extend([['', '', '', '', '', '', '', '', '', ''], ['', '', '', '', '', '', '', '', '', '']])
+                    
+                    member_df = pd.DataFrame(member_info_data)
+                    member_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+                    
+                    worksheet = writer.sheets[sheet_name]
+                    from openpyxl.styles import PatternFill
+                    highlight_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+                    
+                    for row_idx, row_data in enumerate(member_info_data, start=1):
+                        if len(row_data) > 0 and isinstance(row_data[0], str) and row_data[0].startswith('★'):
+                            for col_idx in range(1, 11):
                                 cell = worksheet.cell(row=row_idx, column=col_idx)
                                 cell.fill = highlight_fill
+
+        buffer.seek(0)
+        return buffer.getvalue()
+    
+    def export_company_report_pdf(self, company_data: Dict[str, Any]) -> bytes:
+        """Export company report as PDF organized by departments and teams, showing projects and tasks for each member"""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4)
+        story = []
+
+        # Title
+        title = "Company-Wide Performance Report"
+        story.append(Paragraph(title, self.title_style))
+        story.append(Spacer(1, 20))
+
+        # Company Overview
+        story.append(Paragraph("Company Overview", self.heading_style))
+        
+        company_metrics = company_data.get('company_metrics', {})
+        overview_data = [
+            ['Metric', 'Value'],
+            ['Total Departments', str(company_metrics.get('total_departments', 0))],
+            ['Total Teams', str(company_metrics.get('total_teams', 0))],
+            ['Total Members', str(company_metrics.get('total_members', 0))],
+            ['Total Projects', str(company_metrics.get('total_projects', 0))],
+            ['Total Tasks', str(company_metrics.get('total_tasks', 0))],
+            ['Completed Tasks', str(company_metrics.get('completed_tasks', 0))],
+            ['Company Completion Rate', f"{company_metrics.get('completion_percentage', 0):.1f}%"],
+            ['Overdue Tasks', str(company_metrics.get('overdue_tasks', 0))],
+            ['Company Overdue Rate', f"{company_metrics.get('overdue_percentage', 0):.1f}%"],
+            ['Average Task Duration', f"{company_metrics.get('average_task_duration'):.1f} days" if company_metrics.get('average_task_duration') else "N/A"]
+        ]
+        
+        overview_table = Table(overview_data, colWidths=[2.5*inch, 2.5*inch])
+        overview_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.darkblue),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey])
+        ]))
+        story.append(overview_table)
+        story.append(Spacer(1, 30))
+
+        # Department sections
+        departments = company_data.get('departments', [])
+        
+        for dept_idx, department in enumerate(departments):
+            if dept_idx > 0:
+                story.append(PageBreak())
+            
+            dept_name = department.get('dept_name', 'Unknown Department')
+            
+            # Department Header
+            dept_header = Paragraph(f"DEPARTMENT: {dept_name}", 
+                                   ParagraphStyle('DeptHeader',
+                                                parent=getSampleStyleSheet()['Heading1'],
+                                                fontSize=18,
+                                                textColor=colors.darkred,
+                                                spaceAfter=20))
+            story.append(dept_header)
+            
+            # Director Section with Projects and Tasks
+            director_data = department.get('director')
+            if director_data:
+                story.append(Paragraph(f"Director: {director_data.get('user_name', 'Unknown')}", self.heading_style))
+                
+                director_summary = [
+                    ['Metric', 'Value'],
+                    ['Total Projects', str(director_data.get('total_projects', 0))],
+                    ['Total Tasks', str(director_data.get('total_tasks', 0))],
+                    ['Completed Tasks', str(director_data.get('completed_tasks', 0))],
+                    ['Completion Rate', f"{director_data.get('completion_percentage', 0):.1f}%"],
+                    ['Overdue Tasks', str(director_data.get('overdue_tasks', 0))],
+                    ['Average Task Duration', f"{director_data.get('average_task_duration'):.1f} days" if director_data.get('average_task_duration') else "N/A"]
+                ]
+                
+                director_table = Table(director_summary, colWidths=[2.5*inch, 2*inch])
+                director_table.setStyle(TableStyle([
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, -1), 9),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                ]))
+                story.append(director_table)
+                story.append(Spacer(1, 15))
+                
+                # Director's Projects and Tasks
+                self._add_member_projects_and_tasks_to_pdf(story, director_data, director_data.get('user_id'))
+            
+            # Teams in this department
+            teams = department.get('teams', [])
+            
+            if not teams:
+                # No teams in this department
+                if director_data:
+                    story.append(Spacer(1, 20))
+                story.append(Paragraph("No teams in this department", 
+                                     ParagraphStyle('NoTeams',
+                                                  parent=getSampleStyleSheet()['Normal'],
+                                                  fontSize=11,
+                                                  textColor=colors.grey,
+                                                  spaceAfter=15)))
+            
+            for team_idx, team in enumerate(teams):
+                if team_idx > 0 or director_data:
+                    story.append(PageBreak())
+                
+                team_name = team.get('team_name', 'Unknown Team')
+                
+                # Team Header
+                team_header = Paragraph(f"TEAM: {team_name}", 
+                                       ParagraphStyle('TeamHeader',
+                                                    parent=getSampleStyleSheet()['Heading2'],
+                                                    fontSize=14,
+                                                    textColor=colors.darkgreen,
+                                                    spaceAfter=15))
+                story.append(team_header)
+                
+                # Manager Section with Projects and Tasks
+                manager_data = team.get('manager')
+                if manager_data:
+                    story.append(Paragraph(f"Manager: {manager_data.get('user_name', 'Unknown')}", 
+                                         ParagraphStyle('ManagerHeader',
+                                                      parent=getSampleStyleSheet()['Heading3'],
+                                                      fontSize=11,
+                                                      spaceAfter=10)))
+                    
+                    manager_summary = [
+                        ['Metric', 'Value'],
+                        ['Total Projects', str(manager_data.get('total_projects', 0))],
+                        ['Total Tasks', str(manager_data.get('total_tasks', 0))],
+                        ['Completed Tasks', str(manager_data.get('completed_tasks', 0))],
+                        ['Completion Rate', f"{manager_data.get('completion_percentage', 0):.1f}%"],
+                        ['Overdue Tasks', str(manager_data.get('overdue_tasks', 0))]
+                    ]
+                    
+                    manager_table = Table(manager_summary, colWidths=[2*inch, 1.8*inch])
+                    manager_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgreen),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 8),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                    ]))
+                    story.append(manager_table)
+                    story.append(Spacer(1, 15))
+                    
+                    # Manager's Projects and Tasks
+                    self._add_member_projects_and_tasks_to_pdf(story, manager_data, manager_data.get('user_id'))
+                else:
+                    story.append(Paragraph("No manager assigned to this team", 
+                                         ParagraphStyle('NoManager',
+                                                      parent=getSampleStyleSheet()['Normal'],
+                                                      fontSize=10,
+                                                      textColor=colors.grey,
+                                                      spaceAfter=15)))
+                
+                # Staff Members with Projects and Tasks
+                staff_list = team.get('staff', [])
+                
+                if not staff_list:
+                    story.append(Paragraph("No staff members in this team", 
+                                         ParagraphStyle('NoStaff',
+                                                      parent=getSampleStyleSheet()['Normal'],
+                                                      fontSize=10,
+                                                      textColor=colors.grey,
+                                                      spaceAfter=15)))
+                
+                for staff_idx, staff in enumerate(staff_list):
+                    story.append(PageBreak())
+                    
+                    story.append(Paragraph(f"Staff: {staff.get('user_name', 'Unknown')}", 
+                                         ParagraphStyle('StaffHeader',
+                                                      parent=getSampleStyleSheet()['Heading3'],
+                                                      fontSize=11,
+                                                      spaceAfter=10)))
+                    
+                    staff_summary = [
+                        ['Metric', 'Value'],
+                        ['Total Projects', str(staff.get('total_projects', 0))],
+                        ['Total Tasks', str(staff.get('total_tasks', 0))],
+                        ['Completed Tasks', str(staff.get('completed_tasks', 0))],
+                        ['Completion Rate', f"{staff.get('completion_percentage', 0):.1f}%"],
+                        ['Overdue Tasks', str(staff.get('overdue_tasks', 0))]
+                    ]
+                    
+                    staff_table = Table(staff_summary, colWidths=[2*inch, 1.8*inch])
+                    staff_table.setStyle(TableStyle([
+                        ('BACKGROUND', (0, 0), (-1, 0), colors.lightyellow),
+                        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                        ('FONTSIZE', (0, 0), (-1, -1), 8),
+                        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                        ('GRID', (0, 0), (-1, -1), 1, colors.black)
+                    ]))
+                    story.append(staff_table)
+                    story.append(Spacer(1, 15))
+                    
+                    # Staff's Projects and Tasks
+                    self._add_member_projects_and_tasks_to_pdf(story, staff, staff.get('user_id'))
+
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    def _add_member_projects_and_tasks_to_pdf(self, story, member_data, member_user_id):
+        """Add projects and tasks breakdown for a member to the PDF story"""
+        projects_breakdown = member_data.get('projects_breakdown', [])
+        
+        if not projects_breakdown:
+            story.append(Paragraph("No projects assigned", self.styles['Normal']))
+            story.append(Spacer(1, 15))
+            return
+        
+        for project in projects_breakdown:
+            project_name = project.get('project_name', 'Unknown Project')
+            
+            # Project Header
+            story.append(Paragraph(f"Project: {project_name}", 
+                                 ParagraphStyle('ProjectTitle',
+                                              parent=getSampleStyleSheet()['Heading4'],
+                                              fontSize=10,
+                                              textColor=colors.darkblue,
+                                              spaceAfter=8)))
+            
+            # Project Summary
+            project_summary = [
+                ['Project Metric', 'Value'],
+                ['Total Tasks', str(project.get('total_tasks', 0))],
+                ['Completed Tasks', str(project.get('completed_tasks', 0))],
+                ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%"],
+                ['Overdue Tasks', str(project.get('overdue_tasks', 0))],
+                ['Average Duration', f"{project.get('average_task_duration', 0):.1f} days" if project.get('average_task_duration') else "N/A"],
+                ['Projected Completion', project.get('projected_completion_date', 'N/A')]
+            ]
+            
+            project_table = Table(project_summary, colWidths=[1.8*inch, 2*inch])
+            project_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 8),
+                ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                ('FONTSIZE', (0, 1), (-1, -1), 7),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black)
+            ]))
+            story.append(project_table)
+            story.append(Spacer(1, 10))
+            
+            # Tasks in this project
+            task_details = project.get('task_details', [])
+            if task_details:
+                story.append(Paragraph(f"Tasks ({len(task_details)}) - ★ = Member is owner/collaborator", 
+                                     ParagraphStyle('TasksSubtitle',
+                                                  parent=getSampleStyleSheet()['Normal'],
+                                                  fontSize=8,
+                                                  spaceAfter=6)))
+                
+                task_data = [['Task Name', 'Status', 'Owner', 'Collaborators', 'Due Date', 'Duration']]
+                
+                # Track which rows need highlighting
+                highlighted_rows = []
+                
+                for task_idx, task in enumerate(task_details):
+                    # Check if member is owner or collaborator
+                    owner_id = task.get('owner_id')
+                    collaborator_ids = task.get('collaborator_ids', []) or []
+                    
+                    is_member_involved = (owner_id == member_user_id) or (member_user_id in collaborator_ids)
+                    
+                    # Get task information
+                    task_name = task.get('task_name', 'Unknown')
+                    if is_member_involved:
+                        task_name = f"★ {task_name}"
+                        highlighted_rows.append(task_idx + 1)  # +1 because row 0 is header
+                    
+                    status = task.get('status', 'Unknown')
+                    owner = task.get('owner_name', 'Unknown')
+                    collaborators_display = ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None"
+                    due_date = task.get('due_date', '')[:10] if task.get('due_date') else 'N/A'
+                    
+                    # Duration
+                    completion_days = task.get('completion_days')
+                    duration_text = f"{completion_days}d" if completion_days else "Ongoing"
+                    
+                    task_data.append([
+                        task_name,
+                        status,
+                        owner,
+                        collaborators_display,
+                        due_date,
+                        duration_text
+                    ])
+                
+                task_table = Table(task_data, colWidths=[1.8*inch, 0.7*inch, 0.9*inch, 1.2*inch, 0.7*inch, 0.6*inch])
+                
+                # Build table style with highlighting for member's tasks
+                table_style = [
+                    ('BACKGROUND', (0, 0), (-1, 0), colors.darkgrey),
+                    ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                    ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                    ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                    ('FONTSIZE', (0, 0), (-1, 0), 7),
+                    ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+                    ('FONTSIZE', (0, 1), (-1, -1), 6),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                    ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP')
+                ]
+                
+                # Add yellow highlighting for rows where member is involved
+                for row_idx in highlighted_rows:
+                    table_style.append(('BACKGROUND', (0, row_idx), (-1, row_idx), colors.lightyellow))
+                
+                task_table.setStyle(TableStyle(table_style))
+                story.append(task_table)
+                story.append(Spacer(1, 15))
+
+    def export_company_report_excel(self, company_data: Dict[str, Any]) -> bytes:
+        """Export company report as Excel with overview and department tabs showing all members, projects, and tasks"""
+        buffer = io.BytesIO()
+
+        with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+            # ========== COMPANY OVERVIEW TAB ==========
+            overview_data = []
+            company_metrics = company_data.get('company_metrics', {})
+
+            overview_data.extend([
+                ['COMPANY PERFORMANCE DASHBOARD', ''],
+                ['', ''],
+                ['COMPANY METRICS', ''],
+                ['Total Departments', company_metrics.get('total_departments', 0)],
+                ['Total Teams', company_metrics.get('total_teams', 0)],
+                ['Total Members', company_metrics.get('total_members', 0)],
+                ['Total Projects', company_metrics.get('total_projects', 0)],
+                ['Total Tasks', company_metrics.get('total_tasks', 0)],
+                ['Completed Tasks', company_metrics.get('completed_tasks', 0)],
+                ['Company Completion Rate', f"{company_metrics.get('completion_percentage', 0):.1f}%"],
+                ['Overdue Tasks', company_metrics.get('overdue_tasks', 0)],
+                ['Company Overdue Rate', f"{company_metrics.get('overdue_percentage', 0):.1f}%"],
+                ['Average Task Duration',
+                f"{company_metrics.get('average_task_duration'):.1f} days" if company_metrics.get('average_task_duration') else "N/A"],
+                ['', ''],
+                ['PERFORMANCE RATING', ''],
+                ['Company Status',
+                '🟢 High Performing' if company_metrics.get('completion_percentage', 0) >= 75 and company_metrics.get('overdue_percentage', 0) < 20 else
+                '🟡 Moderate Performance' if company_metrics.get('completion_percentage', 0) >= 50 else '🔴 Needs Improvement']
+            ])
+
+            overview_df = pd.DataFrame(overview_data, columns=['Metric', 'Value'])
+            overview_df.to_excel(writer, sheet_name='Company Overview', index=False)
+
+            # ========== DEPARTMENT TABS ==========
+            departments = company_data.get('departments', [])
+            yellow_fill = PatternFill(start_color='FFFF00', end_color='FFFF00', fill_type='solid')
+
+            for dept in departments:
+                dept_name = dept.get('dept_name', 'Unknown Department')[:31]
+                dept_rows = []
+
+                # Department Header
+                dept_rows.extend([
+                    [f"DEPARTMENT: {dept_name}", '', '', '', '', '', ''],
+                    ['', '', '', '', '', '', '']
+                ])
+
+                # Director
+                director = dept.get('director')
+                if director:
+                    dept_rows.extend([
+                        [f"DIRECTOR: {director.get('user_name', 'Unknown')}", '', '', '', '', '', ''],
+                        ['Total Projects', director.get('total_projects', 0)],
+                        ['Total Tasks', director.get('total_tasks', 0)],
+                        ['Completed Tasks', director.get('completed_tasks', 0)],
+                        ['Completion Rate', f"{director.get('completion_percentage', 0):.1f}%"],
+                        ['', '', '', '', '', '', '']
+                    ])
+
+                # Teams and Members
+                teams = dept.get('teams', [])
+                if not teams:
+                    dept_rows.append(['No teams in this department', '', '', '', '', '', ''])
+                else:
+                    for team in teams:
+                        team_name = team.get('team_name', 'Unknown Team')
+                        dept_rows.extend([
+                            [f"TEAM: {team_name}", '', '', '', '', '', ''],
+                            ['', '', '', '', '', '', '']
+                        ])
+
+                        manager = team.get('manager')
+                        if manager:
+                            dept_rows.append([f"Manager: {manager.get('user_name', 'Unknown')}", '', '', '', '', '', ''])
+
+                        staff_list = team.get('staff', [])
+                        for member in ([manager] if manager else []) + staff_list:
+                            if not member:
+                                continue
+
+                            dept_rows.extend([
+                                ['', '', '', '', '', '', ''],
+                                [f"MEMBER: {member.get('user_name', 'Unknown')}", '', '', '', '', '', ''],
+                                ['Total Projects', member.get('total_projects', 0)],
+                                ['Total Tasks', member.get('total_tasks', 0)],
+                                ['Completed Tasks', member.get('completed_tasks', 0)],
+                                ['Completion Rate', f"{member.get('completion_percentage', 0):.1f}%"],
+                                ['Overdue Tasks', member.get('overdue_tasks', 0)],
+                                ['Average Duration',
+                                f"{member.get('average_task_duration'):.1f} days" if member.get('average_task_duration') else 'N/A'],
+                                ['', '', '', '', '', '', '']
+                            ])
+
+                            projects_breakdown = member.get('projects_breakdown', [])
+                            for project in projects_breakdown:
+                                project_name = project.get('project_name', 'Unknown Project')
+                                dept_rows.extend([
+                                    [f"PROJECT: {project_name}", '', '', '', '', '', ''],
+                                    ['Total Tasks', project.get('total_tasks', 0)],
+                                    ['Completed', project.get('completed_tasks', 0)],
+                                    ['Completion Rate', f"{project.get('completion_percentage', 0):.1f}%"],
+                                    ['Overdue', project.get('overdue_tasks', 0)],
+                                    ['Avg Duration',
+                                    f"{project.get('average_task_duration'):.1f} days" if project.get('average_task_duration') else "N/A"],
+                                    ['Projected Completion', project.get('projected_completion_date', 'N/A')],
+                                    ['', '', '', '', '', '', ''],
+                                    ['TASKS (★ = Member is owner/collaborator)', '', '', '', '', '', ''],
+                                    ['Task Name', 'Status', 'Priority', 'Owner', 'Collaborators', 'Due Date', 'Duration']
+                                ])
+
+                                task_details = project.get('task_details', [])
+                                member_user_id = member.get('user_id')
+                                for task in task_details:
+                                    owner_id = task.get('owner_id')
+                                    collaborator_ids = task.get('collaborator_ids', []) or []
+                                    is_member_involved = (owner_id == member_user_id) or (member_user_id in collaborator_ids)
+                                    task_name = task.get('task_name', 'Unknown')
+                                    if is_member_involved:
+                                        task_name = f"★ {task_name}"
+
+                                    collaborators_display = ", ".join(task.get('collaborators', [])) if task.get('collaborators') else "None"
+                                    duration_text = f"{task.get('completion_days')}d" if task.get('completion_days') else "Ongoing"
+
+                                    dept_rows.append([
+                                        task_name,
+                                        task.get('status', 'Unknown'),
+                                        task.get('priority', 'Normal'),
+                                        task.get('owner_name', 'Unknown'),
+                                        collaborators_display,
+                                        task.get('due_date', '')[:10] if task.get('due_date') else 'N/A',
+                                        duration_text
+                                    ])
+                                dept_rows.extend([['', '', '', '', '', '', ''], ['', '', '', '', '', '', '']])
+
+                # Write department data
+                dept_df = pd.DataFrame(dept_rows)
+                dept_df.to_excel(writer, sheet_name=dept_name, index=False, header=False)
+
+                # Highlight rows with ★ after writing
+                worksheet = writer.sheets[dept_name]
+                for idx, row in enumerate(dept_rows, start=1):
+                    if row and isinstance(row[0], str) and row[0].startswith('★'):
+                        for col in range(1, 8):  # highlight columns A–G
+                            worksheet.cell(row=idx, column=col).fill = yellow_fill
 
         buffer.seek(0)
         return buffer.getvalue()
