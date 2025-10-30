@@ -76,6 +76,20 @@
           </router-link>
         </div>
 
+        <!-- Company's Workload -->
+         <!-- Company's Workload -->
+        <div 
+          v-if="showCompanyWorkload" 
+          class="nav-item"
+        >
+          <router-link to="/company" class="nav-link" @click="handleNavItemClick">
+            <div class="nav-icon">
+              <i class="bi bi-briefcase"></i>
+            </div>
+            <span class="nav-text">Company Workload</span>
+          </router-link>
+        </div>
+
         <!-- Schedule -->
         <div class="nav-item">
           <router-link to="/schedule" class="nav-link" @click="handleNavItemClick"> <!-- UPDATE THIS -->
@@ -135,6 +149,8 @@ import { logout } from '../services/auth'
 const expandedMenus = ref([])
 const userRole = ref('')
 const userId = ref(null)
+const teamId = ref(null)
+const deptId = ref(null)
 const isMobileMenuOpen = ref(false)
 const windowWidth = ref(window.innerWidth) // Track window width reactively
 const router = useRouter()
@@ -149,6 +165,18 @@ onMounted(async () => {
   const storedUserRole = localStorage.getItem('spm_userrole') || localStorage.getItem('userRole') || localStorage.getItem('role')
   if (storedUserRole) {
     userRole.value = storedUserRole
+  }
+
+  // get teamId from localStorage if available
+  const storedTeamId = localStorage.getItem('userTeam')
+  if (storedTeamId) {
+    teamId.value = storedTeamId
+  }
+
+  // get deptId from localStorage if available
+  const storedDeptId = localStorage.getItem('userDept')
+  if (storedDeptId) {
+    deptId.value = storedDeptId
   }
 })
 
@@ -234,7 +262,26 @@ const teamTasksIcon = computed(() => {
   return userRole.value?.toLowerCase() === 'director' ? 'bi bi-building' : 'bi bi-people'
 })
 
-//ADD ROLE-BASED NAVIGATION FOR PROJECTS ALSO (TO BE DONE)
+const showCompanyWorkload = computed(() => {
+  const role = userRole.value?.toLowerCase()
+  const dept = Number(deptId.value)
+  const team = Number(teamId.value)
+
+  if (role === 'managing_director') {
+    return true
+  }
+
+  if (role === 'director' && dept === 5) {
+    return true
+  }
+
+  if ((role === 'staff' || role === 'manager') && team === 9) {
+    return true
+  }
+
+  return false
+})
+
 
 async function onLogout() {
   try {
