@@ -74,7 +74,7 @@ def generate_personal_report(user_id: int):
                 io.BytesIO(pdf_data),
                 mimetype='application/pdf',
                 as_attachment=True,
-                download_name=f'personal_report_{user_id}_{datetime.now().strftime("%Y%m%d")}.pdf'
+                download_name=f'personal_report_{datetime.now().strftime("%Y%m%d")}.pdf'
             )
             
         elif export_format == 'excel':
@@ -85,7 +85,7 @@ def generate_personal_report(user_id: int):
                 io.BytesIO(excel_data),
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 as_attachment=True,
-                download_name=f'personal_report_{user_id}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+                download_name=f'personal_report_{datetime.now().strftime("%Y%m%d")}.xlsx'
             )
             
         else:
@@ -185,7 +185,7 @@ def generate_team_report(manager_user_id: int):
                 io.BytesIO(pdf_data),
                 mimetype='application/pdf',
                 as_attachment=True,
-                download_name=f'team_report_{manager_user_id}_{datetime.now().strftime("%Y%m%d")}.pdf'
+                download_name=f'team_report_{datetime.now().strftime("%Y%m%d")}.pdf'
             )
             
         elif export_format == 'excel':
@@ -217,7 +217,7 @@ def generate_team_report(manager_user_id: int):
                 io.BytesIO(excel_data),
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 as_attachment=True,
-                download_name=f'team_report_{manager_user_id}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+                download_name=f'team_report_{datetime.now().strftime("%Y%m%d")}.xlsx'
             )
             
         else:
@@ -317,7 +317,7 @@ def generate_department_report(director_user_id: int):
                 io.BytesIO(pdf_data),
                 mimetype='application/pdf',
                 as_attachment=True,
-                download_name=f'department_report_{director_user_id}_{datetime.now().strftime("%Y%m%d")}.pdf'
+                download_name=f'department_report_{datetime.now().strftime("%Y%m%d")}.pdf'
             )
             
         elif export_format == 'excel':
@@ -349,7 +349,7 @@ def generate_department_report(director_user_id: int):
                 io.BytesIO(excel_data),
                 mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                 as_attachment=True,
-                download_name=f'department_report_{director_user_id}_{datetime.now().strftime("%Y%m%d")}.xlsx'
+                download_name=f'department_report_{datetime.now().strftime("%Y%m%d")}.xlsx'
             )
             
         else:

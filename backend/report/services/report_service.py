@@ -213,7 +213,7 @@ class ReportService:
                 team_info = self.repo.get_team_info(director_report.team_id)
                 director_report.team_name = team_info.get('name', f'Team {director_report.team_id}') if team_info else f'Team {director_report.team_id}'
             else:
-                director_report.team_name = 'No Team Assigned'
+                director_report.team_name = 'NA'
             
             member_reports.append(director_report)
             
@@ -246,7 +246,7 @@ class ReportService:
                         # Fallback: Use team_id if name not available
                         member_report.team_name = f'Team {member.get("team_id")}'
                 else:
-                    member_report.team_name = 'No Team Assigned'
+                    member_report.team_name = 'NA'
                 
                 member_reports.append(member_report)
 
