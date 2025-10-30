@@ -198,3 +198,27 @@ class ReportRepo:
             print(f"Error fetching department tasks: {e}")
             return []
 
+    def get_all_departments(self) -> List[Dict[str, Any]]:
+        """Get all departments from dept microservice"""
+        try:
+            response = requests.get(f"{self.dept_service_url}/departments")
+            if response.status_code == 200:
+                return response.json().get('data', [])
+            return []
+        except Exception as e:
+            print(f"Error fetching all departments: {e}")
+            return []
+
+    def get_all_teams(self) -> List[Dict[str, Any]]:
+        """Get all teams from team microservice"""
+        try:
+            response = requests.get(f"{self.team_service_url}/teams")
+            if response.status_code == 200:
+                return response.json().get('data', [])
+            return []
+        except Exception as e:
+            print(f"Error fetching all teams: {e}")
+            return []
+        
+    
+

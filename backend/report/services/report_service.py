@@ -92,11 +92,26 @@ class ReportService:
             team_members = self.repo.get_team_members(team_id)
             if not team_members:
                 print(f"Warning: No team members found for team_id {team_id}")
+                team_members = []
 
-            # Generate personal reports for all team members except the manager (compilation approach)
+            # Generate personal reports for all team members INCLUDING the manager
             member_reports = []
+            
+            # First, add the manager's own report
+            manager_tasks = self.repo.get_user_tasks(manager_user_id, start_date, end_date)
+            manager_projects = self.repo.get_user_projects(manager_user_id, start_date, end_date)
+            
+            if manager_tasks is None:
+                manager_tasks = []
+            if manager_projects is None:
+                manager_projects = []
+            
+            manager_report = self._generate_user_report_data(manager_info, manager_tasks, manager_projects)
+            member_reports.append(manager_report)
+            
+            # Then add other team members' reports
             for member in team_members:
-                # Skip the manager from their own team report
+                # Skip the manager since we already added them
                 if member['userid'] == manager_user_id:
                     continue
                     
@@ -176,11 +191,35 @@ class ReportService:
             dept_members = self.repo.get_dept_members(dept_id)
             if not dept_members:
                 print(f"Warning: No department members found for dept_id {dept_id}")
+                dept_members = []
 
-            # Generate personal reports for all department members (including managers, excluding director)
+            # Generate personal reports for all department members INCLUDING the director
             member_reports = []
+            
+            # First, add the director's own report
+            director_tasks = self.repo.get_user_tasks(director_user_id, start_date, end_date)
+            director_projects = self.repo.get_user_projects(director_user_id, start_date, end_date)
+            
+            if director_tasks is None:
+                director_tasks = []
+            if director_projects is None:
+                director_projects = []
+            
+            director_report = self._generate_user_report_data(director_info, director_tasks, director_projects)
+            
+            # Add team information to director report
+            director_report.team_id = director_info.get('team_id')
+            if director_report.team_id:
+                team_info = self.repo.get_team_info(director_report.team_id)
+                director_report.team_name = team_info.get('name', f'Team {director_report.team_id}') if team_info else f'Team {director_report.team_id}'
+            else:
+                director_report.team_name = 'No Team Assigned'
+            
+            member_reports.append(director_report)
+            
+            # Then add other department members' reports
             for member in dept_members:
-                # Skip only the requesting director
+                # Skip the director since we already added them
                 if member['userid'] == director_user_id:
                     continue
                     
@@ -233,6 +272,228 @@ class ReportService:
 
         except Exception as e:
             return {"status": 500, "message": f"Error generating department report: {str(e)}"}
+        
+    def generate_company_report(self, admin_user_id: int, start_date: str = None, end_date: str = None) -> Dict[str, Any]:
+        """Generate company-wide report showing all departments, teams, and members organized hierarchically
+        
+        Args:
+            admin_user_id: ID of the admin/executive requesting the report
+            start_date: Start date for filtering (YYYY-MM-DD format)
+            end_date: End date for filtering (YYYY-MM-DD format)
+        """
+        try:
+            # Get admin information
+            admin_info = self.repo.get_user_info(admin_user_id)
+            if not admin_info:
+                return {"status": 404, "message": f"User {admin_user_id} not found"}
+
+            # Optional: Add role check for admin/executive access
+            # For now, we'll allow any authenticated user to request company reports
+            # You can add stricter role validation here if needed
+
+            # Get all departments
+            all_departments = self.repo.get_all_departments()
+            if not all_departments:
+                print("Warning: No departments found in the system")
+                all_departments = []
+
+            # Get all teams
+            all_teams = self.repo.get_all_teams()
+            if not all_teams:
+                print("Warning: No teams found in the system")
+                all_teams = []
+
+            # Build company structure: departments -> teams -> members
+            company_structure = []
+            company_totals = {
+                'total_departments': len(all_departments),
+                'total_teams': 0,
+                'total_members': 0,
+                'total_tasks': 0,
+                'total_projects': 0,
+                'completed_tasks': 0,
+                'overdue_tasks': 0,
+                'all_task_durations': []
+            }
+
+            for department in all_departments:
+                dept_id = department.get('id')
+                dept_name = department.get('name', f'Department {dept_id}')
+
+                # Get director for this department
+                dept_members = self.repo.get_dept_members(dept_id)
+                if dept_members is None:
+                    dept_members = []
+
+                # Find director
+                director_info = None
+                for member in dept_members:
+                    member_role = member.get('role')
+                    if member_role is None:
+                        role_str = ''
+                    elif isinstance(member_role, int):
+                        role_map = {1: 'staff', 2: 'manager', 3: 'director'}
+                        role_str = role_map.get(member_role, '')
+                    else:
+                        role_str = str(member_role).lower()
+                    
+                    if role_str == 'director':
+                        director_info = member
+                        break
+
+                # Generate director's personal report with full projects breakdown
+                director_report = None
+                if director_info:
+                    director_tasks = self.repo.get_user_tasks(director_info['userid'], start_date, end_date)
+                    director_projects = self.repo.get_user_projects(director_info['userid'], start_date, end_date)
+                    
+                    if director_tasks is None:
+                        director_tasks = []
+                    if director_projects is None:
+                        director_projects = []
+                    
+                    # Generate full report data including projects_breakdown
+                    director_report = self._generate_user_report_data(director_info, director_tasks, director_projects)
+                    
+                    # Update company totals with director's metrics
+                    company_totals['total_members'] += 1
+                    company_totals['total_tasks'] += director_report.total_tasks or 0
+                    company_totals['total_projects'] += director_report.total_projects or 0
+                    company_totals['completed_tasks'] += director_report.completed_tasks or 0
+                    company_totals['overdue_tasks'] += director_report.overdue_tasks or 0
+                    if director_report.average_task_duration:
+                        company_totals['all_task_durations'].append(director_report.average_task_duration)
+
+                # Get teams in this department
+                dept_teams = [team for team in all_teams if team.get('dept_id') == dept_id]
+                company_totals['total_teams'] += len(dept_teams)
+
+                teams_data = []
+                for team in dept_teams:
+                    team_id = team.get('id')
+                    team_name = team.get('name', f'Team {team_id}')
+
+                    # Get team members
+                    team_members = self.repo.get_team_members(team_id)
+                    if team_members is None:
+                        team_members = []
+
+                    # Find manager and staff
+                    manager_info = None
+                    staff_members = []
+
+                    for member in team_members:
+                        member_role = member.get('role')
+                        if member_role is None:
+                            role_str = ''
+                        elif isinstance(member_role, int):
+                            role_map = {1: 'staff', 2: 'manager', 3: 'director'}
+                            role_str = role_map.get(member_role, '')
+                        else:
+                            role_str = str(member_role).lower()
+                        
+                        if role_str == 'manager':
+                            manager_info = member
+                        elif role_str == 'staff':
+                            staff_members.append(member)
+
+                    # Generate manager's personal report with full projects breakdown
+                    manager_report = None
+                    if manager_info:
+                        manager_tasks = self.repo.get_user_tasks(manager_info['userid'], start_date, end_date)
+                        manager_projects = self.repo.get_user_projects(manager_info['userid'], start_date, end_date)
+                        
+                        if manager_tasks is None:
+                            manager_tasks = []
+                        if manager_projects is None:
+                            manager_projects = []
+                        
+                        # Generate full report data including projects_breakdown
+                        manager_report = self._generate_user_report_data(manager_info, manager_tasks, manager_projects)
+                        
+                        # Update company totals
+                        company_totals['total_members'] += 1
+                        company_totals['total_tasks'] += manager_report.total_tasks or 0
+                        company_totals['total_projects'] += manager_report.total_projects or 0
+                        company_totals['completed_tasks'] += manager_report.completed_tasks or 0
+                        company_totals['overdue_tasks'] += manager_report.overdue_tasks or 0
+                        if manager_report.average_task_duration:
+                            company_totals['all_task_durations'].append(manager_report.average_task_duration)
+
+                    # Generate staff reports with full projects breakdown
+                    staff_reports = []
+                    for staff in staff_members:
+                        staff_tasks = self.repo.get_user_tasks(staff['userid'], start_date, end_date)
+                        staff_projects = self.repo.get_user_projects(staff['userid'], start_date, end_date)
+                        
+                        if staff_tasks is None:
+                            staff_tasks = []
+                        if staff_projects is None:
+                            staff_projects = []
+                        
+                        # Generate full report data including projects_breakdown
+                        staff_report = self._generate_user_report_data(staff, staff_tasks, staff_projects)
+                        staff_reports.append(staff_report)
+                        
+                        # Update company totals
+                        company_totals['total_members'] += 1
+                        company_totals['total_tasks'] += staff_report.total_tasks or 0
+                        company_totals['total_projects'] += staff_report.total_projects or 0
+                        company_totals['completed_tasks'] += staff_report.completed_tasks or 0
+                        company_totals['overdue_tasks'] += staff_report.overdue_tasks or 0
+                        if staff_report.average_task_duration:
+                            company_totals['all_task_durations'].append(staff_report.average_task_duration)
+
+                    # Build team structure
+                    team_structure = {
+                        'team_id': team_id,
+                        'team_name': team_name,
+                        'manager': manager_report.to_dict() if manager_report else None,
+                        'staff': [staff.to_dict() for staff in staff_reports]
+                    }
+                    teams_data.append(team_structure)
+
+                # Build department structure
+                dept_structure = {
+                    'dept_id': dept_id,
+                    'dept_name': dept_name,
+                    'director': director_report.to_dict() if director_report else None,
+                    'teams': teams_data
+                }
+                company_structure.append(dept_structure)
+
+            # Calculate company-wide metrics
+            company_completion_percentage = (company_totals['completed_tasks'] / company_totals['total_tasks'] * 100) if company_totals['total_tasks'] > 0 else 0
+            company_overdue_percentage = (company_totals['overdue_tasks'] / company_totals['total_tasks'] * 100) if company_totals['total_tasks'] > 0 else 0
+            company_avg_duration = statistics.mean(company_totals['all_task_durations']) if company_totals['all_task_durations'] else None
+
+            result = {
+                "status": 200,
+                "message": f"Company report generated for {admin_info.get('name', 'User')}",
+                "data": {
+                    "company_report": {
+                        "company_metrics": {
+                            "total_departments": company_totals['total_departments'],
+                            "total_teams": company_totals['total_teams'],
+                            "total_members": company_totals['total_members'],
+                            "total_tasks": company_totals['total_tasks'],
+                            "total_projects": company_totals['total_projects'],
+                            "completed_tasks": company_totals['completed_tasks'],
+                            "overdue_tasks": company_totals['overdue_tasks'],
+                            "completion_percentage": company_completion_percentage,
+                            "overdue_percentage": company_overdue_percentage,
+                            "average_task_duration": company_avg_duration
+                        },
+                        "departments": company_structure
+                    }
+                }
+            }
+
+            return result
+
+        except Exception as e:
+            return {"status": 500, "message": f"Error generating company report: {str(e)}"}
+
 
     def _generate_user_report_data(self, user_info: Dict[str, Any], tasks: List[Dict[str, Any]], projects: List[Dict[str, Any]]) -> ReportData:
         """Generate report data for a single user organized by projects"""
