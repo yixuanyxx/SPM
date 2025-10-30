@@ -42,7 +42,7 @@
 
         <!-- Company Report Button (Visible only to users with team_id 9) -->
         <button 
-          v-if="teamId === 9 || (userRole === 'director' && deptId === 5)" 
+          v-if="teamId === 9 || (userRole === 'director' && deptId === 5) || userRole === 'managing_director'" 
           class="report-btn company-report-btn" 
           @click="showReportForm('company')"
         >
