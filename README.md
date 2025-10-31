@@ -1,16 +1,16 @@
 # SPM Project
 
-## 📋 Table of Contents
+## Table of Contents
 - [Frontend Setup](#frontend-setup)
 - [Backend Setup](#backend-setup)
 - [Microservices](#microservices)
 
 ---
 
-## 🎨 Frontend Setup
+## Frontend Setup
 
 ### Prerequisites
-Add `.env` file to the `frontend` folder (instructions to be provided closer to deadline)
+Add `.env` file to the `frontend` folder
 
 ### Installation & Running
 ```bash
@@ -23,7 +23,7 @@ npm run dev
 
 ---
 
-## 🔧 Backend Setup
+## Backend Setup
 
 ### Prerequisites
 Add `.env` file to the `backend` folder (instructions to be provided closer to deadline)
@@ -42,7 +42,7 @@ We have the following microservices:
 
 ---
 
-## 🚀 Microservices
+## Microservices
 
 For each microservice, follow these steps:
 
@@ -52,12 +52,12 @@ cd backend/[microservice-name]
 ```
 Replace `[microservice-name]` with: `comments`, `dept`, `notification`, `projects`, `report`, `tasks`, `team`, or `users`
 
-### 2. Create a virtual environment (optional but recommended)
+### 2. Create a virtual environment (optional)
 ```bash
 python -m venv venv
 ```
 
-### 3. Activate the virtual environment
+### 3. Activate the virtual environment (optional)
 
 **For Mac/Linux:**
 ```bash
@@ -69,7 +69,7 @@ source venv/bin/activate
 venv\Scripts\activate
 ```
 
-⚠️ **IMPORTANT:** Make sure you are in the virtual environment before proceeding!
+**IMPORTANT:** Make sure you are in the virtual environment before proceeding! (if created) (See step 3 to activate virtual environment)
 
 ### 4. Install required libraries
 ```bash
@@ -83,7 +83,7 @@ python app.py
 
 ---
 
-## 📦 Additional Package Management
+## Additional Package Management
 
 ### To install additional libraries:
 ```bash
@@ -95,9 +95,11 @@ pip install [packagename]
 pip freeze > requirements.txt
 ```
 
+
+
 ---
 
-## 🔄 Quick Start - Running All Microservices
+## Quick Start - Running All Microservices (If previously already installed necessary libraries in requirements.txt)
 
 You'll need to open separate terminal windows for each microservice you want to run:
 
@@ -109,37 +111,37 @@ python app.py
 
 # Terminal 2 - Dept
 cd backend/dept
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 3 - Notification
 cd backend/notification
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 4 - Projects
 cd backend/projects
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 5 - Report
 cd backend/report
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 6 - Tasks
 cd backend/tasks
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 7 - Team
 cd backend/team
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 8 - Users
 cd backend/users
-venv\Scripts\activate
+venv\Scripts\activate # or source venv/bin/activate on Mac
 python app.py
 
 # Terminal 9 - Frontend
