@@ -46,40 +46,40 @@ class TestTeamControllerIntegration(unittest.TestCase):
         # Clean up any existing test data
         self.cleanup_test_data()
 
-    def tearDown(self):
-        """Clean up after each test method."""
-        self.cleanup_test_data()
+    # def tearDown(self):
+    #     """Clean up after each test method."""
+    #     self.cleanup_test_data()
 
-    def cleanup_test_data(self):
-        """Clean up test data from the database."""
-        try:
-            # Delete test teams for common test department IDs
-            test_dept_ids = [1, 2, 3, 999]  # Common test department IDs
-            deleted_count = 0
+    # def cleanup_test_data(self):
+    #     """Clean up test data from the database."""
+    #     try:
+    #         # Delete test teams for common test department IDs
+    #         test_dept_ids = [1, 2, 3, 999]  # Common test department IDs
+    #         deleted_count = 0
             
-            for dept_id in test_dept_ids:
-                # Get teams for this department
-                teams = self.repo.find_by_dept_id(dept_id)
-                print(f"Found {len(teams)} teams for department {dept_id}")
+    #         for dept_id in test_dept_ids:
+    #             # Get teams for this department
+    #             teams = self.repo.find_by_dept_id(dept_id)
+    #             print(f"Found {len(teams)} teams for department {dept_id}")
                 
-                # Delete teams
-                for team in teams:
-                    team_id = team['id']
-                    if self.repo.delete_team(team_id):
-                        deleted_count += 1
-                        print(f"✓ Deleted team {team_id} for department {dept_id}")
-                    else:
-                        print(f"✗ Failed to delete team {team_id} for department {dept_id}")
+    #             # Delete teams
+    #             for team in teams:
+    #                 team_id = team['id']
+    #                 if self.repo.delete_team(team_id):
+    #                     deleted_count += 1
+    #                     print(f"✓ Deleted team {team_id} for department {dept_id}")
+    #                 else:
+    #                     print(f"✗ Failed to delete team {team_id} for department {dept_id}")
             
-            if deleted_count > 0:
-                print(f"Cleanup completed: {deleted_count} teams deleted")
-            else:
-                print("No teams found to clean up")
+    #         if deleted_count > 0:
+    #             print(f"Cleanup completed: {deleted_count} teams deleted")
+    #         else:
+    #             print("No teams found to clean up")
                 
-        except Exception as e:
-            print(f"Warning: Could not clean up test data: {e}")
-            import traceback
-            traceback.print_exc()
+    #     except Exception as e:
+    #         print(f"Warning: Could not clean up test data: {e}")
+    #         import traceback
+    #         traceback.print_exc()
 
     # ==================== get_all_teams Tests ====================
     

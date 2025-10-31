@@ -313,7 +313,7 @@ class TestUserControllerIntegration(unittest.TestCase):
         
         # Update the user
         response = self.client.put('/users/297', json={
-            "role": "director"
+            "role": "manager"
         })
         
         # Assertions
@@ -321,7 +321,7 @@ class TestUserControllerIntegration(unittest.TestCase):
         data = json.loads(response.data)
         self.assertEqual(data["status"], 200)
         self.assertIn("User 297 updated successfully", data["message"])
-        self.assertEqual(data["data"]["role"], "director")
+        self.assertEqual(data["data"]["role"], "manager")
 
 
     def test_update_user_no_fields(self):
