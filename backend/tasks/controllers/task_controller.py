@@ -618,6 +618,29 @@ def get_tasks_with_upcoming_deadlines():
     except Exception as e:
         return jsonify({"Message": str(e), "Code": 500}), 500
     
+@task_bp.route("/tasks", methods=["GET"])
+def get_all_tasks():
+    """
+    Get all tasks for all teams/users.
+    
+    Returns:
+    {
+        "data": [ ... list of all tasks ... ],
+        "Code": 200
+    }
+    
+    Responses:
+        200: Tasks found and returned (or empty list if no tasks)
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_all_tasks()
+        status = result.pop("__status", 200)
+        result["Code"] = status
+        return jsonify(result), status
+    except Exception as e:
+        return jsonify({"Message": str(e), "Code": 500}), 500
+    
 @task_bp.route("/health")
 def health_check():
     return jsonify({"status": "ok"}), 200

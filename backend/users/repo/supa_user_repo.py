@@ -66,3 +66,10 @@ class SupabaseUserRepo:
             .execute()
         )
         return res.data or []
+    
+    def get_all_users(self) -> list:
+        """
+        Retrieve all users from the system.
+        """
+        res = self.client.table("user").select("*").execute()
+        return res.data or []

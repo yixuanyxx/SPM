@@ -242,4 +242,37 @@ class UserService:
             
         except Exception as e:
             return {"status": 500, "message": f"Failed to search users: {str(e)}"}
+        
+    def get_all_users(self) -> Dict[str, Any]:
+        """
+        Get all users across the company (all departments and teams).
+        """
+        try:
+            users_data = self.repo.get_all_users()  # Repo function returns list of user dicts
+
+            if not users_data:
+                return {
+                    "status": 200,
+                    "message": "No users found",
+                    "data": []
+                }
+
+            users = []
+            for user_data in users_data:
+                try:
+                    user = User(**user_data)  # Validate/format
+                    users.append(user.__dict__)
+                except Exception as e:
+                    print(f"Warning: Failed to parse user data: {str(e)}")
+                    continue
+
+            return {
+                "status": 200,
+                "message": f"Retrieved {len(users)} user(s)",
+                "data": users
+            }
+
+        except Exception as e:
+            return {"status": 500, "message": f"Failed to get all users: {str(e)}"}
+
 
