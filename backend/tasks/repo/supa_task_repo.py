@@ -244,3 +244,10 @@ class SupabaseTaskRepo:
         ).execute()
         
         return res.data or []
+    
+    def find_all_parent_tasks(self) -> list:
+        """
+        Find all tasks (parent and subtasks) in the system.
+        """
+        res = self.client.table(TABLE).select("*").is_("parent_task", None).execute()
+        return res.data or []

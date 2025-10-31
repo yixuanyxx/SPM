@@ -1091,3 +1091,54 @@ class TaskService:
         subtask_payload["recurrence_interval_days"] = payload.get("recurrence_interval_days")
         
         return subtask_payload
+    
+    def get_all_tasks(self) -> Dict[str, Any]:
+        """
+        Get all tasks for all users (including subtasks).
+        """
+        try:
+            parent_tasks = self.repo.find_all_parent_tasks()
+
+            for parent_task in parent_tasks:
+                parent_task_id = parent_task["id"]
+                subtasks = self.repo.find_subtasks_by_parent(parent_task_id)
+
+                formatted_subtasks = []
+                for subtask in subtasks:
+                    formatted_subtasks.append({
+                        "id": subtask["id"],
+                        "task_name": subtask["task_name"],
+                        "description": subtask["description"],
+                        "due_date": subtask["due_date"],
+                        "status": subtask["status"],
+                        "owner_id": subtask["owner_id"],
+                        "collaborators": subtask["collaborators"] or [],
+                        "project_id": subtask["project_id"],
+                        "created_at": subtask["created_at"],
+                        "parent_task": subtask["parent_task"],
+                        "type": "subtask",
+                        "priority": subtask["priority"],
+                        "attachments": subtask["attachments"] or []
+                    })
+
+                parent_task["subtasks"] = formatted_subtasks
+
+            if not parent_tasks:
+                return {
+                    "__status": 404,
+                    "Message": "No tasks found",
+                    "data": []
+                }
+
+            return {
+                "__status": 200,
+                "Message": f"Successfully retrieved {len(parent_tasks)} tasks",
+                "data": parent_tasks
+            }
+
+        except Exception as e:
+            return {
+                "__status": 500,
+                "Message": f"Error retrieving tasks: {str(e)}",
+                "data": []
+            }

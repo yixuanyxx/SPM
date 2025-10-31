@@ -277,6 +277,29 @@ def update_notification_preferences(userid: int):
     except Exception as e:
         return jsonify({"error": str(e), "status": 500}), 500
     
+@user_bp.route("/users/all", methods=["GET"])
+def get_all_users():
+    """
+    Get all users across all departments.
+    
+    Returns:
+    {
+        "message": "Retrieved {count} user(s)",
+        "data": [ ... list of all users ... ],
+        "status": 200
+    }
+    
+    Responses:
+        200: Users found and returned (or empty list if no users)
+        500: Internal Server Error
+    """
+    try:
+        result = service.get_all_users()
+        status_code = result.pop("status", 200)
+        return jsonify(result), status_code
+    except Exception as e:
+        return jsonify({"error": str(e), "status": 500}), 500
+    
 @user_bp.route("/health")
 def health_check():
     return jsonify({"status": "ok"}), 200
