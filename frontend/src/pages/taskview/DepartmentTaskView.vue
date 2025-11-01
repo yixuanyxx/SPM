@@ -669,21 +669,6 @@
                           {{ getUserName(task.owner_id) }}
                         </div>
                       </div>
-                      <button 
-                        v-if="isTaskOverdue(task)&& task.owner_id === userId" 
-                        class="reschedule-btn" 
-                        @click.stop="openRescheduleModal(task)"
-                      >
-                        Reschedule
-                      </button>
-
-                      <button
-                        v-if="isTaskOverdue(task)&& task.owner_id === userId"
-                        @click="markAsCompleted(task)"
-                        class="btn-complete"
-                      >
-                        Mark as Completed
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -721,21 +706,6 @@
                       <i class="bi bi-person"></i>
                       {{ getUserName(task.owner_id) }}
                     </div>
-                    <button 
-                      v-if="isTaskOverdue(task)&& task.owner_id === userId" 
-                      class="reschedule-btn" 
-                      @click.stop="openRescheduleModal(task)"
-                    >
-                      Reschedule
-                    </button>
-
-                    <button
-                      v-if="isTaskOverdue(task)&& task.owner_id === userId"
-                      @click="markAsCompleted(task)"
-                      class="btn-complete"
-                    >
-                      Mark as Completed
-                    </button>
                   </div>
                 </div>
               </div>
@@ -827,22 +797,6 @@
               View Task Details
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Reschedule Modal -->
-    <div v-if="showRescheduleModal" class="modal-overlay">
-      <div class="modal-content">
-        <h3>Reschedule Task</h3>
-        <p><strong>{{ selectedTaskForReschedule?.task_name }}</strong></p>
-
-        <label for="newDueDate">New Due Date:</label>
-        <input id="newDueDate" type="datetime-local" v-model="newDueDate" class="date-picker" :min="todayString" />
-
-        <div class="modal-actions">
-          <button class="confirm-btn" @click="confirmReschedule">Save</button>
-          <button class="cancel-btn" @click="closeRescheduleModal">Cancel</button>
         </div>
       </div>
     </div>
@@ -1883,35 +1837,62 @@ const monthDays = computed(() => {
   return days
 })
 // Schedule view computed properties
+const allScheduleTasks = computed(() => {
+  const all = [];
+
+  tasks.value.forEach((task) => {
+    // Include parent task
+    all.push({
+      ...task,
+      isSubtask: false,
+      parentTaskName: null
+    });
+
+    // Include each subtask if it exists
+    if (Array.isArray(task.subtasks)) {
+      task.subtasks.forEach((sub) => {
+        all.push({
+          ...sub,
+          isSubtask: true,
+          parentTaskName: task.task_name || null
+        });
+      });
+    }
+  });
+
+  return all;
+});
+
 const displayedTasks = computed(() => {
-  let filtered = [...tasks.value]
-  
+  let filtered = [...allScheduleTasks.value];
+
   if (!showCompleted.value) {
-    filtered = filtered.filter(task => task.status?.toLowerCase() !== 'completed')
+    filtered = filtered.filter(task => task.status?.toLowerCase() !== 'completed');
   }
-  
+
   if (appliedMemberFilter.value) {
-    const memberId = parseInt(appliedMemberFilter.value)
+    const memberId = parseInt(appliedMemberFilter.value);
     filtered = filtered.filter(task => 
-      task.owner_id === memberId || 
+      task.owner_id === memberId ||
       (task.collaborators && task.collaborators.includes(memberId))
-    )
+    );
   }
-  
+
   if (appliedProjectFilter.value) {
     filtered = filtered.filter(task =>
       String(task.project_id) === String(appliedProjectFilter.value)
-    )
+    );
   }
-  
+
   if (appliedStatusFilters.value.length > 0) {
     filtered = filtered.filter(task =>
       appliedStatusFilters.value.includes(task.status)
-    )
+    );
   }
-  
-  return filtered
-})
+
+  return filtered;
+});
+
 
 const hasActiveFilters = computed(() =>
   appliedProjectFilter.value !== '' || appliedStatusFilters.value.length > 0 || appliedMemberFilter.value !== ''
@@ -1973,58 +1954,6 @@ const selectDate = (date) => {
   currentView.value = 'day'
 }
 
-// Reschedule functionality
-const openRescheduleModal = (task) => {
-  selectedTaskForReschedule.value = task
-  newDueDate.value = task.due_date ? new Date(task.due_date).toISOString().slice(0, 16) : todayString.value
-  showRescheduleModal.value = true
-}
-
-const closeRescheduleModal = () => {
-  showRescheduleModal.value = false
-  selectedTaskForReschedule.value = null
-  newDueDate.value = ''
-}
-
-const confirmReschedule = async () => {
-  if (!newDueDate.value) {
-    showError('Please select a new due date.')
-    return
-  }
-  
-  if (newDueDate.value < todayString.value) {
-    showError('Cannot reschedule to a date before today.')
-    return
-  }
-
-  try {
-    const utcDateString = new Date(newDueDate.value).toISOString()
-    const payload = {
-      task_id: selectedTaskForReschedule.value.id,
-      due_date: utcDateString
-    }
-
-    const res = await fetch('http://127.0.0.1:5002/tasks/update', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    })
-    const data = await res.json()
-
-    if (data.Code === 200) {
-      selectedTaskForReschedule.value.due_date = newDueDate.value
-      showSuccess('Task rescheduled successfully!')
-      await fetchTeamTasks() // Refresh tasks
-    } else {
-      showError(`Failed to reschedule: ${data.Message}`)
-    }
-  } catch (err) {
-    console.error(err)
-    showError('Error rescheduling task.')
-  } finally {
-    closeRescheduleModal()
-  }
-}
 
 const showSuccess = (msg) => {
   successMessage.value = msg
@@ -2035,42 +1964,6 @@ const showError = (msg) => {
   errorMessage.value = msg
   setTimeout(() => (errorMessage.value = ''), 5000)
 }
-
-// Mark as Completed
-const markAsCompleted = async (task) => {
-  if (!task?.id) return;
-
-  const previousStatus = task.status;
-  task.status = 'Completed'; // optimistic update
-  showSuccess(`Task "${task.task_name}" marked as completed!`);
-
-  try {
-    const payload = {
-      task_id: task.id,
-      status: 'Completed'
-    };
-
-    const response = await fetch(`http://localhost:5002/tasks/update`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const data = await response.json();
-
-    if (data.Code !== 200) {
-      task.status = previousStatus; // revert if API fails
-      showError(`Failed to update task: ${data.Message || 'Unknown error'}`);
-    } else {
-      // ✅ Important: refresh the task list to reflect the next instance / updated status
-      await fetchTeamTasks();
-    }
-  } catch (err) {
-    task.status = previousStatus; // revert
-    console.error(err);
-    showError('Error marking task as completed.');
-  }
-};
 
 const getTaskStatusClass = (status) => {
   if (!status) return ''
