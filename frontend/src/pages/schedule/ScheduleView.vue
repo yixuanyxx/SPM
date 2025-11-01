@@ -258,6 +258,12 @@
                 </span>
               </div>
             </div>
+            <div class="modal-actions">
+              <button @click="navigateToTask(selectedTask.id)" class="view-task-btn">
+                <i class="bi bi-arrow-right"></i>
+                View Task Details
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -366,6 +372,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import SideNavbar from '../../components/SideNavbar.vue'
 import { sessionState } from '../../services/session.js'
 
@@ -819,6 +826,12 @@ const fetchTasks = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const router = useRouter()
+
+const navigateToTask = (taskId) => {
+  router.push(`/tasks/${taskId}`)
 }
 
 // Modal state
