@@ -92,15 +92,15 @@
                             <span>{{ getDepartmentTaskCount(department.id) }} tasks</span>
                         </div>
                     </div>
+                    </div>
+                </div>
+                <div class="department-action">
+                    <span class="action-text">Click to view teams</span>
+                    <i class="bi bi-arrow-right"></i>
                 </div>
             </div>
-            <div class="department-action">
-                <span class="action-text">Click to view teams</span>
-                <i class="bi bi-arrow-right"></i>
-              </div>
         </div>
-    </div>
-    </div>
+      </div>
       
       <!-- Content when no team selected - Show team grid -->
       <div v-else-if="!selectedTeamId" class="teams-grid-container">
@@ -854,7 +854,6 @@
           </div>
         </div>
       </div>
-      </div>
     </div>
 
     <!-- Task Details Modal -->
@@ -986,6 +985,7 @@
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <script setup>
@@ -2389,10 +2389,13 @@ const getTaskStatusClass = (status) => {
   opacity: 0;
   transform: translateY(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
 }
 
 .team-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) translateX(0);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   border-color: #3b82f6;
 }
@@ -2455,6 +2458,9 @@ const getTaskStatusClass = (status) => {
   padding: 1rem;
   background: #f9fafb;
   border-radius: 8px;
+  min-height: 80px;
+  display: flex;
+  align-items: flex-start;
 }
 
 .workload-summary {
@@ -2506,6 +2512,7 @@ const getTaskStatusClass = (status) => {
   font-size: 0.875rem;
   color: #6b7280;
   transition: color 0.2s ease;
+  margin-top: auto;
 }
 
 .team-card:hover .team-action {
@@ -2718,6 +2725,9 @@ const getTaskStatusClass = (status) => {
   opacity: 0;
   transform: translateY(20px);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
 }
 
 .department-icon {
@@ -2733,7 +2743,7 @@ const getTaskStatusClass = (status) => {
 }
 
 .department-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-2px) translateX(0);
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
   border-color: #3b82f6;
 }
@@ -2747,6 +2757,7 @@ const getTaskStatusClass = (status) => {
   font-size: 0.875rem;
   color: #6b7280;
   transition: color 0.2s ease;
+  margin-top: auto;
 }
 
 .department-card:hover .department-action {

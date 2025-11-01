@@ -44,7 +44,7 @@ class TestTeamControllerIntegration(unittest.TestCase):
         self.client = self.app.test_client()
         
         # Clean up any existing test data
-        self.cleanup_test_data()
+        # self.cleanup_test_data()
 
     # def tearDown(self):
     #     """Clean up after each test method."""

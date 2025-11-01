@@ -116,8 +116,10 @@ def main():
     # if model_success and controller_success:
     if controller_success:
         print("\n[SUCCESS] All tests completed successfully!")
+        return 0
     else:
-        print("\n[WARNING] Some tests failed. Check the output above.")
+        print("\n[FAILURE] Some tests failed. Check the output above.")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

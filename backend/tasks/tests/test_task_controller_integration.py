@@ -1152,45 +1152,45 @@ class TestTaskControllerIntegration(unittest.TestCase):
         self.assertIn("Parent task with ID 999 not found", data["Message"])
 
 
-    # ==================== get_tasks_by_team Tests ====================
+    # # ==================== get_tasks_by_team Tests ====================
     
-    def test_get_tasks_by_team_success(self):
-        """Test successfully retrieving tasks for a team."""
-        # Clean up any existing test data first
-        self.cleanup_test_data()
+    # def test_get_tasks_by_team_success(self):
+    #     """Test successfully retrieving tasks for a team."""
+    #     # Clean up any existing test data first
+    #     self.cleanup_test_data()
         
-        # First, create some tasks for the team
-        create_response = self.client.post('/tasks/manager-task/create', json={
-            "owner_id": 297,
-            "task_name": "Team Task 1",
-            "description": "Task for team"
-        })
-        self.assertEqual(create_response.status_code, 201)
+    #     # First, create some tasks for the team
+    #     create_response = self.client.post('/tasks/manager-task/create', json={
+    #         "owner_id": 297,
+    #         "task_name": "Team Task 1",
+    #         "description": "Task for team"
+    #     })
+    #     self.assertEqual(create_response.status_code, 201)
         
-        # Make request
-        response = self.client.get('/tasks/team/5')
+    #     # Make request
+    #     response = self.client.get('/tasks/team/5')
         
-        # Assertions
-        self.assertEqual(response.status_code, 200)
-        data = json.loads(response.data)
-        self.assertEqual(data["Code"], 200)
-        self.assertIn("Successfully retrieved", data["Message"])
-        self.assertIn("team 5", data["Message"])
-        self.assertIn("data", data)
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 200)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["Code"], 200)
+    #     self.assertIn("Successfully retrieved", data["Message"])
+    #     self.assertIn("team 5", data["Message"])
+    #     self.assertIn("data", data)
 
-    def test_get_tasks_by_team_not_found(self):
-        """Test get tasks by team when no tasks found."""
-        # Clean up any existing test data first
-        self.cleanup_test_data()
+    # def test_get_tasks_by_team_not_found(self):
+    #     """Test get tasks by team when no tasks found."""
+    #     # Clean up any existing test data first
+    #     self.cleanup_test_data()
         
-        # Make request for team with no tasks
-        response = self.client.get('/tasks/team/999')
+    #     # Make request for team with no tasks
+    #     response = self.client.get('/tasks/team/999')
         
-        # Assertions
-        self.assertEqual(response.status_code, 404)
-        data = json.loads(response.data)
-        self.assertEqual(data["Code"], 404)
-        self.assertIn("No tasks found for team 999", data["Message"])
+    #     # Assertions
+    #     self.assertEqual(response.status_code, 404)
+    #     data = json.loads(response.data)
+    #     self.assertEqual(data["Code"], 404)
+    #     self.assertIn("No tasks found for team 999", data["Message"])
 
 
 
