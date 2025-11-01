@@ -49,16 +49,14 @@
           <div class="stat-card workload-stat" @click="workloadFilter = 'all'" :class="{ active: workloadFilter === 'all' }">
             <div class="stat-content">
               <div class="stat-icon members">
-                <i class="bi bi-people"></i>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ teamMembers.filter(m => m.userid !== userId).length }}</div>
-                <div class="stat-title">All Members</div>
-              </div>
+              <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-number">{{ teamMembers.length }}</div>
+              <div class="stat-title">All Members</div>
             </div>
           </div>
-
-          <div class="stat-card workload-light" @click="workloadFilter = 'low'" :class="{ active: workloadFilter === 'low' }">
+        </div>          <div class="stat-card workload-light" @click="workloadFilter = 'low'" :class="{ active: workloadFilter === 'low' }">
             <div class="stat-content">
               <div class="stat-icon light">
                 <i class="bi bi-circle"></i>
@@ -185,7 +183,7 @@
               <label for="memberFilter">Filter by member:</label>
               <select id="memberFilter" v-model="selectedMember" class="filter-dropdown">
                 <option value="">All Members</option>
-                <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                <option v-for="member in teamMembers" :key="member.userid" :value="member.userid">
                   {{ member.name }}
                 </option>
               </select>
@@ -330,7 +328,7 @@
               <label for="memberTaskFilter">Filter by member:</label>
               <select id="memberTaskFilter" v-model="selectedTaskMember" class="filter-dropdown">
                 <option value="">All Members</option>
-                <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                <option v-for="member in teamMembers" :key="member.userid" :value="member.userid">
                   {{ member.name }}
                 </option>
               </select>
@@ -795,7 +793,7 @@
             </label>
             <select v-model="selectedMemberFilter" class="filter-select">
               <option value="">All Members</option>
-              <option v-for="member in teamMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+              <option v-for="member in teamMembers" :key="member.userid" :value="member.userid">
                 {{ member.name }}
               </option>
             </select>
@@ -1116,20 +1114,20 @@ const getWorkloadLevel = (member) => {
 }
 
 const filteredMembers = computed(() => {
-  // Filter out the current user from the member list
-  let membersExcludingCurrentUser = teamMembers.value.filter(member => member.userid !== userId.value)
+  // Include all members including the current user
+  let filteredMembersList = teamMembers.value
   
   // Apply individual member filter
   if (selectedMember.value) {
-    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => member.userid === parseInt(selectedMember.value))
+    filteredMembersList = filteredMembersList.filter(member => member.userid === parseInt(selectedMember.value))
   }
   
   // Apply workload filter
   if (workloadFilter.value !== 'all') {
-    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => getWorkloadClass(member) === workloadFilter.value)
+    filteredMembersList = filteredMembersList.filter(member => getWorkloadClass(member) === workloadFilter.value)
   }
   
-  return membersExcludingCurrentUser
+  return filteredMembersList
 })
 
 const viewMemberTasks = (memberId) => {
@@ -1315,22 +1313,22 @@ const completedTasks = computed(() => tasks.value.filter(task => task.status ===
 const unassignedTasks = computed(() => tasks.value.filter(task => task.status === 'Unassigned').length)
 const overloadedMembers = computed(() => {
   if (!teamMembers.value || teamMembers.value.length === 0) return 0
-  return teamMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'overload').length
+  return teamMembers.value.filter(member => getWorkloadClass(member) === 'overload').length
 })
 
 const lightLoadMembers = computed(() => {
   if (!teamMembers.value || teamMembers.value.length === 0) return 0
-  return teamMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'low').length
+  return teamMembers.value.filter(member => getWorkloadClass(member) === 'low').length
 })
 
 const moderateLoadMembers = computed(() => {
   if (!teamMembers.value || teamMembers.value.length === 0) return 0
-  return teamMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'moderate').length
+  return teamMembers.value.filter(member => getWorkloadClass(member) === 'moderate').length
 })
 
 const heavyLoadMembers = computed(() => {
   if (!teamMembers.value || teamMembers.value.length === 0) return 0
-  return teamMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'high').length
+  return teamMembers.value.filter(member => getWorkloadClass(member) === 'high').length
 })
 
 const memberTaskStats = computed(() => {
@@ -1910,34 +1908,561 @@ const getCollaboratorNames = (collaboratorIds) => {
   flex-wrap: wrap;
 }
 
-@media (max-width: 768px) {
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+/* Large Desktop (1440px+) */
+@media (min-width: 1440px) {
+  .members-container {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  }
+}
+
+/* Desktop (1024px - 1439px) */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .members-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .stats-container {
+    gap: 1rem;
+  }
+}
+
+/* Tablet Landscape (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-container {
+    padding: 1rem;
+  }
+  
+  .header-section {
+    padding: 1.5rem;
+  }
+  
+  .page-title {
+    font-size: 1.75rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
   .header-right-actions {
     flex-wrap: wrap;
-    gap: 0.25rem;
+    justify-content: flex-start;
   }
   
   .view-toggle-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .tasks-container {
+    padding: 1rem;
+  }
+  
+  .sort-controls {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .sort-container {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    justify-content: space-around;
+    margin: 0;
+  }
+}
+
+/* Tablet Portrait & Large Mobile (480px - 767px) */
+@media (min-width: 480px) and (max-width: 767px) {
+  .app-container {
+    padding: 0.75rem;
+  }
+  
+  .header-section {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .header-content {
+    text-align: center;
+  }
+  
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.85rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+  
+  .header-right-actions {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .view-toggle-btn {
+    flex: 1;
     min-width: 100px;
-    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.75rem;
+  }
+  
+  .stats-section {
+    padding: 1rem 0.75rem;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  
+  .stat-card {
+    padding: 0.75rem;
+  }
+  
+  .stat-number {
+    font-size: 1.5rem;
+  }
+  
+  .stat-title {
+    font-size: 0.75rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.25rem;
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .main-content {
+    padding: 0.75rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .member-card {
+    padding: 1rem;
+  }
+  
+  .tasks-container {
+    padding: 0.75rem;
+  }
+  
+  .task-card {
+    padding: 1rem;
+  }
+  
+  .sort-controls {
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .sort-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .filter-dropdown, .sort-dropdown {
+    width: 100%;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0;
+    gap: 0.5rem;
+  }
+  
+  .legend-item {
+    font-size: 0.75rem;
+  }
+}
+
+/* Mobile (320px - 479px) */
+@media (max-width: 479px) {
+  .app-layout {
+    margin: 0;
+  }
+  
+  .app-container {
+    padding: 0.5rem;
+  }
+  
+  .header-section {
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .header-content {
+    text-align: center;
+  }
+  
+  .page-title {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+  
+  .page-subtitle {
     font-size: 0.8rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  
+  .header-right-actions {
+    width: 100%;
+    justify-content: center;
+    flex-direction: column;
+  }
+  
+  .view-toggle-btn {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.5rem;
+  }
+  
+  .stats-section {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .stats-section-member {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+  }
+  
+  .stat-card {
+    padding: 0.6rem;
+  }
+  
+  .stat-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.25rem;
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 0;
+  }
+  
+  .stat-info {
+    align-items: center;
+  }
+  
+  .stat-number {
+    font-size: 1.25rem;
+  }
+  
+  .stat-title {
+    font-size: 0.7rem;
+  }
+  
+  .main-content {
+    padding: 0.5rem;
+  }
+  
+  .main-content-member {
+    padding-top: 0.5rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .member-card {
+    padding: 0.875rem;
+  }
+  
+  .member-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .member-info {
+    flex-direction: row;
+    width: 100%;
+  }
+  
+  .member-avatar {
+    font-size: 2rem;
+  }
+  
+  .member-name {
+    font-size: 1rem;
+  }
+  
+  .member-role, .member-email {
+    font-size: 0.75rem;
+  }
+  
+  .workload-indicator {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .member-tasks-summary {
+    gap: 0.75rem;
+  }
+  
+  .task-breakdown {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .breakdown-item {
+    font-size: 0.75rem;
+  }
+  
+  .priority-breakdown {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .priority-item, .upcoming-tasks {
+    font-size: 0.75rem;
   }
   
   .member-actions {
     flex-direction: column;
+    gap: 0.5rem;
   }
   
-  .view-tasks-btn,
-  .view-schedule-btn {
+  .view-tasks-btn, .view-schedule-btn {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.6rem;
     min-width: auto;
   }
   
+  .tasks-container {
+    padding: 0.5rem;
+  }
+  
+  .task-card {
+    padding: 0.875rem;
+  }
+  
+  .task-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .task-title {
+    font-size: 0.95rem;
+  }
+  
+  .task-badges {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  
+  .task-status, .task-priority {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  .task-people {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .task-owner, .task-collaborators {
+    font-size: 0.75rem;
+  }
+  
+  .sort-controls {
+    padding: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .sort-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .filter-group label {
+    font-size: 0.8rem;
+  }
+  
+  .filter-dropdown, .sort-dropdown {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.5rem;
+  }
+  
+  .sort-order-btn {
+    width: 100%;
+    padding: 0.6rem;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0;
+  }
+  
+  .legend-item {
+    font-size: 0.7rem;
+  }
+  
+  .legend-color {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .empty-state {
+    padding: 2rem 1rem;
+    min-height: 300px;
+  }
+  
+  .empty-icon i {
+    font-size: 2.5rem;
+  }
+  
+  .empty-title {
+    font-size: 1rem;
+  }
+  
+  .empty-subtitle {
+    font-size: 0.8rem;
+  }
+  
+  .loading-state {
+    min-height: 300px;
+  }
+  
+  .loading-text {
+    font-size: 0.85rem;
+  }
+  
+  /* Calendar/Schedule View Responsive */
   .calendar-controls {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  
+  .view-toggle, .date-navigation, .action-buttons {
+    width: 100%;
+  }
+  
+  .view-toggle {
+    overflow-x: auto;
+  }
+  
+  .view-btn {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    white-space: nowrap;
+  }
+  
+  .current-period {
+    font-size: 1rem;
   }
   
   .action-buttons {
+    flex-direction: column;
     justify-content: center;
+    gap: 0.5rem;
+  }
+  
+  .toggle-completed-btn, .filter-button, .today-button {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.6rem;
+  }
+  
+  .calendar-container {
+    padding: 0.5rem;
+  }
+  
+  .monthly-view .month-grid {
+    gap: 2px;
+  }
+  
+  .month-day {
+    padding: 0.25rem;
+    min-height: 60px;
+  }
+  
+  .day-number {
+    font-size: 0.8rem;
+  }
+  
+  .task-box {
+    font-size: 0.65rem;
+    padding: 0.2rem;
   }
 }
 </style>

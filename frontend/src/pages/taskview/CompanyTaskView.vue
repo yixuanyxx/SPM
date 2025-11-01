@@ -123,11 +123,67 @@
         <div v-else class="teams-grid">
           <h2 class="section-title">Choose a Team to View Workload</h2>
           <div class="teams-container">
+            <!-- Directors Card (if directors exist without team_id) -->
+            <div 
+              v-if="hasDirectors"
+              class="team-card directors-card"
+              :style="{ animationDelay: '0s' }"
+              @click="selectTeam('directors', 'Directors')"
+            >
+              <div class="team-header">
+                <div class="team-icon">
+                  <i class="bi bi-star-fill"></i>
+                </div>
+                <div class="team-info">
+                  <h3 class="team-name">Directors</h3>
+                  <p class="team-dept">Department Leadership</p>
+                </div>
+              </div>
+              
+              <div class="team-meta">
+                <div class="meta-item">
+                  <i class="bi bi-people"></i>
+                  <span>{{ getTeamMemberCount('directors') }} members</span>
+                </div>
+                <div class="meta-item">
+                  <i class="bi bi-list-task"></i>
+                  <span>{{ getTeamTaskCount('directors') }} tasks</span>
+                </div>
+              </div>
+
+              <div class="team-workload-preview">
+                <div class="workload-summary">
+                  <div class="workload-item overload" v-if="getTeamWorkloadCount('directors', 'overload') > 0">
+                    <span class="count">{{ getTeamWorkloadCount('directors', 'overload') }}</span>
+                    <span class="label">Overloaded</span>
+                  </div>
+                  <div class="workload-item high" v-if="getTeamWorkloadCount('directors', 'high') > 0">
+                    <span class="count">{{ getTeamWorkloadCount('directors', 'high') }}</span>
+                    <span class="label">Heavy</span>
+                  </div>
+                  <div class="workload-item moderate" v-if="getTeamWorkloadCount('directors', 'moderate') > 0">
+                    <span class="count">{{ getTeamWorkloadCount('directors', 'moderate') }}</span>
+                    <span class="label">Moderate</span>
+                  </div>
+                  <div class="workload-item low" v-if="getTeamWorkloadCount('directors', 'low') > 0">
+                    <span class="count">{{ getTeamWorkloadCount('directors', 'low') }}</span>
+                    <span class="label">Light</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="team-action">
+                <span class="action-text">Click to view directors workload</span>
+                <i class="bi bi-arrow-right"></i>
+              </div>
+            </div>
+
+            <!-- Regular Team Cards -->
             <div 
               v-for="(team, index) in departmentTeams" 
               :key="team.id"
               class="team-card"
-              :style="{ animationDelay: `${index * 0.1}s` }"
+              :style="{ animationDelay: `${(index + (hasDirectors ? 1 : 0)) * 0.1}s` }"
               @click="selectTeam(team.id, team.name)"
             >
               <div class="team-header">
@@ -189,16 +245,14 @@
           <div class="stat-card workload-stat" @click="workloadFilter = 'all'" :class="{ active: workloadFilter === 'all' }">
             <div class="stat-content">
               <div class="stat-icon members">
-                <i class="bi bi-people"></i>
-              </div>
-              <div class="stat-info">
-                <div class="stat-number">{{ departmentMembers.filter(m => m.userid !== userId).length }}</div>
-                <div class="stat-title">All Members</div>
-              </div>
+              <i class="bi bi-people"></i>
+            </div>
+            <div class="stat-info">
+              <div class="stat-number">{{ departmentMembers.length }}</div>
+              <div class="stat-title">All Members</div>
             </div>
           </div>
-
-          <div class="stat-card workload-light" @click="workloadFilter = 'low'" :class="{ active: workloadFilter === 'low' }">
+        </div>          <div class="stat-card workload-light" @click="workloadFilter = 'low'" :class="{ active: workloadFilter === 'low' }">
             <div class="stat-content">
               <div class="stat-icon light">
                 <i class="bi bi-circle"></i>
@@ -325,7 +379,7 @@
               <label for="memberFilter">Filter by member:</label>
               <select id="memberFilter" v-model="selectedMember" class="filter-dropdown">
                 <option value="">All Members</option>
-                <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                <option v-for="member in departmentMembers" :key="member.userid" :value="member.userid">
                   {{ member.name }}
                 </option>
               </select>
@@ -467,7 +521,7 @@
               <label for="memberTaskFilter">Filter by member:</label>
               <select id="memberTaskFilter" v-model="selectedTaskMember" class="filter-dropdown">
                 <option value="">All Members</option>
-                <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+                <option v-for="member in departmentMembers" :key="member.userid" :value="member.userid">
                   {{ member.name }}
                 </option>
               </select>
@@ -904,7 +958,7 @@
             </label>
             <select v-model="selectedMemberFilter" class="filter-select">
               <option value="">All Members</option>
-              <option v-for="member in departmentMembers.filter(m => m.userid !== userId)" :key="member.userid" :value="member.userid">
+              <option v-for="member in departmentMembers" :key="member.userid" :value="member.userid">
                 {{ member.name }}
               </option>
             </select>
@@ -1182,17 +1236,31 @@ const fetchAllTasksGlobal = async () => {
         return
       }
 
-      // Count tasks per team
-      allTeamStats.value = data.data.reduce((acc, task) => {
+      // Count tasks per team and per department (for directors)
+      const teamStats = {}
+      const deptDirectorStats = {} // Track director tasks by department
+      
+      data.data.forEach(task => {
         const user = allMembers.value.find(u => u.userid === task.owner_id)
-        if (!user) return acc  // skip if owner not found
-        const teamId = String(user.team_id)
-        acc[teamId] = (acc[teamId] || 0) + 1
-        return acc
-      }, {})
+        if (!user) return // skip if owner not found
+        
+        if (user.team_id) {
+          // Regular team member
+          const teamId = String(user.team_id)
+          teamStats[teamId] = (teamStats[teamId] || 0) + 1
+        } else if (user.dept_id) {
+          // Director (no team_id but has dept_id)
+          const deptId = String(user.dept_id)
+          deptDirectorStats[deptId] = (deptDirectorStats[deptId] || 0) + 1
+        }
+      })
+      
+      allTeamStats.value = teamStats
+      allTeamStats.value._directorsByDept = deptDirectorStats // Store director stats separately
 
-      console.log('Fetched all tasks globally:', Object.keys(allTeamStats.value).length)
+      console.log('Fetched all tasks globally:', Object.keys(allTeamStats.value).length, 'teams')
       console.log('Team stats:', allTeamStats.value)
+      console.log('Director stats by dept:', deptDirectorStats)
     } else {
       console.error('Failed to fetch all tasks globally:', response.status)
     }
@@ -1248,7 +1316,7 @@ const fetchDepartmentTeams = async () => {
 
 // Function to fetch statistics for all teams (optimized for speed and accuracy)
 const fetchTeamStatistics = async () => {
-  if (!departmentTeams.value.length) return
+  if (!departmentTeams.value.length && !allDepartmentMembers.value.some(m => !m.team_id)) return
   
   try {
     console.log(`Optimizing load for ${departmentTeams.value.length} teams...`)
@@ -1302,6 +1370,28 @@ const fetchTeamStatistics = async () => {
       }
     })
     
+    // Add directors (members without team_id) to a virtual "directors" team
+    const directors = allDepartmentMembers.value.filter(member => !member.team_id && member.dept_id === deptId.value)
+    if (directors.length > 0) {
+      console.log(`Found ${directors.length} directors without team_id`)
+      teamMemberMapping['directors'] = directors
+      directors.forEach(director => {
+        allMemberTaskPromises.push(
+          fetch(`http://localhost:5002/tasks/user-task/${director.userid}`)
+            .then(response => response.ok ? response.json() : null)
+            .then(data => ({
+              teamId: 'directors',
+              memberId: director.userid,
+              tasks: data?.data || []
+            }))
+            .catch(error => {
+              console.error(`Error fetching tasks for director ${director.userid}:`, error)
+              return { teamId: 'directors', memberId: director.userid, tasks: [] }
+            })
+        )
+      })
+    }
+    
     console.log(`Optimized: ${teamsWithMembers} teams with members, ${allMemberTaskPromises.length} total member requests`)
     
     // Step 3: Execute all member task requests in parallel
@@ -1311,23 +1401,19 @@ const fetchTeamStatistics = async () => {
     // Step 4: Process all results efficiently
     const finalStats = {}
     
-    departmentTeams.value.forEach(team => {
-      // Get team task count
-      const teamTaskResult = teamTasksResults.find(result => result.teamId === team.id)
-      const taskCount = teamTaskResult ? teamTaskResult.tasks.length : 0
-      
-      // Calculate workload distribution
+    // Helper function to calculate workload stats for a team/group
+    const calculateWorkloadStats = (teamId, teamMembers) => {
+      let taskCount = 0
       const workloadCounts = { low: 0, moderate: 0, high: 0, overload: 0 }
-      const teamMembers = teamMemberMapping[team.id] || []
       
-      // Process each team member's workload
       teamMembers.forEach(member => {
         const memberTaskResult = memberTasksResults.find(
-          result => result.teamId === team.id && result.memberId === member.userid
+          result => result.teamId === teamId && result.memberId === member.userid
         )
         
         if (memberTaskResult && memberTaskResult.tasks.length > 0) {
           const memberTasks = memberTaskResult.tasks
+          taskCount += memberTasks.length
           
           // Calculate workload for this member (same logic, more efficient)
           const activeTasks = memberTasks.filter(task => task.status !== 'Completed')
@@ -1349,11 +1435,31 @@ const fetchTeamStatistics = async () => {
         }
       })
       
+      return { taskCount, workloadCounts }
+    }
+    
+    // Process regular teams
+    departmentTeams.value.forEach(team => {
+      const teamMembers = teamMemberMapping[team.id] || []
+      
+      // For teams, also try to get team task count from team endpoint
+      const teamTaskResult = teamTasksResults.find(result => result.teamId === team.id)
+      const teamTaskCount = teamTaskResult ? teamTaskResult.tasks.length : 0
+      
+      const stats = calculateWorkloadStats(team.id, teamMembers)
+      
+      // Use the maximum of team tasks or sum of member tasks
       finalStats[team.id] = {
-        taskCount,
-        workloadCounts
+        taskCount: Math.max(teamTaskCount, stats.taskCount),
+        workloadCounts: stats.workloadCounts
       }
     })
+    
+    // Process directors
+    if (teamMemberMapping['directors'] && teamMemberMapping['directors'].length > 0) {
+      const stats = calculateWorkloadStats('directors', teamMemberMapping['directors'])
+      finalStats['directors'] = stats
+    }
     
     // Step 5: Store results
     teamStats.value = finalStats
@@ -1489,6 +1595,16 @@ const fetchTeamMembers = async (teamId) => {
   if (!teamId) return
   
   try {
+    // Special handling for directors
+    if (teamId === 'directors') {
+      // Get directors from allDepartmentMembers (members with dept_id but no team_id)
+      departmentMembers.value = allDepartmentMembers.value.filter(
+        member => !member.team_id && member.dept_id === deptId.value
+      )
+      console.log('Fetched directors:', departmentMembers.value.length, departmentMembers.value)
+      return
+    }
+    
     const response = await fetch(`http://localhost:5003/users/team/${teamId}`)
     if (response.ok) {
       const data = await response.json()
@@ -1511,6 +1627,37 @@ const fetchTeamTasks = async (teamId) => {
   isLoadingTasks.value = true
   
   try {
+    // Special handling for directors
+    if (teamId === 'directors') {
+      // Get all tasks for directors (members without team_id)
+      const directors = allDepartmentMembers.value.filter(
+        member => !member.team_id && member.dept_id === deptId.value
+      )
+      
+      // Fetch tasks for all directors in parallel
+      const taskPromises = directors.map(async (director) => {
+        try {
+          const response = await fetch(`http://localhost:5002/tasks/user-task/${director.userid}`)
+          if (response.ok) {
+            const data = await response.json()
+            return data.data || []
+          }
+          return []
+        } catch (error) {
+          console.error(`Error fetching tasks for director ${director.userid}:`, error)
+          return []
+        }
+      })
+      
+      const allDirectorTasks = await Promise.all(taskPromises)
+      tasks.value = allDirectorTasks.flat()
+      console.log('Fetched director tasks:', tasks.value.length, tasks.value)
+      
+      await fetchTaskUsers()
+      isLoadingTasks.value = false
+      return
+    }
+    
     const response = await fetch(`http://localhost:5002/tasks/team/${teamId}`)
     if (response.ok) {
       const data = await response.json()
@@ -1533,6 +1680,14 @@ const fetchTeamTasks = async (teamId) => {
 // Team helper functions
 const getTeamMemberCount = (teamId) => {
   if (!teamId || !allDepartmentMembers.value.length) return 0
+  
+  // Special handling for directors
+  if (teamId === 'directors') {
+    return allDepartmentMembers.value.filter(
+      member => !member.team_id && member.dept_id === deptId.value
+    ).length
+  }
+  
   return allDepartmentMembers.value.filter(member => member.team_id === teamId).length
 }
 
@@ -1545,6 +1700,14 @@ const getTeamWorkloadCount = (teamId, workloadLevel) => {
   if (!teamId || !teamStats.value[teamId]) return 0
   return teamStats.value[teamId].workloadCounts?.[workloadLevel] || 0
 }
+
+// Computed property to check if directors exist in department
+const hasDirectors = computed(() => {
+  if (!deptId.value || !allDepartmentMembers.value.length) return false
+  return allDepartmentMembers.value.some(
+    member => !member.team_id && member.dept_id === deptId.value
+  )
+})
 
 //Dept helper functions 
 const departmentTeamsMap = computed(() => {
@@ -1560,21 +1723,31 @@ const departmentTeamsMap = computed(() => {
 
 const getDepartmentTeamCount = (deptId) => {
   if (!deptId) return 0
+  // Only count actual teams, not directors
   return departmentTeamsMap.value[deptId]?.length || 0
 }
 
 const getDepartmentMemberCount = (deptId) => {
   const departmentTeams = departmentTeamsMap.value[deptId] || []
-  return allMembers.value.filter(member =>
+  // Count members in teams + directors (members with dept_id but no team_id)
+  const teamMembers = allMembers.value.filter(member =>
     departmentTeams.includes(String(member.team_id))
   ).length
+  const directors = allMembers.value.filter(member =>
+    String(member.dept_id) === String(deptId) && !member.team_id
+  ).length
+  return teamMembers + directors
 }
 
 const getDepartmentTaskCount = (deptId) => {
   const departmentTeams = departmentTeamsMap.value[deptId] || []
-  return departmentTeams.reduce((total, teamId) => {
+  // Sum tasks from all teams
+  const teamTaskCount = departmentTeams.reduce((total, teamId) => {
     return total + (allTeamStats.value[teamId] || 0)
   }, 0)
+  // Add director tasks for this department
+  const directorTaskCount = allTeamStats.value._directorsByDept?.[String(deptId)] || 0
+  return teamTaskCount + directorTaskCount
 }
 
 
@@ -1681,20 +1854,20 @@ const getWorkloadLevel = (member) => {
 }
 
 const filteredMembers = computed(() => {
-  // Filter out the current user from the member list
-  let membersExcludingCurrentUser = departmentMembers.value.filter(member => member.userid !== userId.value)
+  // Include all members including the current user
+  let filteredMembersList = departmentMembers.value
   
   // Apply individual member filter
   if (selectedMember.value) {
-    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => member.userid === parseInt(selectedMember.value))
+    filteredMembersList = filteredMembersList.filter(member => member.userid === parseInt(selectedMember.value))
   }
   
   // Apply workload filter
   if (workloadFilter.value !== 'all') {
-    membersExcludingCurrentUser = membersExcludingCurrentUser.filter(member => getWorkloadClass(member) === workloadFilter.value)
+    filteredMembersList = filteredMembersList.filter(member => getWorkloadClass(member) === workloadFilter.value)
   }
   
-  return membersExcludingCurrentUser
+  return filteredMembersList
 })
 
 const viewMemberTasks = (memberId) => {
@@ -1910,22 +2083,22 @@ const completedTasks = computed(() => tasks.value.filter(task => task.status ===
 const unassignedTasks = computed(() => tasks.value.filter(task => task.status === 'Unassigned').length)
 const overloadedMembers = computed(() => {
   if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
-  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'overload').length
+  return departmentMembers.value.filter(member => getWorkloadClass(member) === 'overload').length
 })
 
 const lightLoadMembers = computed(() => {
   if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
-  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'low').length
+  return departmentMembers.value.filter(member => getWorkloadClass(member) === 'low').length
 })
 
 const moderateLoadMembers = computed(() => {
   if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
-  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'moderate').length
+  return departmentMembers.value.filter(member => getWorkloadClass(member) === 'moderate').length
 })
 
 const heavyLoadMembers = computed(() => {
   if (!departmentMembers.value || departmentMembers.value.length === 0) return 0
-  return departmentMembers.value.filter(member => member.userid !== userId.value && getWorkloadClass(member) === 'high').length
+  return departmentMembers.value.filter(member => getWorkloadClass(member) === 'high').length
 })
 
 const memberTaskStats = computed(() => {
@@ -2430,6 +2603,25 @@ const getTaskStatusClass = (status) => {
   color: #3b82f6;
 }
 
+/* Directors Card Styling */
+.directors-card {
+  border: 2px solid #fbbf24;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.directors-card:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 8px 25px rgba(245, 158, 11, 0.2);
+}
+
+.directors-card .team-icon {
+  color: #f59e0b;
+}
+
+.directors-card .team-name {
+  color: #92400e;
+}
+
 .back-btn {
   display: flex;
   align-items: center;
@@ -2709,19 +2901,719 @@ const getTaskStatusClass = (status) => {
   }
 }
 
-/* Responsive design */
-@media (max-width: 768px) {
-  .teams-container {
+/* ==================== RESPONSIVE DESIGN ==================== */
+
+/* Large Desktop (1440px+) */
+@media (min-width: 1440px) {
+  .teams-container, .departments-container {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    max-width: 1400px;
+  }
+  
+  .members-container {
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  }
+}
+
+/* Desktop (1024px - 1439px) */
+@media (min-width: 1024px) and (max-width: 1439px) {
+  .teams-container, .departments-container {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  }
+  
+  .members-container {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .stats-container {
+    gap: 1rem;
+  }
+}
+
+/* Tablet Landscape (768px - 1023px) */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .app-container {
+    padding: 1rem;
+  }
+  
+  .header-section {
+    padding: 1.5rem;
+  }
+  
+  .page-title {
+    font-size: 1.75rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.9rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+  
+  .header-right-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  
+  .view-toggle-btn {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  .teams-container, .departments-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+  }
+  
+  .teams-grid-container, .departments-grid-container {
+    padding: 1rem;
+  }
+  
+  .team-card, .department-card {
+    padding: 1.25rem;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+  
+  .stat-card {
+    padding: 1rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .tasks-container {
+    padding: 1rem;
+  }
+  
+  .sort-controls {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .sort-container {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    justify-content: space-around;
+    margin: 0;
+  }
+}
+
+/* Tablet Portrait & Large Mobile (480px - 767px) */
+@media (min-width: 480px) and (max-width: 767px) {
+  .app-container {
+    padding: 0.75rem;
+  }
+  
+  .header-section {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .header-content {
+    text-align: center;
+  }
+  
+  .page-title {
+    font-size: 1.5rem;
+  }
+  
+  .page-subtitle {
+    font-size: 0.85rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.75rem;
+  }
+  
+  .header-left-actions, .header-right-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .header-right-actions {
+    flex-wrap: wrap;
+  }
+  
+  .view-toggle-btn {
+    flex: 1;
+    min-width: 100px;
+    font-size: 0.85rem;
+    padding: 0.6rem 0.75rem;
+  }
+  
+  .back-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .teams-container, .departments-container {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
   
-  .teams-grid-container {
+  .teams-grid-container, .departments-grid-container {
+    padding: 0.75rem;
+  }
+  
+  .section-title {
+    font-size: 1.25rem;
+  }
+  
+  .team-card, .department-card {
     padding: 1rem;
   }
   
-  .team-card {
+  .team-icon, .department-icon {
+    font-size: 2rem;
+    min-width: 2.5rem;
+  }
+  
+  .team-name, .department-name {
+    font-size: 1.1rem;
+  }
+  
+  .stats-section {
+    padding: 1rem 0.75rem;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+  
+  .stat-card {
+    padding: 0.75rem;
+  }
+  
+  .stat-number {
+    font-size: 1.5rem;
+  }
+  
+  .stat-title {
+    font-size: 0.75rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.25rem;
+    width: 2rem;
+    height: 2rem;
+  }
+  
+  .main-content {
+    padding: 0.75rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .member-card {
     padding: 1rem;
+  }
+  
+  .tasks-container {
+    padding: 0.75rem;
+  }
+  
+  .task-card {
+    padding: 1rem;
+  }
+  
+  .sort-controls {
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .sort-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    margin: 0;
+  }
+  
+  .filter-dropdown, .sort-dropdown {
+    width: 100%;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: 0;
+    gap: 0.5rem;
+  }
+  
+  .legend-item {
+    font-size: 0.75rem;
+  }
+}
+
+/* Mobile (320px - 479px) */
+@media (max-width: 479px) {
+  .app-layout {
+    margin: 0;
+  }
+  
+  .app-container {
+    padding: 0.5rem;
+  }
+  
+  .header-section {
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .header-content {
+    text-align: center;
+  }
+  
+  .page-title {
+    font-size: 1.25rem;
+    line-height: 1.3;
+  }
+  
+  .page-subtitle {
+    font-size: 0.8rem;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 0.5rem;
+  }
+  
+  .header-left-actions, .header-right-actions {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .header-right-actions {
+    flex-direction: column;
+  }
+  
+  .view-toggle-btn {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.5rem;
+  }
+  
+  .back-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.85rem;
+    padding: 0.6rem;
+  }
+  
+  .teams-container, .departments-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .teams-grid-container, .departments-grid-container {
+    padding: 0.5rem;
+  }
+  
+  .section-title {
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+  }
+  
+  .team-card, .department-card {
+    padding: 0.875rem;
+  }
+  
+  .team-header, .department-header {
+    gap: 0.75rem;
+  }
+  
+  .team-icon, .department-icon {
+    font-size: 1.75rem;
+    min-width: 2rem;
+  }
+  
+  .team-name, .department-name {
+    font-size: 1rem;
+  }
+  
+  .team-dept, .department-meta {
+    font-size: 0.75rem;
+  }
+  
+  .meta-item {
+    font-size: 0.75rem;
+  }
+  
+  .team-workload-preview {
+    padding: 0.75rem;
+  }
+  
+  .workload-item {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  .stats-section {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .stats-section-member {
+    padding: 0.75rem 0.5rem;
+  }
+  
+  .stats-container {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.4rem;
+  }
+  
+  .stat-card {
+    padding: 0.6rem;
+  }
+  
+  .stat-content {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.5rem;
+  }
+  
+  .stat-icon {
+    font-size: 1.25rem;
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 0;
+  }
+  
+  .stat-info {
+    align-items: center;
+  }
+  
+  .stat-number {
+    font-size: 1.25rem;
+  }
+  
+  .stat-title {
+    font-size: 0.7rem;
+  }
+  
+  .main-content {
+    padding: 0.5rem;
+  }
+  
+  .main-content-member {
+    padding-top: 0.5rem;
+  }
+  
+  .members-container {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  
+  .member-card {
+    padding: 0.875rem;
+  }
+  
+  .member-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+  
+  .member-info {
+    flex-direction: row;
+    width: 100%;
+  }
+  
+  .member-avatar {
+    font-size: 2rem;
+  }
+  
+  .member-name {
+    font-size: 1rem;
+  }
+  
+  .member-role, .member-email {
+    font-size: 0.75rem;
+  }
+  
+  .workload-indicator {
+    width: 100%;
+    text-align: center;
+  }
+  
+  .member-tasks-summary {
+    gap: 0.75rem;
+  }
+  
+  .task-breakdown {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .breakdown-item {
+    font-size: 0.75rem;
+  }
+  
+  .priority-breakdown {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .priority-item, .upcoming-tasks {
+    font-size: 0.75rem;
+  }
+  
+  .member-actions {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .view-tasks-btn {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.6rem;
+  }
+  
+  .tasks-container {
+    padding: 0.5rem;
+  }
+  
+  .task-card {
+    padding: 0.875rem;
+  }
+  
+  .task-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .task-title {
+    font-size: 0.95rem;
+  }
+  
+  .task-badges {
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+  
+  .task-status, .task-priority {
+    font-size: 0.7rem;
+    padding: 0.2rem 0.4rem;
+  }
+  
+  .task-people {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .task-owner, .task-collaborators {
+    font-size: 0.75rem;
+  }
+  
+  .sort-controls {
+    padding: 0.5rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .sort-container {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .filter-group {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  
+  .filter-group label {
+    font-size: 0.8rem;
+  }
+  
+  .filter-dropdown, .sort-dropdown {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.5rem;
+  }
+  
+  .sort-order-btn {
+    width: 100%;
+    padding: 0.6rem;
+  }
+  
+  .workload-legend {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    margin: 0;
+  }
+  
+  .legend-item {
+    font-size: 0.7rem;
+  }
+  
+  .legend-color {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .empty-state {
+    padding: 2rem 1rem;
+    min-height: 300px;
+  }
+  
+  .empty-icon i {
+    font-size: 2.5rem;
+  }
+  
+  .empty-title {
+    font-size: 1rem;
+  }
+  
+  .empty-subtitle {
+    font-size: 0.8rem;
+  }
+  
+  .loading-state {
+    min-height: 300px;
+  }
+  
+  .loading-text {
+    font-size: 0.85rem;
+  }
+  
+  /* Calendar/Schedule View Responsive */
+  .calendar-controls {
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  
+  .view-toggle, .date-navigation, .action-buttons {
+    width: 100%;
+  }
+  
+  .view-toggle {
+    overflow-x: auto;
+  }
+  
+  .view-btn {
+    font-size: 0.75rem;
+    padding: 0.5rem;
+    white-space: nowrap;
+  }
+  
+  .current-period {
+    font-size: 1rem;
+  }
+  
+  .action-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .toggle-completed-btn, .filter-button, .today-button {
+    width: 100%;
+    font-size: 0.8rem;
+    padding: 0.6rem;
+  }
+  
+  .calendar-container {
+    padding: 0.5rem;
+  }
+  
+  .monthly-view .month-grid {
+    gap: 2px;
+  }
+  
+  .month-day {
+    padding: 0.25rem;
+    min-height: 60px;
+  }
+  
+  .day-number {
+    font-size: 0.8rem;
+  }
+  
+  .task-box {
+    font-size: 0.65rem;
+    padding: 0.2rem;
+  }
+  
+  /* Modal Responsive */
+  .task-modal-overlay {
+    padding: 1rem;
+  }
+  
+  .task-modal {
+    width: calc(100% - 2rem);
+    max-height: 90vh;
+    margin: 1rem;
+  }
+  
+  .modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .filter-popup {
+    width: calc(100% - 2rem);
+    max-width: none;
+  }
+  
+  .filter-section {
+    margin-bottom: 1rem;
+  }
+  
+  .filter-label {
+    font-size: 0.85rem;
+  }
+  
+  .filter-select {
+    font-size: 0.85rem;
+    padding: 0.6rem;
+  }
+  
+  .checkbox-label {
+    font-size: 0.8rem;
+  }
+  
+  .filter-actions {
+    flex-direction: column-reverse;
+    gap: 0.5rem;
+  }
+  
+  .clear-btn, .apply-btn {
+    width: 100%;
+    padding: 0.75rem;
   }
 }
 </style>
