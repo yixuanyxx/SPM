@@ -87,6 +87,11 @@ jobs:
           shopt -s nullglob
 
           echo "==> Running tests for each microservice..."
+          echo "Note: Pipeline will FAIL and STOP if any tests fail"
+          echo ""
+          
+          OVERALL_STATUS=0
+          
           for svc in backend/*/ ; do
             [[ -d "$svc" ]] || continue
 
@@ -98,12 +103,27 @@ jobs:
             if [[ -f "${svc}run_tests.py" ]]; then
               echo "Running tests for ${svc%/} ..."
               cd "${svc}"
-              python run_tests.py
+              
+              # Run tests and capture exit code
+              if python run_tests.py; then
+                echo "✓ Tests PASSED for ${svc%/}"
+              else
+                TEST_EXIT_CODE=$?
+                echo "✗ Tests FAILED for ${svc%/} (exit code: $TEST_EXIT_CODE)"
+                echo "Stopping CI pipeline due to test failure!"
+                exit $TEST_EXIT_CODE
+              fi
+              
               cd - > /dev/null
             else
               echo "No run_tests.py in ${svc%/} — nothing to run."
             fi
           done
+          
+          echo ""
+          echo "=============================="
+          echo "✓ All microservice tests PASSED"
+          echo "=============================="
 
       - name: Show service logs on failure
         if: failure()

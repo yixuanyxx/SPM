@@ -54,8 +54,10 @@ def main():
     
     if model_success:
         print("\n[SUCCESS] All notification model tests completed successfully!")
+        return 0
     else:
-        print("\n[WARNING] Some notification model tests failed. Check the output above.")
+        print("\n[FAILURE] Some notification model tests failed. Check the output above.")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

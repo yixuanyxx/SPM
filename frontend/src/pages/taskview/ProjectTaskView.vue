@@ -834,15 +834,7 @@ const selectProject = async (projectId) => {
 }
 
 const goBackToProjects = () => {
-  selectedProjectId.value = ''
-  projectMembers.value = []
-  tasks.value = []
-  // Reset filters
-  selectedMember.value = ''
-  selectedTaskMember.value = ''
-  workloadFilter.value = 'all'
-  activeFilter.value = 'all'
-  viewMode.value = 'members'
+  router.push('/projects')
 }
 
 const getProjectMemberCount = (project) => {

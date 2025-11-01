@@ -376,7 +376,7 @@ async function onLogout() {
 /* Side Navigation */
 .side-navbar {
   width: 250px;
-  height: 200vh;
+  height: 100vh;
   background: white;
   border-right: 1px solid #e5e7eb;
   display: flex;
@@ -387,12 +387,14 @@ async function onLogout() {
   z-index: 1000;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   transition: transform 0.3s ease;
+  overflow: hidden;
 }
 
 .navbar-content {
   display: flex;
   flex-direction: column;
   height: 100%;
+  overflow: hidden;
 }
 
 /* Brand */
@@ -455,6 +457,29 @@ async function onLogout() {
   flex: 1;
   padding: 1rem 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  /* Custom Scrollbar Styling */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+.nav-items::-webkit-scrollbar {
+  width: 6px;
+}
+
+.nav-items::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 0.5rem 0;
+}
+
+.nav-items::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+  transition: background 0.2s ease;
+}
+
+.nav-items::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }
 
 .nav-item {
